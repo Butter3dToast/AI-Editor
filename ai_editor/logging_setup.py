@@ -22,6 +22,19 @@ LOG_FILENAME = "ai-editor.log"
 _configured = False
 
 
+# Libraries that log every HTTP header or compile step at DEBUG. Useful to
+# nobody, and they swamp the log file the creator might send for help.
+_NOISY_LIBRARIES = ("httpx", "httpcore", "huggingface_hub", "urllib3", "numba", "filelock",
+                    "fsspec", "matplotlib", "PIL", "faster_whisper")
+
+
+class _LibraryWarningsToFileOnly(logging.Filter):
+    """Python warnings from libraries are for the engineer, not the screen."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.name != "py.warnings"
+
+
 class _PlainLanguageFilter(logging.Filter):
     """Replace an AIEditorError's console text with its creator-facing message."""
 
@@ -60,8 +73,13 @@ def setup_logging(log_dir: str | Path, level: str = "INFO") -> Path:
     console = RichHandler(rich_tracebacks=False, show_path=False, markup=False)
     console.setLevel(getattr(logging, level.upper(), logging.INFO))
     console.addFilter(_PlainLanguageFilter())
+    console.addFilter(_LibraryWarningsToFileOnly())
     console.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(console)
+
+    logging.captureWarnings(True)
+    for name in _NOISY_LIBRARIES:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     _configured = True
     return log_path

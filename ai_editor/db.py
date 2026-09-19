@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 _V1 = """
@@ -259,7 +259,15 @@ CREATE INDEX idx_job_steps_cache ON job_steps(cache_key);
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1}
+# Phase 1B: which audio track a transcript came from. Captions must be the
+# creator's voice only (spec section 7.6); a transcript of the mixed track also
+# contains game dialogue and teammates, and later stages need to know that.
+_V2 = """
+ALTER TABLE transcript_words ADD COLUMN source_role TEXT;
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

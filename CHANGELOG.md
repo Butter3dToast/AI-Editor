@@ -3,6 +3,57 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.3.0 — Phase 1B: Listening to recordings — 19 September 2026
+
+AI-Editor can now hear what happens in a recording.
+
+**New**
+
+- **Analyse a recording** with `ai-editor analyze 1` (the number from
+  `ai-editor library`). AI-Editor:
+  - writes down **every word** said, with the moment each word was spoken,
+  - listens for **laughter, shouting, screaming, gunfire and explosions**,
+  - measures how **loud** each second is, to find silence and sudden spikes,
+  - lists **moments to check** with times you can jump to.
+- **Subtitles you can check.** A subtitle file is saved next to the preview
+  copy, so opening the preview in VLC shows the transcript automatically.
+- **See the results again** any time with `ai-editor moments 1`.
+- **Misheard phrases are set aside.** Over music, speech-recognition AI can
+  "hear" words nobody said (often "see you next time"). Phrases that are both
+  unsure and unnaturally slow are set aside. Words are never removed because
+  of *what* they say, so your real sign-offs stay.
+- The first analysis downloads two AI models (about 4.6 GB altogether) into
+  your Models folder, once.
+- **Fixed before release:** the first version transcribed in fast "batched"
+  mode, which on your EP 1 silently skipped speech under game music: whole
+  minutes with 0–4 words where there were over 70. Transcription now works
+  through the recording one phrase at a time. EP 1 went from 4,838 to 6,389
+  words, and still transcribes in under 2 minutes.
+- **Voice detector "auto":** on a separate mic track, AI-Editor skips silent
+  parts before transcribing (reliable, and stops invented words over silence);
+  on a mixed track it listens to everything, because there the detector missed
+  speech under music.
+- **More accurate transcription model** (Whisper `large-v3` instead of
+  `large-v3-turbo`). Compared on your own mic recording it heard "OBS" instead
+  of "a BS" and "let's just see if this works" instead of "it's just a shit
+  see this works"; on EP 1 it had 17% fewer unclear words. It takes about
+  3 minutes for 2 hours instead of 2. One extra download (about 3 GB).
+- **Short reactions over game music are kept** ("Look out!", "Oh, shit!")
+  instead of being mistaken for noise.
+- **Easier-to-read captions.** Captions end at the end of a sentence (very
+  short ones join the next), long sentences split at a comma, and every caption
+  stays on screen for at least a second. Before, lines were cut mid-sentence and
+  fragments like "there?" flashed up for a fifth of a second.
+- **"Unusually loud" now means louder than your normal talking**, not louder
+  than the silences between sentences, which had hidden raised voices.
+- Four new error messages (E015, E016, E030, E031), explained in manual
+  chapter 25; four new settings in chapter 24.
+
+**Changed**
+
+- `ai-editor library` shows whether each recording has been analysed.
+- Warnings from the AI libraries go to the log file instead of your screen.
+
 ## 0.2.0 — Phase 1A: Importing recordings — 19 September 2026
 
 Your recordings can now be brought into AI-Editor.

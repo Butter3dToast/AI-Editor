@@ -38,10 +38,19 @@ obs:
   websocket_password: "" # Copy from OBS: Tools > WebSocket Server Settings > Show Connect Info
 
 analysis:
-  transcription_model: large-v3-turbo # faster-whisper model name
+  # faster-whisper model. large-v3 was clearly more accurate on the creator's speech than
+  # large-v3-turbo ("OBS" not "a BS"; 17% fewer unclear words on EP 1) and still
+  # transcribed 2 hours in 2.9 minutes. large-v3-turbo is the faster fallback.
+  transcription_model: large-v3
   compute_type: float16
   voice_separation_for_vods: true # Demucs separation on single-track sources
   signal_rate_hz: 1 # Signals are stored once per second (spec section 7.3)
+  language: en # Language you speak on stream. "auto" detects it, a little slower.
+  # Skip non-speech before transcribing? auto = only on a separate mic track, where
+  # it's reliable. On a mixed track it misses speech under game music.
+  voice_detector: auto # auto | on | off
+  silence_threshold_db: -50 # Quieter than this counts as silence
+  event_window_sec: 2 # Length of audio heard at once when listening for laughter, gunfire...
 
 lets_play: # Spec section 7.6 Recipe A
   mode: split # split | condense

@@ -487,19 +487,9 @@ def ingest_recording(
     step_names = ("proxy", "audio")
 
     def reporter(step: str) -> Callable[[float], None]:
-        position = step_names.index(step)
-        last_write = [0.0]
-
-        def report(fraction: float) -> None:
-            if on_progress:
-                on_progress(step, fraction)
-            # Throttled: FFmpeg reports twice a second, the database needn't.
-            now = time.monotonic()
-            if now - last_write[0] >= 2.0 or fraction >= 1.0:
-                last_write[0] = now
-                queue.set_progress(job_id, (position + fraction) / len(step_names), step)
-
-        return report
+        return queue.step_reporter(
+            job_id, step, step_names.index(step), len(step_names), on_progress
+        )
 
     def proxy_step() -> str:
         started = time.monotonic()

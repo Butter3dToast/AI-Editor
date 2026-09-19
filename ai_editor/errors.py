@@ -126,6 +126,40 @@ class InvalidTrackRoles(AIEditorError):
     fix = "Give one label per track. Run the probe command to see how many tracks the recording has"
 
 
+class RecordingNotFound(AIEditorError):
+    code = "E015"
+    what = "AI-Editor doesn't have that recording in its library"
+    why = "Recordings are referred to by their number in the library, or by their file"
+    fix = "Run the library command to see your recordings and their numbers, or import the file first"
+
+
+class NotImported(AIEditorError):
+    code = "E016"
+    what = "That recording hasn't finished importing"
+    why = "Analysis reads the audio that importing extracts, and some of it is missing"
+    fix = "Run the import command on the recording again. Finished work is reused, so it is quick"
+
+
+# --- AI models -------------------------------------------------------------
+
+
+class ModelDownloadFailed(AIEditorError):
+    code = "E030"
+    what = "AI-Editor could not download an AI model it needs"
+    why = "Each model is downloaded once, the first time it is used, so this needs an internet connection"
+    fix = "Check your internet connection and run the same command again. Partly downloaded files are cleaned up"
+
+
+class OutOfGraphicsMemory(AIEditorError):
+    code = "E031"
+    what = "Your graphics card ran out of memory"
+    why = "AI analysis needs several gigabytes of graphics memory, and a game or other program may be using it"
+    fix = (
+        "Close games, OBS, and other graphics-heavy programs, then run the same "
+        "command again. Finished steps are kept"
+    )
+
+
 # --- Jobs ------------------------------------------------------------------
 
 
@@ -147,5 +181,9 @@ ALL_ERRORS: tuple[type[AIEditorError], ...] = (
     NoAudioTrack,
     MediaProcessingFailed,
     InvalidTrackRoles,
+    RecordingNotFound,
+    NotImported,
+    ModelDownloadFailed,
+    OutOfGraphicsMemory,
     JobFailed,
 )

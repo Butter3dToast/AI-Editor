@@ -478,6 +478,44 @@ For each recording AI-Editor:
 8. Uses local AI to rate moments as funny, intense, clutch, story-important, or boring, and writes a one-line summary.
 9. Saves everything into your Clip Library.
 
+### 11.1a Analysing from the command line (until the app window arrives)
+
+> **[Engineer: this section covers the command-line tool used while AI-Editor is being built. The app window arrives in Phase 1H.]**
+
+1. Import the recording first (chapter 10.1a). Then find its number:
+
+   ```powershell
+   ai-editor library
+   ```
+
+2. Analyse it, using its number (or its file path in quotes):
+
+   ```powershell
+   ai-editor analyze 1
+   ```
+
+3. **The first time only**, AI-Editor downloads two AI models, about 4.6 GB altogether, into your Models folder. After that, analysis works offline.
+4. Four progress bars run:
+   - **Preparing audio** — makes small copies of the audio in the form the AI models expect.
+   - **Transcribing speech** — writes down every word, with the moment it was said.
+   - **Listening for laughter, shouts, gunfire** — recognises those sounds second by second.
+   - **Measuring loudness** — how loud each second is, to find silence and sudden spikes.
+5. When it's done, AI-Editor shows **what it heard**: how much talking, how much near-silence, and a list of **moments to check** with times such as `0:41:07`.
+
+**Checking the results yourself**
+
+- **The transcript:** open the preview copy (its path is shown at the end) in **VLC**. The subtitles appear by themselves, because AI-Editor saves them next to the preview copy with the same name. Watch a few minutes: are the words right, and do they appear as they're said?
+- **The moments:** in VLC, press `Ctrl + T` and type a time from the list to jump there. Is there really laughter, shouting or gunfire at that moment?
+- **Loudest moments** are the seconds that are loudest *compared with the rest of that recording*; the number shows how far above normal (for example `1.5x`). On a single mixed track these include the game's loud moments as well as yours.
+- To see the list again later without re-analysing: `ai-editor moments 1`.
+
+**Good to know**
+
+- **One mixed audio track?** Then the transcript includes everyone audible — in-game characters, teammates — not only you. With OBS set up as in chapter 7, AI-Editor transcribes your microphone track alone.
+- **"Set aside" phrases.** Over music or loud game sound, the speech-recognition AI sometimes "hears" words nobody said — very often YouTube-style sign-offs such as *"see you next time"*. AI-Editor sets aside phrases that are both unsure **and** unnaturally slow, and says how many it set aside. It never removes words just because of *what* they say, so your real sign-offs are kept.
+- **Stopping partway is safe.** Press `Ctrl + C`; run the same command again later and it carries on.
+- **Changed the silence threshold?** Run `ai-editor analyze` again — it takes seconds, because nothing slow is redone; the saved results are simply re-read with the new setting.
+
 ### 11.2 How long it takes
 
 For a 2-hour recording, expect **around 45–50 minutes**, a bit longer for Twitch VODs. Your PC can be used for light tasks meanwhile, but avoid gaming during analysis; the AI uses your graphics card heavily.
@@ -1091,8 +1129,12 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Companion | Confirmation sound | On | Quiet click when marking. |
 | Companion | Start with Windows | Off | Launches Companion at startup. |
 | OBS | WebSocket port / password | 4455 / from OBS | OBS connection. |
-| Analysis | Transcription model | Large (turbo) | Accuracy of transcripts. |
+| Analysis | Transcription model | `large-v3` | Which speech-recognition AI writes your transcripts. `large-v3` is the most accurate and still transcribes 2 hours in about 3 minutes on your PC. `large-v3-turbo` is several times faster but misses more unclear speech. Changing it re-transcribes recordings the next time you analyse them. |
 | Analysis | Voice separation for VODs | On | Separates your voice from game audio. |
+| Analysis | Language | English (`en`) | The language you speak on stream. `auto` works it out from the first 30 seconds, which is a little slower and can guess wrong if the recording opens with music. |
+| Analysis | Voice detector | Auto | Whether AI-Editor skips parts with no speech before transcribing. **Auto** uses it only on a separate microphone track, where it's reliable and stops the AI inventing words over silence. On a mixed track it's off, because there it misses speech under game music. **On** or **Off** force it either way. |
+| Analysis | Silence threshold | −50 dB (−90 to −10) | Anything quieter than this counts as silence. Raise it (towards −40) if quiet background hum stops AI-Editor spotting dead air. Changing it takes effect the next time you run analyze, without redoing the slow steps. |
+| Analysis | Sound listening window | 2 seconds (1–10) | How much audio is heard at once when listening for laughter, shouting and gunfire. Longer is steadier but can blur two quick moments together. |
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
 | Highlights | Target length / min score / ordering | 10 min / 0.6 / Balanced | See chapter 16.2. |
 | Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |
@@ -1124,6 +1166,10 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 | **E012** | That recording has no audio | AI-Editor needs sound to find moments, transcribe speech, and place cuts. | Check your OBS audio settings (chapter 7) and record again. |
 | **E013** | AI-Editor could not process that video file | FFmpeg, the tool doing the video work, stopped with an error partway through. AI-Editor already tries three methods for preview copies (full graphics card, part graphics card, processor only) before showing this. | Check the recording plays normally in a video player. If it does, run the same command again. If it fails a second time, use **Copy diagnostic info** and send it to your engineer. The details are in the log file. |
 | **E014** | The audio track labels don't match this recording | You gave a different number of labels than the recording has tracks, or used a label AI-Editor doesn't know. | Give exactly one label per track, in order. Valid labels: `mixed`, `mic`, `game`, `voice_chat`, `unknown`. Run `ai-editor probe "<file>"` to see how many tracks there are. |
+| **E015** | AI-Editor doesn't have that recording in its library | You gave a library number that doesn't exist, or a file that hasn't been imported. | Run `ai-editor library` to see your recordings and their numbers. If the file is new, import it first (chapter 10.1a). |
+| **E016** | That recording hasn't finished importing | Analysis reads the audio tracks that importing saves, and one or more of them is missing — for example after cleaning up the cache. | Run the same `ai-editor import` command again. Anything already finished is reused, so it's quick. |
+| **E030** | AI-Editor could not download an AI model it needs | The first analysis downloads two AI models (about 4.6 GB in total), once. This needs an internet connection. | Check your connection and run the same command again. Half-finished downloads are cleaned up automatically, and the next try starts fresh. |
+| **E031** | Your graphics card ran out of memory | The AI models need several gigabytes of graphics memory. A game, OBS, or a browser with many tabs may be using it. | Close games, OBS, and other graphics-heavy programs, then run the same command again. Finished steps are kept. |
 | **E020** | A job could not finish | A step failed. The steps that already finished were kept. | Open the **Queue** and press **Resume**. It continues from the step that failed, without repeating finished work. |
 
 ### Stream Companion says "OBS: Not connected"

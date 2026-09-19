@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-editor"
-version = "0.2.0"
+version = "0.3.0"
 description = "AI-Editor - a local assistant editor that turns stream and Let's Play recordings into YouTube content"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,16 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.0",
     "pydantic>=2.6",
+    "numpy>=1.26",
+    "soundfile>=0.12",
+    # Transcription (spec section 4). Runs on CTranslate2, which needs the
+    # CUDA 12 cuBLAS/cuDNN libraries that the CUDA 12 build of torch provides.
+    "faster-whisper>=1.1",
+    # Sound event detection (PANNs Cnn14, see ai_editor/analysis/panns_cnn14.py).
+    # Install torch from the CUDA 12 index FIRST, or pip picks the CPU-only build:
+    #   pip install torch --index-url https://download.pytorch.org/whl/cu126
+    "torch>=2.4",
+    "torchlibrosa>=0.1",
 ]
 
 [project.optional-dependencies]

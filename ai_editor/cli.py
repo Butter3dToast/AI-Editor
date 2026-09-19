@@ -435,6 +435,207 @@ def import_recording(
     console.print(f"Working files folder: {result.cache_dir}")
 
 
+ANALYSIS_LABELS = {
+    "prepare_audio": "Preparing audio",
+    "transcribe": "Transcribing speech",
+    "sound_events": "Listening for laughter, shouts, gunfire",
+    "loudness": "Measuring loudness",
+}
+
+
+def _progress_bar() -> Progress:
+    return Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TextColumn("elapsed,"),
+        TimeRemainingColumn(),
+        TextColumn("left"),
+        console=console,
+    )
+
+
+@app.command("analyze")
+def analyze(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Analyse an imported recording: transcript, loudness, and sound events.
+
+    The first run downloads the AI models (once). Safe to stop with Ctrl+C and
+    run again: finished steps are reused.
+    """
+    from .analysis import analyze_recording
+    from .analysis.pipeline import TrackChoice
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    progress = _progress_bar()
+    tasks: dict[str, TaskID] = {}
+
+    def on_started(row, tracks: TrackChoice) -> None:
+        table = Table(title=f"Analysing: {row['title']}", header_style="bold", show_header=False)
+        table.add_column("Property")
+        table.add_column("Value")
+        table.add_row("Library entry", f"#{row['id']}")
+        table.add_row("Game", row["game"] or "-")
+        table.add_row("Length", _duration(row["duration_sec"]))
+        table.add_row("Voice from", f"track {tracks.voice_index} ({tracks.voice_role})")
+        table.add_row("Game sound from", f"track {tracks.game_index} ({tracks.game_role})")
+        console.print(table)
+        if tracks.voice_role != "mic":
+            console.print(
+                "\n[yellow]No separate microphone track.[/yellow] The transcript will "
+                "include everyone audible, such as in-game characters and teammates, "
+                "not only you."
+            )
+        console.print()
+        progress.start()
+
+    def on_progress(step: str, fraction: float) -> None:
+        if step not in tasks:
+            tasks[step] = progress.add_task(ANALYSIS_LABELS.get(step, step), total=1.0)
+        progress.update(tasks[step], completed=fraction)
+
+    started = time.monotonic()
+    try:
+        result = analyze_recording(
+            conn, settings, recording, on_progress=on_progress, on_started=on_started
+        )
+    except AIEditorError as exc:
+        progress.stop()
+        console.print(f"\n[red]{exc.user_message()}[/red]")
+        conn.close()
+        raise typer.Exit(code=1) from exc
+    except KeyboardInterrupt:
+        progress.stop()
+        console.print(
+            "\n[yellow]Analysis paused.[/yellow] Run the same command again to "
+            "continue; finished steps won't be repeated."
+        )
+        conn.close()
+        raise typer.Exit(code=130)
+    progress.stop()
+
+    if result.status != "complete":
+        console.print(f"\n[red]{result.error_message}[/red]")
+        console.print("To try again, run the same analyze command. Finished steps won't be repeated.")
+        conn.close()
+        raise typer.Exit(code=1)
+
+    summary = Table(title="Analysis complete", header_style="bold")
+    summary.add_column("Step")
+    summary.add_column("Result")
+    summary.add_column("Time", justify="right")
+    for step in result.steps:
+        summary.add_row(
+            ANALYSIS_LABELS.get(step.name, step.name),
+            "[cyan]reused (already done)[/cyan]" if step.reused else "[green]done[/green]",
+            "-" if step.reused else _elapsed(step.seconds),
+        )
+    console.print(summary)
+    console.print(f"Total time: {_elapsed(time.monotonic() - started)}\n")
+
+    _print_moments(conn, result.recording_id)
+    conn.close()
+
+    if result.proxy_srt_path:
+        console.print(
+            f"\n[bold]Check the transcript:[/bold] open the preview copy in VLC and "
+            f"the subtitles load by themselves:\n  {result.proxy_srt_path.with_suffix('.mp4')}"
+        )
+    if result.srt_path:
+        console.print(f"Subtitle file: {result.srt_path}")
+
+
+@app.command("moments")
+def moments(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    top: int = typer.Option(8, "--top", "-n", help="How many moments to list per kind"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Show what analysis found in a recording, with times to check in the proxy."""
+    from .analysis import resolve_recording
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        conn.close()
+        raise typer.Exit(code=1) from exc
+    if row["analysis_status"] != "complete":
+        console.print(
+            f"Recording #{row['id']} hasn't been analysed yet. Run: ai-editor analyze {row['id']}"
+        )
+        conn.close()
+        raise typer.Exit(code=1)
+    _print_moments(conn, row["id"], top)
+    conn.close()
+
+
+def _print_moments(conn, recording_id: int, top: int = 8) -> None:
+    from .analysis.captions import clock
+    from .analysis.moments import EVENT_LABELS, build_report
+
+    report = build_report(conn, recording_id, top)
+
+    overview = Table(title="What AI-Editor heard", header_style="bold", show_header=False)
+    overview.add_column("Measure")
+    overview.add_column("Value")
+    overview.add_row("Words transcribed", f"{report.words:,}")
+    overview.add_row(
+        "Talking",
+        f"{report.talking_pct:.0f}% of the recording"
+        + ("" if report.source_role == "mic" else " (everyone audible, not only you)"),
+    )
+    overview.add_row("Near-silent", f"{report.silence_pct:.0f}% of the recording")
+    if report.phrases_set_aside:
+        overview.add_row(
+            "Set aside",
+            f"{report.phrases_set_aside} phrase(s) that were probably music or noise "
+            "misheard as speech (details in the log file)",
+        )
+    console.print(overview)
+
+    moments_table = Table(
+        title="Moments to check (jump to these times in the preview copy)",
+        header_style="bold",
+    )
+    moments_table.add_column("Kind")
+    moments_table.add_column("Times  (confidence)")
+    moments_table.add_row(
+        "Loudest moments" + ("" if report.source_role == "mic" else " (you and the game)"),
+        "  ".join(f"{clock(t)} ({v:.1f}x)" for t, v in report.spikes) or "[dim]none found[/dim]",
+    )
+    for name, label in EVENT_LABELS.items():
+        found = report.events.get(name)
+        if found is None:
+            continue
+        moments_table.add_row(
+            label,
+            "  ".join(f"{clock(t)} ({v:.0%})" for t, v in found) or "[dim]none found[/dim]",
+        )
+    moments_table.add_row(
+        "Longest stretches with no speech",
+        "  ".join(f"{clock(s)}-{clock(e)}" for s, e in report.quiet_stretches)
+        or "[dim]none over 20 s[/dim]",
+    )
+    console.print(moments_table)
+
+
 @app.command("library")
 def library(
     settings_path: Path = typer.Option(
@@ -459,7 +660,8 @@ def library(
         return
 
     table = Table(title="Clip library", header_style="bold")
-    for column in ("#", "Title", "Game", "Length", "Tracks", "Preview", "Audio", "Source found"):
+    for column in ("#", "Title", "Game", "Length", "Tracks", "Preview", "Audio", "Analysed",
+                   "Source found"):
         table.add_column(column)
     for row in rows:
         table.add_row(
@@ -470,6 +672,8 @@ def library(
             str(row["tracks"]),
             OK if row["proxy_path"] and Path(row["proxy_path"]).exists() else "-",
             OK if row["tracks"] and row["tracks_ready"] == row["tracks"] else "-",
+            {"complete": OK, "running": "[yellow]running[/yellow]",
+             "paused": "[yellow]paused[/yellow]", "failed": FAIL}.get(row["analysis_status"], "-"),
             OK if Path(row["source_file"]).exists() else FAIL,
         )
     console.print(table)

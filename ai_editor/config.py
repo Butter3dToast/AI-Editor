@@ -81,10 +81,14 @@ class Obs(BaseModel):
 
 
 class Analysis(BaseModel):
-    transcription_model: str = "large-v3-turbo"
+    transcription_model: str = "large-v3"
     compute_type: str = "float16"
     voice_separation_for_vods: bool = True
     signal_rate_hz: int = Field(1, ge=1, le=10)
+    language: str = "en"
+    voice_detector: Literal["auto", "on", "off"] = "auto"
+    silence_threshold_db: float = Field(-50.0, ge=-90.0, le=-10.0)
+    event_window_sec: float = Field(2.0, ge=1.0, le=10.0)
 
 
 class Leftover(BaseModel):

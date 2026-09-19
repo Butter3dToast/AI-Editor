@@ -27,7 +27,7 @@ a hard rule, not a preference.
 |---|---|---|
 | **0** | Foundation: settings, database schema, job queue, FFmpeg layer, setup check | **Complete** |
 | **1A** | Ingest: local OBS recordings, proxies, audio extraction | **Complete** |
-| 1B | Audio analysis: transcription, silence, audio events | Not started |
+| **1B** | Audio analysis: transcription, silence, audio events | **Complete** |
 | 1C | Twitch VOD download, chat, Demucs voice separation | Not started |
 | 1D | Stream Companion: OBS WebSocket, marker hotkeys | Not started |
 | 1E | Scoring and clip segmentation | Not started |
@@ -43,6 +43,14 @@ a hard rule, not a preference.
 
 Requires Python 3.11+, FFmpeg with NVENC, and an NVIDIA GPU.
 
+Install PyTorch from the **CUDA 12** index before anything else, or pip picks the
+CPU-only build. CUDA 12 specifically, even on newer drivers: faster-whisper's
+engine (CTranslate2) needs the CUDA 12 cuBLAS/cuDNN libraries that this build ships.
+
+```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cu126
+```
+
 ```powershell
 # From the project root
 .\.venv\Scripts\Activate.ps1      # or: py -3.11 -m venv .venv  (first time)
@@ -52,6 +60,8 @@ ai-editor doctor                  # Check the setup
 ai-editor probe "path\to\recording.mp4" --hash
 ai-editor import "path\to\recording.mp4"    # Proxy + audio into the library
 ai-editor library                 # List imported recordings
+ai-editor analyze 1               # Transcript, loudness, sound events
+ai-editor moments 1               # What analysis found, with times to check
 pytest
 ```
 
@@ -71,6 +81,15 @@ ai_editor/
   ffmpeg.py          FFmpeg/ffprobe wrapper, media probing, content hashing
   ingest.py          Import: registration, proxy (GPU with fallbacks), audio
   games.py           Known games and filename-based game suggestion
+  models.py          AI model loading: one on the GPU at a time, downloads once
+  analysis/
+    pipeline.py      The resumable analysis job and storing its results
+    transcript.py    Whisper transcription and the hallucination filter
+    sound_events.py  Laughter / shouting / gunfire via PANNs
+    panns_cnn14.py   The PANNs network (vendored, MIT; see file header for why)
+    audio_signals.py Loudness, silence, spikes, speech coverage (pure numpy)
+    captions.py      Words into subtitle cues; SRT output
+    moments.py       The human-readable report of what was found
   errors.py          Plain-language errors, each mapped to a manual entry
   logging_setup.py   File logs get tracebacks; the creator never does
   cli.py             Command line interface

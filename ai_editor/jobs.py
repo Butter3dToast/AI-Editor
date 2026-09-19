@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -178,6 +179,33 @@ class JobQueue:
             (max(0.0, min(1.0, progress)), step, job_id),
         )
         self.conn.commit()
+
+    def step_reporter(
+        self,
+        job_id: int,
+        step: str,
+        position: int,
+        total: int,
+        on_progress: Callable[[str, float], None] | None = None,
+    ) -> Callable[[float], None]:
+        """A callback a long step calls with its own 0-1 progress.
+
+        Forwards every update to ``on_progress`` (the progress bar) but writes
+        the job's overall progress to the database at most every two seconds:
+        FFmpeg and the AI models report many times a second, and the database
+        doesn't need to hear about all of them.
+        """
+        last_write = [0.0]
+
+        def report(fraction: float) -> None:
+            if on_progress:
+                on_progress(step, fraction)
+            now = time.monotonic()
+            if now - last_write[0] >= 2.0 or fraction >= 1.0:
+                last_write[0] = now
+                self.set_progress(job_id, (position + fraction) / max(total, 1), step)
+
+        return report
 
     # --- step tracking -----------------------------------------------------
 
