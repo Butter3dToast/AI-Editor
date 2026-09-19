@@ -3,6 +3,47 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.4.0 — Phase 1C: Twitch VODs, chat, and voice separation — 19 September 2026
+
+Your stream footage and Twitch chat can now come into AI-Editor.
+
+**New**
+
+- **Download a VOD straight from Twitch:** `ai-editor import-twitch <link>`
+  downloads a public VOD into your Raw footage folder, imports it, and attaches
+  its chat. Links from your Twitch dashboard work too, and the game is read
+  from Twitch.
+- **Import a VOD you downloaded yourself:** `ai-editor import "<file>" --vod
+  <link>` (or `--source twitch --game Wardogs` without a link). Useful for
+  private VODs, which Twitch won't let AI-Editor download.
+- **Chat activity:** `ai-editor attach-chat <recording> <link>` adds a VOD's
+  chat to any recording, including a local recording made while streaming.
+  Chat bots such as StreamElements are ignored, because they aren't viewers.
+- **Voice separation:** on a recording with one mixed audio track, AI-Editor
+  can split the sound into voices and everything else before analysing it. On
+  by default for Twitch VODs; 2 hours take about 2 minutes. The separated
+  sound is only used for analysis, never in your videos.
+- **VOD expiry warnings:** Twitch deletes VODs after a while; AI-Editor warns
+  when one is within 3 days of going.
+- `ai-editor library` shows whether each recording is local or from Twitch,
+  and whether it has chat.
+- Three new error messages (E040, E041, E042) in manual chapter 25.
+
+**Measured on your footage**
+
+- Voice separation on EP 1: 2.2 minutes for 2 h 06 m, 2% more words, one fewer
+  invented phrase. A modest gain for a Let's Play, which is why it stays off
+  for local recordings by default; your separate OBS tracks already do better.
+- The voice detector was checked on all three kinds of audio. It stays on for
+  clean mic tracks only: on game-heavy audio it cut real short reactions
+  ("Oh, fuck.", "No, no, no!").
+
+**Fixed**
+
+- Re-analysing a recording no longer wipes its chat activity.
+- Technical error text from FFmpeg or the Twitch downloader can no longer
+  appear on your screen; it goes to the log file only.
+
 ## 0.3.0 — Phase 1B: Listening to recordings — 19 September 2026
 
 AI-Editor can now hear what happens in a recording.

@@ -14,6 +14,9 @@ tools:
   # Leave empty to find FFmpeg automatically. Set this to the folder holding
   # ffmpeg.exe only if the setup check cannot find it.
   ffmpeg_dir: null
+  # Where helper programs such as the Twitch downloader are kept. Empty means a
+  # "tools" folder next to your models folder.
+  folder: null
 
 performance:
   device: gpu # gpu | cpu. Leave on gpu.
@@ -43,7 +46,10 @@ analysis:
   # transcribed 2 hours in 2.9 minutes. large-v3-turbo is the faster fallback.
   transcription_model: large-v3
   compute_type: float16
-  voice_separation_for_vods: true # Demucs separation on single-track sources
+  # Split a single mixed audio track into voices and everything else before
+  # analysing it. vods = Twitch VODs only (the spec); mixed = any recording with
+  # one mixed track; off = never. Recordings with a separate mic track never need it.
+  voice_separation: vods # vods | mixed | off
   signal_rate_hz: 1 # Signals are stored once per second (spec section 7.3)
   language: en # Language you speak on stream. "auto" detects it, a little slower.
   # Skip non-speech before transcribing? auto = only on a separate mic track, where
@@ -111,6 +117,15 @@ render:
 
 storage:
   low_space_warning_gb: 100
+
+twitch:
+  # Twitch deletes VODs after 7 days (regular), 14 (Affiliates) or 60 (Partners,
+  # Turbo, Prime). AI-Editor warns when one is close to going.
+  vod_keep_days: 14
+  download_quality: 1080p60
+  # Chat bots post automatically ("...is now live!"), so their messages never
+  # count as viewers reacting. Add any other bot your channel uses.
+  ignore_chatters: [StreamElements, Nightbot, Moobot, Streamlabs, Fossabot, Sery_Bot, WizeBot, SoundAlerts]
 
 llm: # Not used until Phase 2
   enabled: false

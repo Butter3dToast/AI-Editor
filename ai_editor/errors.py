@@ -160,6 +160,40 @@ class OutOfGraphicsMemory(AIEditorError):
     )
 
 
+# --- Twitch ----------------------------------------------------------------
+
+
+class InvalidVodLink(AIEditorError):
+    code = "E040"
+    what = "That doesn't look like a Twitch VOD link"
+    why = "AI-Editor needs the VOD's link or its number"
+    fix = (
+        "Copy the link from your browser while the VOD is open "
+        "(twitch.tv/videos/...), or from Video Producer in your Twitch dashboard"
+    )
+
+
+class VodNotAvailable(AIEditorError):
+    code = "E041"
+    what = "Twitch won't share that VOD"
+    why = (
+        "It is private, unpublished, subscriber-only, or has expired. To Twitch, "
+        "a VOD that isn't public looks as if it doesn't exist"
+    )
+    fix = (
+        "In your Twitch dashboard, open Content, then Video Producer, and make the VOD "
+        "public while you download it. Or download it there yourself and import the "
+        "file with --source twitch"
+    )
+
+
+class TwitchDownloadFailed(AIEditorError):
+    code = "E042"
+    what = "The download from Twitch didn't finish"
+    why = "The connection dropped, or Twitch stopped responding"
+    fix = "Check your internet connection and run the same command again"
+
+
 # --- Jobs ------------------------------------------------------------------
 
 
@@ -185,5 +219,8 @@ ALL_ERRORS: tuple[type[AIEditorError], ...] = (
     NotImported,
     ModelDownloadFailed,
     OutOfGraphicsMemory,
+    InvalidVodLink,
+    VodNotAvailable,
+    TwitchDownloadFailed,
     JobFailed,
 )

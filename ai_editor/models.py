@@ -150,6 +150,53 @@ def whisper_model(settings: Settings) -> Iterator[object]:
         free_gpu_memory()
 
 
+# --- Demucs (voice separation) ---------------------------------------------
+
+# htdemucs: Demucs v4's standard hybrid-transformer model. The file name carries
+# its own checksum ("-8726e21a"), which Demucs verifies on load.
+DEMUCS_MODEL_NAME = "htdemucs"
+DEMUCS_SIGNATURE = "955717e8"
+DEMUCS_FILE = "955717e8-8726e21a.th"
+DEMUCS_URL = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th"
+DEMUCS_MIN_BYTES = 50_000_000
+
+
+@contextmanager
+def separation_model(settings: Settings) -> Iterator[tuple[object, str]]:
+    """Demucs, loaded from the models folder rather than a hidden cache.
+
+    Demucs normally downloads into the user's home folder. Pointing it at a
+    local folder holding the model file keeps everything where spec section
+    10 says models live, and uses the same resumable download as the others.
+    """
+    folder = settings.folders.models / "demucs"
+    checkpoint = download(DEMUCS_URL, folder / DEMUCS_FILE, min_bytes=DEMUCS_MIN_BYTES,
+                          what="voice separation model (about 80 MB)")
+    # A "bag" file tells Demucs which model file(s) make up htdemucs.
+    (folder / f"{DEMUCS_MODEL_NAME}.yaml").write_text(
+        f"models: ['{DEMUCS_SIGNATURE}']\n", encoding="utf-8")
+
+    device = "cuda" if use_gpu(settings) else "cpu"
+    try:
+        from demucs.pretrained import get_model
+
+        model = get_model(DEMUCS_MODEL_NAME, repo=folder)
+        model.to(device).eval()  # type: ignore[attr-defined]
+    except Exception as exc:  # noqa: BLE001
+        free_gpu_memory()
+        if is_out_of_memory(exc):
+            raise OutOfGraphicsMemory() from exc
+        log.exception("Loading the voice separation model failed")
+        checkpoint.unlink(missing_ok=True)  # Failed its checksum or is damaged.
+        raise ModelDownloadFailed("The voice separation model could not be loaded") from exc
+
+    try:
+        yield model, device
+    finally:
+        del model
+        free_gpu_memory()
+
+
 # --- PANNs (sound recognition) ---------------------------------------------
 
 

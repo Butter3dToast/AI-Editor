@@ -27,11 +27,17 @@ log = get_logger(__name__)
 def voice_detector_on(setting: str, voice_role: str) -> bool:
     """Whether to let the voice detector skip audio before transcribing.
 
-    On a clean microphone track the detector is reliable, and skipping the
-    silences stops Whisper inventing words over them. On a mixed track it
-    measured badly: with it on, EP 1 kept 218 words in two test stretches;
-    with it off, 295 -- the difference almost all real dialogue under music.
-    So "auto" uses it only where it helps.
+    Measured on the creator's own recordings:
+
+    * Mic track (5-minute test): on kept 204 words, off 200 -- and "off" added
+      an invented "Thank you." over silence. Reliable; use it.
+    * Mixed track (EP 1): on kept 218 words in two test stretches, off 295,
+      the difference almost all real dialogue under game music.
+    * AI-separated voices (EP 1): on removed all six invented "Thank you."s but
+      also 30 confident real phrases -- short reactions like "Oh, fuck.",
+      "No, no, no!" -- which are exactly what highlights are made of.
+
+    So "auto" uses it on a clean microphone track only.
     """
     if setting == "on":
         return True

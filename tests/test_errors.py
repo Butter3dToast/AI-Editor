@@ -64,3 +64,29 @@ def test_every_error_code_is_documented_in_the_manual():
         "These error codes have no entry in manual chapter 25: "
         + ", ".join(undocumented)
     )
+
+
+def test_technical_detail_never_reaches_the_screen(tmp_path, capsys):
+    """Spec 14.2: an external program's raw error output goes to the log only."""
+    import logging
+
+    from ai_editor import logging_setup
+
+    logging_setup._configured = False
+    root = logging.getLogger()
+    saved = root.handlers[:]
+    root.handlers = []
+    try:
+        log_path = logging_setup.setup_logging(tmp_path, "WARNING")
+        logging.getLogger("test").error("Unhandled exception. System.AggregateException",
+                                        extra=logging_setup.FILE_ONLY)
+        for handler in root.handlers:
+            handler.flush()
+        screen = capsys.readouterr()
+        assert "AggregateException" not in screen.out + screen.err
+        assert "AggregateException" in log_path.read_text(encoding="utf-8")
+    finally:
+        for handler in root.handlers:
+            handler.close()
+        root.handlers = saved
+        logging_setup._configured = False

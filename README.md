@@ -28,7 +28,7 @@ a hard rule, not a preference.
 | **0** | Foundation: settings, database schema, job queue, FFmpeg layer, setup check | **Complete** |
 | **1A** | Ingest: local OBS recordings, proxies, audio extraction | **Complete** |
 | **1B** | Audio analysis: transcription, silence, audio events | **Complete** |
-| 1C | Twitch VOD download, chat, Demucs voice separation | Not started |
+| **1C** | Twitch VOD download, chat, Demucs voice separation | **Complete** |
 | 1D | Stream Companion: OBS WebSocket, marker hotkeys | Not started |
 | 1E | Scoring and clip segmentation | Not started |
 | 1F | Recipes: highlights, Let's Play split optimiser | Not started |
@@ -62,6 +62,8 @@ ai-editor import "path\to\recording.mp4"    # Proxy + audio into the library
 ai-editor library                 # List imported recordings
 ai-editor analyze 1               # Transcript, loudness, sound events
 ai-editor moments 1               # What analysis found, with times to check
+ai-editor import-twitch <link>    # Download a public VOD, import it, attach chat
+ai-editor attach-chat 1 <link>    # Add a VOD's chat to any recording
 pytest
 ```
 
@@ -81,11 +83,14 @@ ai_editor/
   ffmpeg.py          FFmpeg/ffprobe wrapper, media probing, content hashing
   ingest.py          Import: registration, proxy (GPU with fallbacks), audio
   games.py           Known games and filename-based game suggestion
+  twitch.py          TwitchDownloader wrapper: VOD info, video and chat downloads
   models.py          AI model loading: one on the GPU at a time, downloads once
   analysis/
     pipeline.py      The resumable analysis job and storing its results
     transcript.py    Whisper transcription and the hallucination filter
     sound_events.py  Laughter / shouting / gunfire via PANNs
+    separation.py    Demucs voice separation for single mixed tracks
+    chat.py          Chat activity per second, attached from a Twitch VOD
     panns_cnn14.py   The PANNs network (vendored, MIT; see file header for why)
     audio_signals.py Loudness, silence, spikes, speech coverage (pure numpy)
     captions.py      Words into subtitle cues; SRT output

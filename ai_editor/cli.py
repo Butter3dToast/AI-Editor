@@ -36,6 +36,7 @@ from .ffmpeg import (
     nvenc_encoders,
     probe,
 )
+from .games import canonical_game
 from .ingest import Registration, ingest_recording
 from .logging_setup import setup_logging
 
@@ -340,30 +341,60 @@ def import_recording(
         help="Audio track labels in order, e.g. mixed,mic,game,voice_chat. "
         "Guessed from the OBS setup in manual chapter 7 if left out.",
     ),
+    source: str = typer.Option(
+        "local", "--source",
+        help="local (an OBS recording) or twitch (a VOD you downloaded yourself).",
+    ),
+    vod: str = typer.Option(
+        None, "--vod",
+        help="For a downloaded VOD: its Twitch link, so the game and stream date are "
+        "read from Twitch. Implies --source twitch.",
+    ),
     settings_path: Path = typer.Option(
         DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
     ),
 ) -> None:
-    """Import a local OBS recording: preview copy, audio, and library entry.
+    """Import a recording: preview copy, audio, and library entry.
 
     The file is read where it is, never copied or changed. Safe to run again:
     finished work is reused, and an interrupted import continues where it
     stopped.
     """
+    from . import twitch
+
     settings = _load(settings_path)
     setup_logging(settings.log_dir, settings.logging.level)
-    conn = init_db(settings.db_path)
+    if source not in ("local", "twitch"):
+        console.print("[red]--source must be local or twitch.[/red]")
+        raise typer.Exit(code=1)
 
-    progress = Progress(
-        TextColumn("{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        TextColumn("elapsed,"),
-        TimeRemainingColumn(),
-        TextColumn("left"),
-        console=console,
-    )
+    vod_id = recorded_at = None
+    if vod:
+        source = "twitch"
+        try:
+            vod_id = twitch.parse_vod_id(vod)
+            info = twitch.vod_info(settings, vod_id)
+            game = game or (info.game and canonical_game(info.game))
+            recorded_at = info.created_at.isoformat() if info.created_at else None
+        except AIEditorError as exc:
+            # The file is already here, so a VOD Twitch won't describe (private,
+            # expired) only costs the extras. Carry on without them.
+            console.print(f"[yellow]Couldn't read the VOD's details from Twitch; "
+                          f"importing without them.[/yellow] {exc.user_message()}\n")
+
+    conn = init_db(settings.db_path)
+    try:
+        _import_file(settings, conn, path, game=game, tracks=tracks,
+                     source_type="twitch_vod" if source == "twitch" else "local_obs",
+                     vod_id=vod_id, recorded_at=recorded_at)
+    finally:
+        conn.close()
+
+
+def _import_file(settings, conn, path: Path, *, game, tracks, source_type, vod_id=None,
+                 recorded_at=None) -> int:
+    """Shared by import and import-twitch: progress bars, summary. Returns the recording id."""
+    progress = _progress_bar()
     tasks: dict[str, TaskID] = {}
 
     def on_registered(reg: Registration, space_warning: str | None) -> None:
@@ -372,6 +403,7 @@ def import_recording(
         table.add_column("Property")
         table.add_column("Value")
         table.add_row("Library entry", f"#{reg.recording_id} ({'new' if reg.is_new else 'already in library'})")
+        table.add_row("Source", "Twitch VOD" if source_type == "twitch_vod" else "Local recording")
         table.add_row("Game", reg.game or "[yellow]not set - add --game[/yellow]")
         table.add_row("Length", _duration(info.duration_sec))
         table.add_row("Video", f"{info.width}x{info.height} @ {info.fps:.0f} fps" if info.fps else "-")
@@ -382,7 +414,7 @@ def import_recording(
         if reg.relinked_from:
             table.add_row("Moved from", reg.relinked_from)
         console.print(table)
-        if not info.is_multitrack:
+        if not info.is_multitrack and source_type != "twitch_vod":
             _single_track_warning()
         if space_warning:
             console.print(f"\n[yellow]Low space:[/yellow] {space_warning}")
@@ -399,6 +431,7 @@ def import_recording(
         result = ingest_recording(
             conn, settings, path, game=game, track_roles=tracks,
             on_progress=on_progress, on_registered=on_registered,
+            source_type=source_type, twitch_vod_id=vod_id, recorded_at=recorded_at,
         )
     except AIEditorError as exc:
         progress.stop()
@@ -413,7 +446,6 @@ def import_recording(
         raise typer.Exit(code=130)
     finally:
         progress.stop()
-        conn.close()
 
     if result.status != "complete":
         console.print(f"\n[red]{result.error_message}[/red]")
@@ -433,9 +465,142 @@ def import_recording(
     console.print(f"Total time: {_elapsed(time.monotonic() - started)}")
     console.print(f"Preview copy: [bold]{result.proxy_path}[/bold]")
     console.print(f"Working files folder: {result.cache_dir}")
+    console.print(f"Next: [bold]ai-editor analyze {result.registration.recording_id}[/bold]")
+    return result.registration.recording_id
+
+
+def _safe_filename(text: str) -> str:
+    cleaned = "".join(c if c.isalnum() or c in " -_()[]" else " " for c in text)
+    return " ".join(cleaned.split())[:80] or "Twitch VOD"
+
+
+@app.command("import-twitch")
+def import_twitch(
+    link: str = typer.Argument(..., help="The VOD's Twitch link (or dashboard link, or number)"),
+    game: str = typer.Option(None, "--game", "-g", help="Only if Twitch has the game wrong"),
+    chat: bool = typer.Option(True, "--chat/--no-chat", help="Also download and attach the chat"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Download a Twitch VOD into your raw folder, import it, and attach its chat.
+
+    The VOD must be public. For a private one, download it from your Twitch
+    dashboard and use: ai-editor import "<file>" --vod <link>
+    """
+    from . import twitch
+    from .analysis.chat import attach_chat
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    try:
+        vod_id = twitch.parse_vod_id(link)
+        info = twitch.vod_info(settings, vod_id)
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[bold]{info.title or 'Twitch VOD'}[/bold]  "
+                  f"({info.channel or '?'}, {info.game or 'game unknown'}, "
+                  f"{_duration(info.length_sec)})")
+    warning = twitch.expiry_warning(info, settings.twitch.vod_keep_days)
+    if warning:
+        console.print(f"[yellow]{warning}[/yellow]")
+
+    date = info.created_at.strftime("%Y-%m-%d") if info.created_at else "unknown date"
+    target = settings.folders.raw / f"Twitch {date} {_safe_filename(info.title or vod_id)} ({vod_id}).mp4"
+    if target.exists():
+        console.print(f"Already downloaded: {target}")
+    else:
+        progress = _progress_bar()
+        task = progress.add_task("Downloading the VOD", total=1.0)
+        progress.start()
+        try:
+            twitch.download_video(settings, vod_id, target,
+                                  lambda f: progress.update(task, completed=f))
+        except AIEditorError as exc:
+            progress.stop()
+            console.print(f"\n[red]{exc.user_message()}[/red]")
+            raise typer.Exit(code=1) from exc
+        except KeyboardInterrupt:
+            progress.stop()
+            console.print("\n[yellow]Download stopped.[/yellow] Run the same command to start it again.")
+            raise typer.Exit(code=130)
+        progress.stop()
+
+    conn = init_db(settings.db_path)
+    try:
+        recording_id = _import_file(
+            settings, conn, target,
+            game=game or (info.game and canonical_game(info.game)), tracks=None,
+            source_type="twitch_vod", vod_id=vod_id,
+            recorded_at=info.created_at.isoformat() if info.created_at else None,
+        )
+        if chat:
+            result = attach_chat(conn, settings, recording_id, vod_id)
+            _print_chat(result)
+    except AIEditorError as exc:
+        console.print(f"\n[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+
+@app.command("attach-chat")
+def attach_chat_command(
+    recording: str = typer.Argument(..., help="The recording's number from the library, or its file"),
+    link: str = typer.Argument(..., help="The Twitch VOD whose chat to attach"),
+    starts_at: float = typer.Option(
+        0.0, "--starts-at",
+        help="Seconds into the stream when this recording began. 0 for the VOD itself; "
+        "a few seconds for a local recording made while streaming.",
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Add a Twitch VOD's chat to a recording (manual chapter 10.3).
+
+    Works for the VOD itself, and for a local recording made while streaming,
+    which keeps the better video and separate audio tracks but gains the chat.
+    """
+    from .analysis import resolve_recording
+    from .analysis.chat import attach_chat
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+        result = attach_chat(conn, settings, row["id"], link, recording_starts_at=starts_at)
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+    _print_chat(result)
+
+
+def _print_chat(result) -> None:
+    from .analysis.captions import clock
+
+    table = Table(title=f"Chat from VOD {result.vod_id}", header_style="bold", show_header=False)
+    table.add_column("Measure")
+    table.add_column("Value")
+    table.add_row("Messages", f"{result.messages_in_recording:,} from {result.chatters} viewer(s)")
+    if result.bot_messages:
+        table.add_row("Ignored", f"{result.bot_messages} from chat bots (see twitch.ignore_chatters)")
+    table.add_row(
+        "Busiest moments",
+        "  ".join(f"{clock(t)} ({v:.0f} msgs)" for t, v in result.busiest) or "[dim]none yet[/dim]",
+    )
+    console.print(table)
+    if result.expiry_warning:
+        console.print(f"[yellow]{result.expiry_warning}[/yellow]")
 
 
 ANALYSIS_LABELS = {
+    "separate_voices": "Separating voices from game sound",
     "prepare_audio": "Preparing audio",
     "transcribe": "Transcribing speech",
     "sound_events": "Listening for laughter, shouts, gunfire",
@@ -480,20 +645,29 @@ def analyze(
     tasks: dict[str, TaskID] = {}
 
     def on_started(row, tracks: TrackChoice) -> None:
+        from .analysis.pipeline import needs_separation
+
+        separating = needs_separation(settings, row, tracks)
         table = Table(title=f"Analysing: {row['title']}", header_style="bold", show_header=False)
         table.add_column("Property")
         table.add_column("Value")
         table.add_row("Library entry", f"#{row['id']}")
         table.add_row("Game", row["game"] or "-")
         table.add_row("Length", _duration(row["duration_sec"]))
-        table.add_row("Voice from", f"track {tracks.voice_index} ({tracks.voice_role})")
-        table.add_row("Game sound from", f"track {tracks.game_index} ({tracks.game_role})")
+        if separating:
+            table.add_row("Voice from", f"track {tracks.voice_index} ({tracks.voice_role}), separated by AI")
+            table.add_row("Game sound from", f"track {tracks.voice_index} ({tracks.voice_role}), separated by AI")
+        else:
+            table.add_row("Voice from", f"track {tracks.voice_index} ({tracks.voice_role})")
+            table.add_row("Game sound from", f"track {tracks.game_index} ({tracks.game_role})")
         console.print(table)
         if tracks.voice_role != "mic":
             console.print(
                 "\n[yellow]No separate microphone track.[/yellow] The transcript will "
                 "include everyone audible, such as in-game characters and teammates, "
                 "not only you."
+                + (" Voice separation removes the game's music and sound effects first."
+                   if separating else "")
             )
         console.print()
         progress.start()
@@ -660,13 +834,14 @@ def library(
         return
 
     table = Table(title="Clip library", header_style="bold")
-    for column in ("#", "Title", "Game", "Length", "Tracks", "Preview", "Audio", "Analysed",
-                   "Source found"):
+    for column in ("#", "Title", "Source", "Game", "Length", "Tracks", "Preview", "Audio",
+                   "Analysed", "Chat", "Source found"):
         table.add_column(column)
     for row in rows:
         table.add_row(
             str(row["id"]),
             row["title"] or "-",
+            "Twitch" if row["source_type"] == "twitch_vod" else "Local",
             row["game"] or "-",
             _duration(row["duration_sec"]),
             str(row["tracks"]),
@@ -674,6 +849,7 @@ def library(
             OK if row["tracks"] and row["tracks_ready"] == row["tracks"] else "-",
             {"complete": OK, "running": "[yellow]running[/yellow]",
              "paused": "[yellow]paused[/yellow]", "failed": FAIL}.get(row["analysis_status"], "-"),
+            OK if row["twitch_vod_id"] else "-",
             OK if Path(row["source_file"]).exists() else FAIL,
         )
     console.print(table)

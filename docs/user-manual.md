@@ -448,6 +448,34 @@ Right-click the tray icon → **View session log** to see markers and events fro
 
 Because Twitch VODs have one mixed audio track, AI-Editor automatically separates your voice from game sound and teammates using your voice sample. This adds some time to analysis.
 
+### 10.2a Twitch VODs from the command line (until the app window arrives)
+
+> **[Engineer: command-line versions of 10.2 and 10.3, used while AI-Editor is being built.]**
+
+**A public VOD: one command does everything.** It downloads the video into your Raw footage folder, imports it, and attaches the chat:
+
+```powershell
+ai-editor import-twitch "https://www.twitch.tv/videos/2875855539"
+```
+
+Links from **Content → Video Producer** in your Twitch dashboard work too, and so does just the number. The game is read from Twitch, so you don't need `--game`. Add `--no-chat` to skip the chat.
+
+**A private VOD:** Twitch won't let AI-Editor download it (error E041). Either make it public for a few minutes, or download it yourself from **Video Producer** and import the file, giving the link so the game and stream date still come from Twitch:
+
+```powershell
+ai-editor import "F:\AI-Editor\raw\Twitch Vod.mp4" --vod "<the VOD's link>"
+```
+
+(Without a link, use `--source twitch --game Wardogs` instead.)
+
+**Adding chat later**, for example once the VOD is public:
+
+```powershell
+ai-editor attach-chat 3 "<the VOD's link>"
+```
+
+AI-Editor shows how many messages it found, from how many viewers, and the busiest moments. Messages from chat bots such as StreamElements are ignored (Settings → Twitch → Ignored chatters).
+
 ### 10.3 Using both a local recording and the VOD
 
 If you recorded locally *and* want chat data:
@@ -455,6 +483,8 @@ If you recorded locally *and* want chat data:
 1. Import the **local recording** first.
 2. Open it in the Library, click **Attach Twitch chat**, and paste the VOD link.
 3. AI-Editor downloads only the chat and lines it up with your recording.
+
+From the command line: `ai-editor attach-chat <recording number> "<VOD link>" --starts-at <seconds>`. `--starts-at` is how many seconds into the stream your recording began: usually 0–5 if OBS starts recording automatically when you go live. In Phase 1D, the Stream Companion works this out for you.
 
 ### 10.4 Games that show up in one session
 
@@ -1130,7 +1160,7 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Companion | Start with Windows | Off | Launches Companion at startup. |
 | OBS | WebSocket port / password | 4455 / from OBS | OBS connection. |
 | Analysis | Transcription model | `large-v3` | Which speech-recognition AI writes your transcripts. `large-v3` is the most accurate and still transcribes 2 hours in about 3 minutes on your PC. `large-v3-turbo` is several times faster but misses more unclear speech. Changing it re-transcribes recordings the next time you analyse them. |
-| Analysis | Voice separation for VODs | On | Separates your voice from game audio. |
+| Analysis | Voice separation | Twitch VODs only (`vods`) | On a recording with one mixed audio track, splits the sound into voices and everything else (music, combat) before analysing it, so the game's music can't hide your speech or trick the speech recognition. `vods` does this for Twitch VODs only; `mixed` for any single-track recording; `off` never. Recordings with a separate microphone track never need it. Takes about 2 minutes per 2 hours. The separated sound is only used for analysis, never in your videos. |
 | Analysis | Language | English (`en`) | The language you speak on stream. `auto` works it out from the first 30 seconds, which is a little slower and can guess wrong if the recording opens with music. |
 | Analysis | Voice detector | Auto | Whether AI-Editor skips parts with no speech before transcribing. **Auto** uses it only on a separate microphone track, where it's reliable and stops the AI inventing words over silence. On a mixed track it's off, because there it misses speech under game music. **On** or **Off** force it either way. |
 | Analysis | Silence threshold | −50 dB (−90 to −10) | Anything quieter than this counts as silence. Raise it (towards −40) if quiet background hum stops AI-Editor spotting dead air. Changing it takes effect the next time you run analyze, without redoing the slow steps. |
@@ -1141,6 +1171,10 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |
 | Storage | Low space warning | 100 GB | When to warn. |
+| Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
+| Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
+| Twitch | Ignored chatters | StreamElements, Nightbot, Moobot, Streamlabs, Fossabot, Sery_Bot, WizeBot, SoundAlerts | Chat bots post automatically, so their messages never count as viewers reacting. Add any other bot your channel uses. |
+| Tools | Tools folder | Empty (a `tools` folder next to your Models folder) | Where helper programs, such as the Twitch downloader, are kept. |
 | Logging | Screen detail level | WARNING | How much AI-Editor prints while it works. WARNING shows only problems. INFO also shows each step as it happens. The log file always records full detail, whatever this is set to. |
 | Game profiles | Screen reading (per game) | On | Turn off if detection breaks after a game update. |
 
@@ -1170,6 +1204,9 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 | **E016** | That recording hasn't finished importing | Analysis reads the audio tracks that importing saves, and one or more of them is missing — for example after cleaning up the cache. | Run the same `ai-editor import` command again. Anything already finished is reused, so it's quick. |
 | **E030** | AI-Editor could not download an AI model it needs | The first analysis downloads two AI models (about 4.6 GB in total), once. This needs an internet connection. | Check your connection and run the same command again. Half-finished downloads are cleaned up automatically, and the next try starts fresh. |
 | **E031** | Your graphics card ran out of memory | The AI models need several gigabytes of graphics memory. A game, OBS, or a browser with many tabs may be using it. | Close games, OBS, and other graphics-heavy programs, then run the same command again. Finished steps are kept. |
+| **E040** | That doesn't look like a Twitch VOD link | AI-Editor couldn't find a VOD number in what you gave it. | Open the VOD on Twitch and copy the link from your browser (`twitch.tv/videos/...`), or copy it from **Content → Video Producer** in your Twitch dashboard. Both kinds of link work, and so does just the number. |
+| **E041** | Twitch won't share that VOD | The VOD is private, unpublished, subscriber-only, or expired. Twitch treats a VOD that isn't public as if it doesn't exist. | In your Twitch dashboard open **Content → Video Producer** and make the VOD public while you download it; you can change it back afterwards. Or download it there yourself and import the file: `ai-editor import "<file>" --source twitch`. |
+| **E042** | The download from Twitch didn't finish | The internet connection dropped, or Twitch stopped responding. | Check your connection and run the same command again. |
 | **E020** | A job could not finish | A step failed. The steps that already finished were kept. | Open the **Queue** and press **Resume**. It continues from the step that failed, without repeating finished work. |
 
 ### Stream Companion says "OBS: Not connected"
@@ -1196,6 +1233,13 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 - Check the Queue: AI-Editor may be running voice separation (Twitch VODs take longer).
 - Make sure **Run AI on** is set to GPU.
 - Update NVIDIA drivers.
+
+### Subtitles don't appear when I play the preview copy in VLC
+AI-Editor saves the subtitles as `proxy.srt` next to `proxy.mp4`, and VLC normally loads them by itself. If you opened the preview copy **before** analysis finished, VLC may have remembered it as having no subtitles.
+1. With the preview copy playing, press **`V`** to switch through subtitle tracks.
+2. Or open **Subtitle → Sub Track** and choose `proxy.srt` if it's listed.
+3. If it isn't listed, choose **Subtitle → Add Subtitle File…** and pick `proxy.srt` from the same folder, or drag `proxy.srt` onto the VLC window.
+4. Still nothing? Close VLC completely and open the preview copy again.
 
 ### Captions have wrong words
 - Click caption text on the Review screen to fix it.

@@ -13,7 +13,8 @@ from ai_editor.cli import app
 
 runner = CliRunner()
 
-COMMANDS = ["version", "doctor", "init-db", "probe", "import", "library", "analyze", "moments"]
+COMMANDS = ["version", "doctor", "init-db", "probe", "import", "import-twitch", "attach-chat",
+            "library", "analyze", "moments"]
 
 
 def test_top_level_help_lists_every_command():

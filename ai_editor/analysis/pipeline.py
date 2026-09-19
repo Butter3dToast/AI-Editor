@@ -2,6 +2,7 @@
 
 Steps, each resumable and cached like the import (spec sections 3 and 5):
 
+0. separate_voices -- only for a single mixed track, when enabled (Demucs, GPU)
 1. prepare_audio  -- resample the imported WAVs to what each model wants
 2. transcribe     -- Whisper, word by word                        (GPU)
 3. sound_events   -- laughter, shouting, gunfire...              (GPU)
@@ -19,7 +20,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -32,6 +33,7 @@ from ..ingest import recording_cache_dir
 from ..jobs import JobQueue, make_cache_key
 from ..logging_setup import get_logger
 from . import audio_signals, captions
+from .separation import BACKING_FILE, VOCALS_FILE, separate_voices
 from .sound_events import detect_sound_events
 from .transcript import accepted_words, transcribe, voice_detector_on
 
@@ -41,6 +43,7 @@ log = get_logger(__name__)
 ANALYSIS_VERSION = 3
 
 STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness")
+SEPARATION_STEP = "separate_voices"
 
 ProgressCallback = Callable[[str, float], None]
 
@@ -79,10 +82,12 @@ class TrackChoice:
     game_index: int
     game_role: str
     game_wav: Path
+    separated: bool = False
 
     @property
     def separate_game_track(self) -> bool:
-        return self.game_index != self.voice_index
+        """Voice and game sound come from different audio, OBS tracks or AI-separated."""
+        return self.separated or self.game_index != self.voice_index
 
 
 def choose_tracks(conn: sqlite3.Connection, recording_id: int) -> TrackChoice:
@@ -115,6 +120,19 @@ def choose_tracks(conn: sqlite3.Connection, recording_id: int) -> TrackChoice:
         voice["stream_index"], voice["role"], Path(voice["extracted_path"]),
         game["stream_index"], game["role"], Path(game["extracted_path"]),
     )
+
+
+def needs_separation(settings: Settings, row: sqlite3.Row, tracks: TrackChoice) -> bool:
+    """Whether to un-mix the audio before analysing it.
+
+    Never when OBS already recorded a separate mic track: that is clean
+    already. Otherwise it depends on the voice_separation setting: Twitch VODs
+    only (the spec's default), every single-mixed-track recording, or never.
+    """
+    if tracks.voice_role == "mic" or tracks.separate_game_track:
+        return False
+    mode = settings.analysis.voice_separation
+    return mode == "mixed" or (mode == "vods" and row["source_type"] == "twitch_vod")
 
 
 # --- Steps -----------------------------------------------------------------
@@ -209,6 +227,16 @@ def analyze_recording(
     voice_16k, voice_32k = prepared / "voice_16k.wav", prepared / "voice_32k.wav"
     game_32k = prepared / "game_32k.wav" if tracks.separate_game_track else None
 
+    separate = needs_separation(settings, row, tracks)
+    mixed_wav = tracks.voice_wav
+    separated_dir = out_dir / "separated"
+    if separate:
+        # From here on, "voice" is the separated voices and "game" everything else.
+        tracks = replace(tracks, separated=True, voice_role="separated", game_role="separated",
+                         voice_wav=separated_dir / VOCALS_FILE, game_wav=separated_dir / BACKING_FILE)
+        game_32k = prepared / "game_32k.wav"
+    step_names = ((SEPARATION_STEP,) if separate else ()) + STEPS
+
     queue = JobQueue(conn)
     queue.recover_interrupted()
     open_job = queue.find_open("analyze", recording_id)
@@ -236,11 +264,23 @@ def analyze_recording(
         return run
 
     def reporter(step: str) -> Callable[[float], None]:
-        return queue.step_reporter(job_id, step, STEPS.index(step), len(STEPS), on_progress)
+        return queue.step_reporter(job_id, step, step_names.index(step), len(step_names), on_progress)
 
-    track_key = (tracks.voice_index, tracks.game_index)
+    # Every later step's cache key records whether it heard separated audio, so
+    # switching separation on or off redoes them instead of reusing the other kind.
+    track_key = (tracks.voice_index, tracks.game_index, tracks.separated)
     detector = voice_detector_on(settings.analysis.voice_detector, tracks.voice_role)
-    steps = [
+    steps = []
+    if separate:
+        steps.append((
+            SEPARATION_STEP,
+            make_cache_key(digest, SEPARATION_STEP, ANALYSIS_VERSION, tracks.voice_index, "htdemucs"),
+            timed(SEPARATION_STEP, lambda: str(
+                separate_voices(settings, mixed_wav, separated_dir, duration,
+                                reporter(SEPARATION_STEP))
+            )),
+        ))
+    steps += [
         (
             "prepare_audio",
             make_cache_key(digest, "prepare_audio", ANALYSIS_VERSION, *track_key),
@@ -250,7 +290,7 @@ def analyze_recording(
         ),
         (
             "transcribe",
-            make_cache_key(digest, "transcribe", ANALYSIS_VERSION, tracks.voice_index,
+            make_cache_key(digest, "transcribe", ANALYSIS_VERSION, *track_key,
                            settings.analysis.transcription_model, settings.analysis.language,
                            detector),
             timed("transcribe", lambda: _write_json(
@@ -307,7 +347,7 @@ def analyze_recording(
         srt_path=srt_path,
         proxy_srt_path=proxy_srt,
         tracks=tracks,
-        steps=[StepReport(name, name not in ran, ran.get(name, 0.0)) for name in STEPS],
+        steps=[StepReport(name, name not in ran, ran.get(name, 0.0)) for name in step_names],
     )
 
 
@@ -378,7 +418,12 @@ def store_results(
     for group, values in events.items():
         signals[group] = np.array(values, dtype=np.float32)
 
-    conn.execute("DELETE FROM signals WHERE recording_id = ?", (recording_id,))
+    # Only the signals analysis produces are replaced: chat activity comes from
+    # Twitch separately (analysis/chat.py) and must survive a re-analysis.
+    conn.execute(
+        f"DELETE FROM signals WHERE recording_id = ? AND name IN ({','.join('?' * len(signals))})",
+        (recording_id, *signals),
+    )
     conn.executemany(
         "INSERT INTO signals (recording_id, t_sec, name, value) VALUES (?, ?, ?, ?)",
         (

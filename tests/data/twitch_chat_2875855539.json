@@ -1,0 +1,84 @@
+{
+ "FileInfo": {
+  "Version": {
+   "Major": 1,
+   "Minor": 4,
+   "Patch": 0
+  },
+  "CreatedAt": "2026-09-19T17:08:37.7230993+02:00",
+  "UpdatedAt": "0001-01-01T00:00:00"
+ },
+ "streamer": {
+  "name": "Butter3dToast",
+  "login": "butter3dtoast",
+  "id": 80472704
+ },
+ "clipper": null,
+ "video": {
+  "title": "[DROPS] Its Doggy Time",
+  "description": null,
+  "id": "2875855539",
+  "created_at": "2026-09-16T17:55:07Z",
+  "start": 0,
+  "end": 11887,
+  "length": 11887,
+  "viewCount": 4,
+  "game": "WARDOGS",
+  "chapters": [
+   {
+    "id": "",
+    "startMilliseconds": 0,
+    "lengthMilliseconds": 11887000,
+    "type": "GAME_CHANGE",
+    "description": "WARDOGS",
+    "subDescription": "",
+    "thumbnailUrl": null,
+    "gameId": "743893402",
+    "gameDisplayName": "WARDOGS",
+    "gameBoxArtUrl": "https://static-cdn.jtvnw.net/ttv-boxart/743893402_IGDB-40x53.jpg"
+   }
+  ]
+ },
+ "comments": [
+  {
+   "_id": "89e73edc-7a80-4cd1-8303-ec0f8b2cfd1a",
+   "created_at": "2026-09-16T17:55:18.795Z",
+   "channel_id": "80472704",
+   "content_type": "video",
+   "content_id": "2875855539",
+   "content_offset_seconds": 11,
+   "commenter": {
+    "display_name": "StreamElements",
+    "_id": "100135110",
+    "name": "streamelements",
+    "bio": "Elevate your content with www.StreamElements.com \u2714\ufe0fFree forever \u2714\ufe0fLegendary Service \u2714\ufe0fTrusted by the Best ",
+    "created_at": "2015-08-21T20:25:14.224473Z",
+    "updated_at": "2025-09-19T16:16:30.026748Z",
+    "logo": "https://static-cdn.jtvnw.net/jtv_user_pictures/74a96970-cd03-4ca5-89ce-92d8b04813df-profile_image-70x70.png"
+   },
+   "message": {
+    "body": "Butter3dToast is now live! Streaming WARDOGS: [DROPS] Its Doggy Time",
+    "bits_spent": 0,
+    "fragments": [
+     {
+      "text": "Butter3dToast is now live! Streaming WARDOGS: [DROPS] Its Doggy Time",
+      "emoticon": null
+     }
+    ],
+    "user_badges": [
+     {
+      "_id": "moderator",
+      "version": "1"
+     },
+     {
+      "_id": "bot-badge",
+      "version": "1"
+     }
+    ],
+    "user_color": "#5B99FF",
+    "emoticons": []
+   }
+  }
+ ],
+ "embeddedData": null
+}

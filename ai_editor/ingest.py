@@ -99,7 +99,7 @@ def register_recording(
     *,
     game: str | None = None,
     track_roles: str | None = None,
-    source_type: str = "local_obs",
+    source_type: str | None = None,
 ) -> Registration:
     """Add a recording to the library, or find it if it's already there.
 
@@ -132,6 +132,9 @@ def register_recording(
                 (str(media_path), recording_id),
             )
             log.info("Recording #%d moved: %s -> %s", recording_id, relinked_from, media_path)
+        if source_type:
+            conn.execute("UPDATE recordings SET source_type = ? WHERE id = ?",
+                         (source_type, recording_id))
         if game:
             conn.execute("UPDATE recordings SET game = ? WHERE id = ?", (chosen_game, recording_id))
         else:
@@ -160,7 +163,7 @@ def register_recording(
         "recorded_at, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             digest,
-            source_type,
+            source_type or "local_obs",
             str(media_path),
             chosen_game,
             media_path.stem,
@@ -451,6 +454,9 @@ def ingest_recording(
     track_roles: str | None = None,
     on_progress: ProgressCallback | None = None,
     on_registered: Callable[[Registration, str | None], None] | None = None,
+    source_type: str | None = None,
+    twitch_vod_id: str | None = None,
+    recorded_at: str | None = None,
 ) -> IngestResult:
     """Import one local recording: register, check space, proxy, audio.
 
@@ -458,7 +464,17 @@ def ingest_recording(
     reused, an interrupted import picks up where it stopped, and a moved file
     is relinked.
     """
-    registration = register_recording(conn, path, game=game, track_roles=track_roles)
+    registration = register_recording(conn, path, game=game, track_roles=track_roles,
+                                      source_type=source_type)
+    if twitch_vod_id or recorded_at:
+        # For a VOD, "recorded" is when the stream happened, not when the file
+        # was downloaded -- that is what VOD expiry is counted from.
+        conn.execute(
+            "UPDATE recordings SET twitch_vod_id = COALESCE(?, twitch_vod_id), "
+            "recorded_at = COALESCE(?, recorded_at) WHERE id = ?",
+            (twitch_vod_id, recorded_at, registration.recording_id),
+        )
+        conn.commit()
     info = registration.info
     source = Path(path).resolve()
 

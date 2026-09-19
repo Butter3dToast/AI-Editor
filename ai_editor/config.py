@@ -42,6 +42,7 @@ class Tools(BaseModel):
     """
 
     ffmpeg_dir: Path | None = None
+    folder: Path | None = None
 
 
 class Performance(BaseModel):
@@ -83,7 +84,7 @@ class Obs(BaseModel):
 class Analysis(BaseModel):
     transcription_model: str = "large-v3"
     compute_type: str = "float16"
-    voice_separation_for_vods: bool = True
+    voice_separation: Literal["vods", "mixed", "off"] = "vods"
     signal_rate_hz: int = Field(1, ge=1, le=10)
     language: str = "en"
     voice_detector: Literal["auto", "on", "off"] = "auto"
@@ -206,6 +207,15 @@ class Storage(BaseModel):
     low_space_warning_gb: float = Field(100.0, ge=0)
 
 
+class Twitch(BaseModel):
+    vod_keep_days: int = Field(14, ge=1, le=365)
+    download_quality: str = "1080p60"
+    # Chat bots post automatically, so they never count as viewers reacting.
+    ignore_chatters: list[str] = Field(default_factory=lambda: [
+        "StreamElements", "Nightbot", "Moobot", "Streamlabs", "Fossabot",
+        "Sery_Bot", "WizeBot", "SoundAlerts"])
+
+
 class Llm(BaseModel):
     enabled: bool = False
     model: str | None = None
@@ -229,6 +239,7 @@ class Settings(BaseModel):
     shorts: Shorts = Shorts()
     render: Render = Render()
     storage: Storage = Storage()
+    twitch: Twitch = Twitch()
     llm: Llm = Llm()
     logging: Logging = Logging()
 

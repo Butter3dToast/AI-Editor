@@ -25,7 +25,7 @@ from .errors import (
     MediaProcessingFailed,
     MediaUnreadable,
 )
-from .logging_setup import get_logger
+from .logging_setup import FILE_ONLY, get_logger
 
 log = get_logger(__name__)
 
@@ -205,6 +205,7 @@ def run_ffmpeg(
         log.error(
             "FFmpeg failed while %s (exit %s):\n%s",
             what, process.returncode, "".join(errors).strip(),
+            extra=FILE_ONLY,
         )
         raise MediaProcessingFailed(f"This happened while {what}")
 

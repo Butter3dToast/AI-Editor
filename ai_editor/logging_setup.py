@@ -21,6 +21,11 @@ from .errors import AIEditorError
 LOG_FILENAME = "ai-editor.log"
 _configured = False
 
+# Pass as ``extra=FILE_ONLY`` for detail meant for the engineer: an external
+# program's raw error output, say. It is written to the log file but never
+# shown on screen (spec section 14.2), whatever its level.
+FILE_ONLY = {"file_only": True}
+
 
 # Libraries that log every HTTP header or compile step at DEBUG. Useful to
 # nobody, and they swamp the log file the creator might send for help.
@@ -29,10 +34,11 @@ _NOISY_LIBRARIES = ("httpx", "httpcore", "huggingface_hub", "urllib3", "numba", 
 
 
 class _LibraryWarningsToFileOnly(logging.Filter):
-    """Python warnings from libraries are for the engineer, not the screen."""
+    """Python warnings from libraries, and anything marked FILE_ONLY, are for
+    the engineer, not the screen."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        return record.name != "py.warnings"
+        return record.name != "py.warnings" and not getattr(record, "file_only", False)
 
 
 class _PlainLanguageFilter(logging.Filter):
