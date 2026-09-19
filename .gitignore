@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Media: never commit footage. A single recording is over 12 GB.
+Sample footage/
+*.mp4
+*.mkv
+*.mov
+*.wav
+*.flac
+
+# Working data
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Local overrides of settings.yaml
+config/settings.local.yaml
+
+# OS
+Thumbs.db
+desktop.ini

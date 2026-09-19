@@ -1,0 +1,111 @@
+# AI-Editor settings
+#
+# Every value here is documented in docs/user-manual.md chapter 24 (Settings reference).
+# Paths use forward slashes; Windows handles them fine.
+
+folders:
+  raw: F:/AI-Editor/raw # Twitch VOD downloads and OBS recordings
+  cache: F:/AI-Editor/cache # Proxies, extracted audio, analysis working files
+  output: F:/AI-Editor/output # Rendered videos, exported timelines, thumbnails
+  assets: F:/AI-Editor/assets # Your music, SFX, fonts, overlays
+  models: E:/AI-Editor/models # AI model files (Ollama manages its own)
+
+tools:
+  # Leave empty to find FFmpeg automatically. Set this to the folder holding
+  # ffmpeg.exe only if the setup check cannot find it.
+  ffmpeg_dir: null
+
+performance:
+  device: gpu # gpu | cpu. Leave on gpu.
+  unload_models_between_steps: true # Spec section 3: only one large model in VRAM at a time
+  proxy_resolution: 540 # Height in pixels of the fast preview copy
+  ffmpeg_threads: 0 # 0 = let FFmpeg decide
+
+queue:
+  overnight_start_time: null # e.g. "02:00" to start the queue automatically
+  shutdown_when_finished: false
+
+companion:
+  mark_moment_hotkey: ctrl+alt+m
+  mark_short_hotkey: ctrl+alt+s
+  confirmation_sound: true
+  start_with_windows: false
+
+obs:
+  websocket_host: 127.0.0.1
+  websocket_port: 4455
+  websocket_password: "" # Copy from OBS: Tools > WebSocket Server Settings > Show Connect Info
+
+analysis:
+  transcription_model: large-v3-turbo # faster-whisper model name
+  compute_type: float16
+  voice_separation_for_vods: true # Demucs separation on single-track sources
+  signal_rate_hz: 1 # Signals are stored once per second (spec section 7.3)
+
+lets_play: # Spec section 7.6 Recipe A
+  mode: split # split | condense
+  target_min: 30
+  normal_range_min: [25, 35]
+  story_extension_preferred_max_min: 45
+  story_extension_hard_max_min: 60
+  trim_level: light # light | standard | tight
+  penalties:
+    per_min_outside_normal_range: 1.0
+    per_min_over_45: 4.0
+    split_inside_story_mission: 50.0
+    split_inside_cutscene_dialogue_fight: forbidden
+  bonus_hook_ending: -5.0
+  leftover:
+    min_standalone_min: 15
+    default_action: carry_to_next_session # carry_to_next_session | merge_into_previous
+  recap_at_start: false
+  recap_max_sec: 15
+  hook_endings: true
+  speedup_indicator: true
+  tolerance_pct: 15 # A part counts as "on target" within +/- this percentage
+
+highlights: # Spec section 7.6 Recipe B
+  target_length_min: 10
+  min_clip_score: 0.6
+  ordering: balanced # chronological | balanced | best_last
+  hook: true
+  hook_seconds: [5, 15]
+  allow_reused_clips: false
+  always_include_pinned: true
+  always_include_markers: true
+
+shorts: # Spec section 7.6 Recipe C
+  min_length_sec: 15
+  max_length_sec: 60
+  platform: universal # youtube_shorts | tiktok | universal
+  layout: facecam_top # Facecam top third, gameplay bottom two thirds
+  follow_action: false
+  hook: true
+  must_make_sense_alone: true
+  link_to_full_video: true
+  spoiler_check_games: ["The Blood of Dawnwalker"]
+  safe_zones: # Fractions of frame height/width kept clear of platform UI
+    youtube_shorts: { bottom: 0.18, right: 0.14, top: 0.06 }
+    tiktok: { bottom: 0.26, right: 0.20, top: 0.08 }
+    universal: { bottom: 0.26, right: 0.20, top: 0.08 }
+
+render:
+  encoder: h264_nvenc # h264_nvenc | hevc_nvenc
+  nvenc_preset: p5 # p1 fastest .. p7 best quality
+  loudness_target_lufs: -14.0 # Suits YouTube playback loudness
+  presets:
+    youtube_1080p60: { width: 1920, height: 1080, fps: 60, bitrate: "16M" }
+    youtube_1080p30: { width: 1920, height: 1080, fps: 30, bitrate: "12M" }
+    vertical_1080x1920_60: { width: 1080, height: 1920, fps: 60, bitrate: "12M" }
+    vertical_1080x1920_30: { width: 1080, height: 1920, fps: 30, bitrate: "10M" }
+
+storage:
+  low_space_warning_gb: 100
+
+llm: # Not used until Phase 2
+  enabled: false
+  model: null
+  keep_alive: 0 # Free VRAM immediately after each stage (spec section 3)
+
+logging:
+  level: INFO

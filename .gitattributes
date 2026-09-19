@@ -1,0 +1,10 @@
+# Keep line endings stable in the repository regardless of who checks it out.
+* text=auto eol=lf
+
+# Binary assets, never converted.
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.mkv binary
+*.wav binary
+*.db  binary
