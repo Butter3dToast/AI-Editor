@@ -78,7 +78,7 @@ def test_finished_steps_are_skipped_on_rerun(queue):
     assert calls == ["proxy", "audio"], "finished steps must not run again"
 
 
-def test_resume_continues_from_the_failed_step(queue):
+def test_resume_continues_from_the_failed_step(queue, tmp_path):
     """A crash mid-analysis keeps earlier work and retries only what failed."""
     job_id = queue.enqueue("analyse")
     calls: list[str] = []
@@ -86,13 +86,17 @@ def test_resume_continues_from_the_failed_step(queue):
 
     def proxy() -> str:
         calls.append("proxy")
-        return "F:/cache/proxy.mp4"
+        output = tmp_path / "proxy.mp4"
+        output.write_bytes(b"video")
+        return str(output)
 
     def audio() -> str:
         calls.append("audio")
         if fail_on_audio:
             raise LowDiskSpace("only 2 GB free")
-        return "F:/cache/audio.wav"
+        output = tmp_path / "audio.wav"
+        output.write_bytes(b"audio")
+        return str(output)
 
     def transcribe() -> str:
         calls.append("transcribe")
@@ -177,3 +181,59 @@ def test_progress_advances(queue):
     )
     assert seen == [0.0, 0.25, 0.5, 0.75]
     assert queue.get(job_id).progress == 1.0
+
+
+def test_crash_leaves_no_job_stuck_running(queue):
+    """Manual 11.3: after a PC restart, interrupted jobs wait for Resume."""
+    job_id = queue.enqueue("analyse")
+    queue.conn.execute("UPDATE jobs SET status = 'running' WHERE id = ?", (job_id,))
+    queue.conn.commit()
+
+    assert queue.recover_interrupted() == 1
+    assert queue.get(job_id).status == PAUSED
+
+
+def test_find_open_returns_the_unfinished_job(queue):
+    queue.conn.execute(
+        "INSERT INTO recordings (id, content_hash, source_type, source_file, imported_at) "
+        "VALUES (7, 'h', 'local_obs', 'x.mp4', '2026-09-19')"
+    )
+    done = queue.enqueue("ingest", recording_id=7)
+    queue.run(done, [])
+    assert queue.find_open("ingest", 7) is None, "a finished job is not open"
+
+    open_job = queue.enqueue("ingest", recording_id=7)
+    queue.pause(open_job)
+    assert queue.find_open("ingest", 7).id == open_job
+    assert queue.find_open("analyse", 7) is None
+
+
+def test_interrupt_pauses_instead_of_failing(queue):
+    job_id = queue.enqueue("analyse")
+
+    def ctrl_c() -> str:
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        queue.run(job_id, [("step", make_cache_key("h", "step"), ctrl_c)])
+    assert queue.get(job_id).status == PAUSED
+
+
+def test_deleted_output_is_not_treated_as_done(queue, tmp_path):
+    """Cache cleanup must not leave a step 'finished' with nothing on disk."""
+    output = tmp_path / "proxy.mp4"
+    calls: list[str] = []
+
+    def make() -> str:
+        calls.append("made")
+        output.write_bytes(b"video")
+        return str(output)
+
+    key = make_cache_key("hash", "proxy")
+    queue.run(queue.enqueue("ingest"), [("proxy", key, make)])
+    queue.run(queue.enqueue("ingest"), [("proxy", key, make)])
+    assert calls == ["made"]
+
+    output.unlink()
+    queue.run(queue.enqueue("ingest"), [("proxy", key, make)])
+    assert calls == ["made", "made"]

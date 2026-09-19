@@ -3,6 +3,32 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.2.0 — Phase 1A: Importing recordings — 19 September 2026
+
+Your recordings can now be brought into AI-Editor.
+
+**New**
+
+- **Import a recording** with `ai-editor import "<file>"`. AI-Editor:
+  - works out the game from the file name (or use `--game`),
+  - makes a small **preview copy** (540p, 30 fps) for fast previews and
+    analysis, using your graphics card,
+  - saves each **audio track** separately so the next phase can transcribe it,
+  - checks there is enough disk space *before* starting.
+- **Your recording is never copied or changed.** It is read where it is.
+- **Stop any time.** Press `Ctrl + C`; running the same command again carries
+  on where it stopped.
+- **Re-importing is instant.** Finished work is reused.
+- **Moved a file?** Importing it from the new place is recognised as the same
+  recording, not a new one.
+- **See your library** with `ai-editor library`.
+- Two new error messages, E013 and E014, explained in manual chapter 25.
+
+**Changed**
+
+- The screen now shows only warnings and problems while AI-Editor works. The
+  full step-by-step detail still goes to the log file.
+
 ## 0.1.0 — Phase 0: Foundation — 19 September 2026
 
 The skeleton everything else is built on. Nothing to click yet; this phase is

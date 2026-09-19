@@ -218,3 +218,22 @@ def test_content_hash_notices_a_changed_file(tmp_path):
 def test_content_hash_missing_file(tmp_path):
     with pytest.raises(MediaFileNotFound):
         ffmpeg.content_hash(tmp_path / "gone.mp4")
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("out_time_us=30000000\n", 0.25),
+        ("out_time_us=120000000", 1.0),
+        ("out_time_us=999999999999", 1.0),  # never past the end
+        ("out_time_us=N/A", None),          # before the first frame
+        ("frame=120", None),                # other keys ignored
+        ("progress=continue", None),
+    ],
+)
+def test_parse_progress_line(line, expected):
+    assert ffmpeg.parse_progress_line(line, 120.0) == expected
+
+
+def test_progress_without_a_duration_is_ignored():
+    assert ffmpeg.parse_progress_line("out_time_us=5000000", None) is None

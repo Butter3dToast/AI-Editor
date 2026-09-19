@@ -12,11 +12,22 @@ import json
 import os
 import shutil
 import subprocess
+import threading
+from collections import deque
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable
 
-from .errors import FFmpegNotFound, MediaFileNotFound, MediaUnreadable
+from .errors import (
+    FFmpegNotFound,
+    MediaFileNotFound,
+    MediaProcessingFailed,
+    MediaUnreadable,
+)
+from .logging_setup import get_logger
+
+log = get_logger(__name__)
 
 # Windows: stop a console window flashing up for every probe.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -115,6 +126,90 @@ def available_encoders() -> set[str]:
 def nvenc_encoders() -> set[str]:
     """The NVENC encoders present. Empty means no GPU encoding available."""
     return {e for e in available_encoders() if e.endswith("_nvenc")}
+
+
+# --- Running long FFmpeg jobs ----------------------------------------------
+
+
+def parse_progress_line(line: str, duration_sec: float | None) -> float | None:
+    """Turn one line of `ffmpeg -progress` output into a 0-1 fraction.
+
+    FFmpeg writes key=value lines; `out_time_us` is the position reached in
+    the output, in microseconds. It reads "N/A" before the first frame.
+    """
+    key, _, value = line.strip().partition("=")
+    if key != "out_time_us" or not duration_sec or duration_sec <= 0:
+        return None
+    try:
+        seconds = int(value) / 1_000_000
+    except ValueError:
+        return None
+    return max(0.0, min(1.0, seconds / duration_sec))
+
+
+def run_ffmpeg(
+    args: list[str],
+    *,
+    duration_sec: float | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    what: str = "processing",
+) -> None:
+    """Run FFmpeg to completion, reporting progress as it goes.
+
+    On failure the FFmpeg error text goes to the log file and the creator gets
+    MediaProcessingFailed (spec section 14.2). If this process is interrupted
+    (Ctrl+C, window closed), FFmpeg is killed rather than left running in the
+    background still writing to disk.
+    """
+    command = [
+        str(find_binary("ffmpeg")),
+        "-hide_banner", "-nostdin", "-y",
+        "-loglevel", "error",
+        "-nostats", "-progress", "pipe:1",
+        *args,
+    ]
+    log.debug("FFmpeg (%s): %s", what, subprocess.list2cmdline(command))
+
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=_NO_WINDOW,
+    )
+
+    # stderr is drained on its own thread: if FFmpeg filled that pipe while we
+    # were blocked reading stdout, both sides would wait on each other forever.
+    errors: deque[str] = deque(maxlen=40)
+    drain = threading.Thread(
+        target=lambda: errors.extend(process.stderr or ()), daemon=True
+    )
+    drain.start()
+
+    try:
+        for line in process.stdout or ():
+            fraction = parse_progress_line(line, duration_sec)
+            if fraction is not None and on_progress:
+                on_progress(fraction)
+        process.wait()
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    finally:
+        drain.join(timeout=5)
+
+    if process.returncode != 0:
+        log.error(
+            "FFmpeg failed while %s (exit %s):\n%s",
+            what, process.returncode, "".join(errors).strip(),
+        )
+        raise MediaProcessingFailed(f"This happened while {what}")
+
+    if on_progress:
+        on_progress(1.0)
 
 
 # --- Probing ---------------------------------------------------------------

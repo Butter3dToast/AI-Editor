@@ -18,6 +18,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .errors import AIEditorError, JobFailed
@@ -123,6 +124,35 @@ class JobQueue:
             ).fetchall()
         return [Job.from_row(r) for r in rows]
 
+    def find_open(self, job_type: str, recording_id: int) -> Job | None:
+        """The unfinished job of this type for a recording, if there is one.
+
+        Re-running an import should resume the job that was interrupted, not
+        start a second one alongside it.
+        """
+        row = self.conn.execute(
+            "SELECT * FROM jobs WHERE job_type = ? AND recording_id = ? "
+            "AND status IN (?, ?, ?) ORDER BY id DESC LIMIT 1",
+            (job_type, recording_id, QUEUED, PAUSED, FAILED),
+        ).fetchone()
+        return Job.from_row(row) if row else None
+
+    def recover_interrupted(self) -> int:
+        """Mark jobs left 'running' by a crash or restart as paused.
+
+        Nothing can genuinely be running when the app starts, because the app
+        is the only thing that runs jobs. This must change if a separate
+        background worker is ever added (Phase 3 batch processing), or it would
+        pause that worker's live job.
+        """
+        cursor = self.conn.execute(
+            "UPDATE jobs SET status = ? WHERE status = ?", (PAUSED, RUNNING)
+        )
+        self.conn.commit()
+        if cursor.rowcount:
+            log.info("Recovered %d interrupted job(s) as paused", cursor.rowcount)
+        return cursor.rowcount
+
     def pause(self, job_id: int) -> None:
         self.conn.execute(
             "UPDATE jobs SET status = ? WHERE id = ? AND status IN (?, ?)",
@@ -157,6 +187,10 @@ class JobQueue:
         A step counts as done when *some* job finished it with this exact cache
         key -- not only this job. That is what lets a re-import of the same
         recording reuse the previous analysis.
+
+        A step whose output file has since been deleted (cache cleanup, or by
+        hand) is not done: trusting the record over the disk would hand later
+        steps a path to nothing.
         """
         row = self.conn.execute(
             "SELECT output_path FROM job_steps WHERE cache_key = ? AND status = ? "
@@ -166,7 +200,11 @@ class JobQueue:
         if row is None:
             return None
         # "" is a legitimate output for steps that write to the database only.
-        return row["output_path"] or ""
+        output = row["output_path"] or ""
+        if output and not Path(output).exists():
+            log.info("Job #%d: cached output for '%s' is gone; redoing it", job_id, step_name)
+            return None
+        return output
 
     def start_step(self, job_id: int, step_name: str, cache_key: str) -> None:
         self.conn.execute(
@@ -224,6 +262,13 @@ class JobQueue:
                 self.finish_step(job_id, name, output or "")
                 self.set_progress(job_id, (position + 1) / total, name)
 
+        except KeyboardInterrupt:
+            # Ctrl+C or closing the window is a pause, not a failure: the step
+            # that was cut short simply runs again on resume.
+            self.conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (PAUSED, job_id))
+            self.conn.commit()
+            log.warning("Job #%d paused by the user", job_id)
+            raise
         except AIEditorError as exc:
             self._fail(job_id, exc.code, exc.user_message())
             return

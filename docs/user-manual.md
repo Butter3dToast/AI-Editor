@@ -398,6 +398,43 @@ Right-click the tray icon → **View session log** to see markers and events fro
 5. Choose the **layout** (facecam position).
 6. Click **Import**.
 
+### 10.1a Importing from the command line (until the app window arrives)
+
+> **[Engineer: this section covers the command-line tool used while AI-Editor is being built. The app window arrives in Phase 1H, when chapter 10.1 above becomes the main way to import.]**
+
+1. Open a terminal in the AI-Editor folder and turn on its Python environment:
+
+   ```powershell
+   cd C:\Users\trent\Desktop\Projects\AI-Editor
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Import your recording. Put the file path in quotes:
+
+   ```powershell
+   ai-editor import "D:\path\to\your recording.mp4"
+   ```
+
+3. AI-Editor shows what it found: the game (guessed from the file name), the length, resolution, and audio tracks. Then two progress bars run:
+   - **Making preview copy (proxy)** — a small 540p, 30 fps copy used for previews and analysis.
+   - **Extracting audio tracks** — each audio track saved separately for analysis.
+4. When it finishes, it shows how long each step took and where the preview copy is. Open it in any video player to check it.
+
+**Options**
+
+| Option | What it does | Example |
+|---|---|---|
+| `--game` | Sets the game when the file name doesn't say. | `--game "Escape from Tarkov"` |
+| `--tracks` | Labels the audio tracks in order, if the guess is wrong. | `--tracks mixed,mic,game,voice_chat` |
+
+**Good to know**
+
+- **Your recording is never copied or changed.** AI-Editor reads it where it is. The preview copy and audio go in your cache folder, under `recordings\<a long code>\`.
+- **Running the same import again is instant.** Finished work is reused.
+- **Stopping partway is safe.** Press `Ctrl + C`. Run the same command again later and it carries on from where it stopped.
+- **Moved a recording?** Import it from its new location. AI-Editor recognises it and updates where it looks, rather than starting over.
+- **See everything you've imported** with `ai-editor library`.
+
 ### 10.2 Import a Twitch VOD
 
 1. On Twitch, go to your channel → **Videos**, open the VOD, and copy the link from your browser's address bar.
@@ -1046,6 +1083,8 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Performance | Run AI on | GPU | Leave on GPU. |
 | Performance | Unload AI models between steps | On | Prevents running out of graphics memory. |
 | Performance | Proxy resolution | 540p | Size of preview copies. |
+| Performance | Proxy frame rate | 30 fps (10–60) | Smoothness of preview copies. Higher makes smoother previews but bigger, slower-to-make copies. Your finished videos always use the original frame rate, whatever this is set to. |
+| Tools | FFmpeg folder | Empty (found automatically) | Only set this if the setup check can't find FFmpeg. Point it at the folder containing `ffmpeg.exe`. |
 | Queue | Overnight start time | Off | Starts the queue automatically. |
 | Companion | Mark moment hotkey | Ctrl+Alt+M | Logs a moment. |
 | Companion | Mark Short-worthy hotkey | Ctrl+Alt+S | Logs a Short moment. |
@@ -1060,6 +1099,7 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |
 | Storage | Low space warning | 100 GB | When to warn. |
+| Logging | Screen detail level | WARNING | How much AI-Editor prints while it works. WARNING shows only problems. INFO also shows each step as it happens. The log file always records full detail, whatever this is set to. |
 | Game profiles | Screen reading (per game) | On | Turn off if detection breaks after a game update. |
 
 ---
@@ -1082,6 +1122,8 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 | **E010** | AI-Editor cannot find that video file | The file was moved, renamed, or its drive was disconnected. | Open the project and click **Relink media** to point at the new location (chapter 23.3). |
 | **E011** | AI-Editor could not read that video file | The file may be incomplete, still being recorded, or in a format AI-Editor doesn't handle. | Make sure OBS has finished writing the file, then import it again. |
 | **E012** | That recording has no audio | AI-Editor needs sound to find moments, transcribe speech, and place cuts. | Check your OBS audio settings (chapter 7) and record again. |
+| **E013** | AI-Editor could not process that video file | FFmpeg, the tool doing the video work, stopped with an error partway through. AI-Editor already tries three methods for preview copies (full graphics card, part graphics card, processor only) before showing this. | Check the recording plays normally in a video player. If it does, run the same command again. If it fails a second time, use **Copy diagnostic info** and send it to your engineer. The details are in the log file. |
+| **E014** | The audio track labels don't match this recording | You gave a different number of labels than the recording has tracks, or used a label AI-Editor doesn't know. | Give exactly one label per track, in order. Valid labels: `mixed`, `mic`, `game`, `voice_chat`, `unknown`. Run `ai-editor probe "<file>"` to see how many tracks there are. |
 | **E020** | A job could not finish | A step failed. The steps that already finished were kept. | Open the **Queue** and press **Resume**. It continues from the step that failed, without repeating finished work. |
 
 ### Stream Companion says "OBS: Not connected"

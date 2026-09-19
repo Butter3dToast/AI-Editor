@@ -19,6 +19,7 @@ performance:
   device: gpu # gpu | cpu. Leave on gpu.
   unload_models_between_steps: true # Spec section 3: only one large model in VRAM at a time
   proxy_resolution: 540 # Height in pixels of the fast preview copy
+  proxy_fps: 30 # Frame rate of the preview copy. Final renders always use the original.
   ffmpeg_threads: 0 # 0 = let FFmpeg decide
 
 queue:
@@ -108,4 +109,5 @@ llm: # Not used until Phase 2
   keep_alive: 0 # Free VRAM immediately after each stage (spec section 3)
 
 logging:
-  level: INFO
+  # What appears on screen. The log file always records everything.
+  level: WARNING # DEBUG | INFO | WARNING | ERROR

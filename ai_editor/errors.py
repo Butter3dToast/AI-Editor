@@ -108,6 +108,24 @@ class NoAudioTrack(AIEditorError):
     fix = "Check your OBS audio settings (manual chapter 7) and record again"
 
 
+class MediaProcessingFailed(AIEditorError):
+    code = "E013"
+    what = "AI-Editor could not process that video file"
+    why = "FFmpeg stopped part-way with an error. The technical details are in the log file"
+    fix = (
+        "Check the recording plays normally in a video player. If it does, run the "
+        "same command again; if it fails again, use Copy diagnostic info and send it "
+        "to your engineer"
+    )
+
+
+class InvalidTrackRoles(AIEditorError):
+    code = "E014"
+    what = "The audio track labels don't match this recording"
+    why = "Each audio track needs exactly one label, in order, such as mixed, mic, game, voice_chat"
+    fix = "Give one label per track. Run the probe command to see how many tracks the recording has"
+
+
 # --- Jobs ------------------------------------------------------------------
 
 
@@ -127,5 +145,7 @@ ALL_ERRORS: tuple[type[AIEditorError], ...] = (
     MediaFileNotFound,
     MediaUnreadable,
     NoAudioTrack,
+    MediaProcessingFailed,
+    InvalidTrackRoles,
     JobFailed,
 )

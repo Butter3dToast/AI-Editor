@@ -48,6 +48,7 @@ class Performance(BaseModel):
     device: Literal["gpu", "cpu"] = "gpu"
     unload_models_between_steps: bool = True
     proxy_resolution: int = Field(540, ge=180, le=1080)
+    proxy_fps: int = Field(30, ge=10, le=60)
     ffmpeg_threads: int = Field(0, ge=0, le=64)
 
 
@@ -208,7 +209,7 @@ class Llm(BaseModel):
 
 
 class Logging(BaseModel):
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
 
 
 class Settings(BaseModel):

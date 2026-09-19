@@ -26,7 +26,7 @@ a hard rule, not a preference.
 | Phase | Scope | Status |
 |---|---|---|
 | **0** | Foundation: settings, database schema, job queue, FFmpeg layer, setup check | **Complete** |
-| 1A | Ingest: local OBS recordings, proxies, audio extraction | Not started |
+| **1A** | Ingest: local OBS recordings, proxies, audio extraction | **Complete** |
 | 1B | Audio analysis: transcription, silence, audio events | Not started |
 | 1C | Twitch VOD download, chat, Demucs voice separation | Not started |
 | 1D | Stream Companion: OBS WebSocket, marker hotkeys | Not started |
@@ -50,6 +50,8 @@ pip install -e ".[dev]"
 
 ai-editor doctor                  # Check the setup
 ai-editor probe "path\to\recording.mp4" --hash
+ai-editor import "path\to\recording.mp4"    # Proxy + audio into the library
+ai-editor library                 # List imported recordings
 pytest
 ```
 
@@ -67,6 +69,8 @@ ai_editor/
   db.py              SQLite clip library: schema and migrations
   jobs.py            Resumable job queue with content-hash step caching
   ffmpeg.py          FFmpeg/ffprobe wrapper, media probing, content hashing
+  ingest.py          Import: registration, proxy (GPU with fallbacks), audio
+  games.py           Known games and filename-based game suggestion
   errors.py          Plain-language errors, each mapped to a manual entry
   logging_setup.py   File logs get tracebacks; the creator never does
   cli.py             Command line interface
