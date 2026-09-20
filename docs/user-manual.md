@@ -211,10 +211,15 @@ Re-record if you change microphones.
 
 | Hotkey | Default | What it does |
 |---|---|---|
-| **Mark moment** | `Ctrl + Alt + M` | Logs a great moment. |
-| **Mark Short-worthy** | `Ctrl + Alt + S` | Logs a moment that would make a great Short. |
+| **Mark moment** | **Numpad +** | Logs a great moment. |
+| **Mark Short-worthy** | **Numpad −** | Logs a moment that would make a great Short. |
 
-Click a box and press your preferred key combination to change it. Choose keys that **don't clash** with your games or OBS. Tip: if you have a Stream Deck or spare mouse buttons, assign them there.
+Click a box and press your preferred key combination to change it. Two things to know when choosing:
+
+- **While the Companion runs, that key belongs to it**, and your games won't see it. That's the price of doing this the safe way (chapter 27). Numpad + and Numpad − are good defaults because games rarely use them.
+- **The numpad's Enter key can't be used.** Windows can't tell it apart from the main Enter key here, so reserving it would take Enter away from every program. AI-Editor refuses it rather than doing that.
+
+Tip: if you have a Stream Deck or spare mouse buttons, assign F13–F24 to them and use those.
 
 ### Step 6: Draw your layouts
 
@@ -294,8 +299,12 @@ Our standard track setup:
 2. Tick **Enable WebSocket server**.
 3. Leave the **Server Port** as `4455` unless you have a reason to change it.
 4. Keep **Enable Authentication** ticked.
-5. Click **Show Connect Info** and copy the **password** into AI-Editor's setup wizard.
+5. Click **Show Connect Info**, then click **Copy** next to **Server Password**.
 6. Click **OK**.
+7. In AI-Editor's setup wizard (until the app window arrives: run `ai-editor setup-obs` in a terminal with OBS open), paste the password. It doesn't show as you type or paste; press **Enter**.
+8. You should see **Connected to OBS** and the OBS version.
+
+The password is only saved once OBS accepts it, in `config/settings.local.yaml`. That file stays on your PC: it's never uploaded to GitHub, and it isn't part of `settings.yaml`. The password itself never travels, even to OBS: AI-Editor answers a one-time question from OBS that proves it knows the password.
 
 ### 7.5 Record while you stream (strongly recommended)
 
@@ -331,13 +340,37 @@ Stream Companion is a small app that runs in the background while you stream or 
 
 **Always start Stream Companion before you go live or start recording.** If it wasn't running, AI-Editor still works, but without markers and League events.
 
+#### 8.1a Starting it from the command line (until the app window arrives)
+
+1. Do chapter 7.4 once (connect AI-Editor to OBS).
+2. Open a terminal in the AI-Editor folder with the venv active and run `ai-editor companion`.
+3. A small status panel appears. Leave that window open (minimised is fine) while you play:
+
+| Line | Shows |
+|---|---|
+| **OBS** | **Connected (OBS 32.x)**, or **Not connected**, which is normal while OBS is closed. It checks again every 5 seconds. |
+| **Recording** / **Streaming** | **On since 21:30:05**, or **Off**. |
+| **Session** | The session name, from the moment you record or go live. |
+| **Logged** | How many things it has noted since you started it. |
+
+4. When you've finished, click that window first so it has focus, then press **Ctrl+C**. (Ctrl+C only reaches a terminal window that has focus. The tray icon in 8.1 replaces this when the app window arrives.)
+
+It uses next to no computer power: it sleeps until OBS tells it something changed.
+
 ### 8.2 Using markers
 
-- Press **Mark moment** (`Ctrl + Alt + M`) right after something great happens. You don't need to be precise; AI-Editor looks at the moments leading up to your press.
-- Press **Mark Short-worthy** (`Ctrl + Alt + S`) when a moment would make a great Short.
-- You'll hear a quiet click (only you, not your stream) to confirm. You can turn this sound off in Companion settings.
+- Press **Mark moment** (**Numpad +**) right after something great happens. You don't need to be precise; AI-Editor looks at the moments leading up to your press.
+- Press **Mark Short-worthy** (**Numpad −**) when a moment would make a great Short.
+- You'll hear a quiet click to confirm, and the **Marked** line in the Companion counts up.
+- Marking while OBS isn't recording still saves the marker, but there's no footage to attach it to.
+
+**Your viewers never hear the click.** Before playing it, the Companion asks OBS what it's capturing. If any **Desktop Audio** source is live and unmuted, that source records everything your PC plays, so the click stays silent and the Companion tells you why. With the per-program capture setup in chapter 7.3, the click is safe and plays normally. You can also switch it off under Companion settings.
 
 Markers are the strongest signal AI-Editor has. Even a few per stream noticeably improves highlights.
+
+**What happens to them:** when you import the recording, AI-Editor works out which session produced it — from the file OBS was writing, or from the time if the file was renamed or converted. Your markers then appear at the top of the moments list as **"You marked these"**, with their time in that recording. If a session was never matched, the **In library** column in `ai-editor sessions` stays empty.
+
+To check the sound before a stream: `ai-editor companion --test-sound` plays both marker sounds.
 
 ### 8.3 League of Legends events
 
@@ -348,6 +381,10 @@ It only works during an actual match (not in the lobby or champion select). This
 ### 8.4 Session log
 
 Right-click the tray icon → **View session log** to see markers and events from today's sessions. AI-Editor matches these to your footage automatically during import.
+
+From the command line: `ai-editor sessions` lists recent sessions, and `ai-editor sessions <session>` shows one in full. Each line has the time it happened, how far into the stream it was, and how far into the recording.
+
+A **session** runs from the moment OBS starts recording or streaming until both have stopped. If you go live and OBS starts recording a few seconds later, the **Recording started** line shows how far into the stream that was. That's exactly how far into the Twitch VOD your recording begins, which is what lines chat up with it.
 
 ---
 
@@ -484,7 +521,9 @@ If you recorded locally *and* want chat data:
 2. Open it in the Library, click **Attach Twitch chat**, and paste the VOD link.
 3. AI-Editor downloads only the chat and lines it up with your recording.
 
-From the command line: `ai-editor attach-chat <recording number> "<VOD link>" --starts-at <seconds>`. `--starts-at` is how many seconds into the stream your recording began: usually 0–5 if OBS starts recording automatically when you go live. In Phase 1D, the Stream Companion works this out for you.
+From the command line: `ai-editor attach-chat <recording number> "<VOD link>"`.
+
+**If the Stream Companion was running, you don't have to line anything up.** It logged how far into the stream your recording began, and AI-Editor uses that number, telling you which one it used. If it wasn't running, chat lines up from the start of the recording, and you can correct it with `--starts-at <seconds>` — usually 0–5 seconds if OBS starts recording automatically when you go live.
 
 ### 10.4 Games that show up in one session
 
@@ -1154,11 +1193,11 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Performance | Proxy frame rate | 30 fps (10–60) | Smoothness of preview copies. Higher makes smoother previews but bigger, slower-to-make copies. Your finished videos always use the original frame rate, whatever this is set to. |
 | Tools | FFmpeg folder | Empty (found automatically) | Only set this if the setup check can't find FFmpeg. Point it at the folder containing `ffmpeg.exe`. |
 | Queue | Overnight start time | Off | Starts the queue automatically. |
-| Companion | Mark moment hotkey | Ctrl+Alt+M | Logs a moment. |
-| Companion | Mark Short-worthy hotkey | Ctrl+Alt+S | Logs a Short moment. |
-| Companion | Confirmation sound | On | Quiet click when marking. |
+| Companion | Mark moment hotkey | `numpad+` | Logs a moment. While the Companion runs, this key belongs to it and games won't see it, so pick one they don't use. Numpad keys, F13–F24 and combinations such as `ctrl+alt+m` all work; the numpad's Enter key can't (chapter 6, step 5). |
+| Companion | Mark Short-worthy hotkey | `numpad-` | Logs a Short moment. |
+| Companion | Confirmation sound | On | Quiet click when you mark. It is skipped automatically whenever OBS is capturing Desktop Audio, so viewers can never hear it (chapter 8.2). |
 | Companion | Start with Windows | Off | Launches Companion at startup. |
-| OBS | WebSocket port / password | 4455 / from OBS | OBS connection. |
+| OBS | WebSocket port / password | 4455 / from OBS | OBS connection. Set the password with `ai-editor setup-obs` (chapter 7.4), which keeps it in `config/settings.local.yaml` on this PC only. |
 | Analysis | Transcription model | `large-v3` | Which speech-recognition AI writes your transcripts. `large-v3` is the most accurate and still transcribes 2 hours in about 3 minutes on your PC. `large-v3-turbo` is several times faster but misses more unclear speech. Changing it re-transcribes recordings the next time you analyse them. |
 | Analysis | Voice separation | Twitch VODs only (`vods`) | On a recording with one mixed audio track, splits the sound into voices and everything else (music, combat) before analysing it, so the game's music can't hide your speech or trick the speech recognition. `vods` does this for Twitch VODs only; `mixed` for any single-track recording; `off` never. Recordings with a separate microphone track never need it. Takes about 2 minutes per 2 hours. The separated sound is only used for analysis, never in your videos. |
 | Analysis | Language | English (`en`) | The language you speak on stream. `auto` works it out from the first 30 seconds, which is a little slower and can guess wrong if the recording opens with music. |
@@ -1184,7 +1223,7 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 
 Every message AI-Editor shows you ends with a code in brackets, like `(Help: manual chapter 25, code E004)`. Find that code below for what it means and what to do.
 
-> **[Engineer: this list grows with each phase. Codes E001–E020 exist as of Phase 0.]**
+> **[Engineer: this list grows with each phase. Codes E001–E052 exist as of Phase 1D.]**
 
 ### Error codes
 
@@ -1207,13 +1246,20 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 | **E040** | That doesn't look like a Twitch VOD link | AI-Editor couldn't find a VOD number in what you gave it. | Open the VOD on Twitch and copy the link from your browser (`twitch.tv/videos/...`), or copy it from **Content → Video Producer** in your Twitch dashboard. Both kinds of link work, and so does just the number. |
 | **E041** | Twitch won't share that VOD | The VOD is private, unpublished, subscriber-only, or expired. Twitch treats a VOD that isn't public as if it doesn't exist. | In your Twitch dashboard open **Content → Video Producer** and make the VOD public while you download it; you can change it back afterwards. Or download it there yourself and import the file: `ai-editor import "<file>" --source twitch`. |
 | **E042** | The download from Twitch didn't finish | The internet connection dropped, or Twitch stopped responding. | Check your connection and run the same command again. |
+| **E050** | AI-Editor could not reach OBS | OBS isn't open, its WebSocket server is switched off, or the port doesn't match. The Stream Companion shows this as **Not connected** and keeps checking every 5 seconds, so you can simply open OBS. | Open OBS. If it still says this, follow chapter 7.4: **Tools → WebSocket Server Settings**, tick **Enable WebSocket server**, and check the **Server Port** is `4455`. |
+| **E051** | OBS didn't accept AI-Editor's password | OBS asks for a password before any program can connect. None has been saved yet, or the password in OBS changed (clicking **Generate Password** in OBS makes a new one). | Run `ai-editor setup-obs` and paste the password from **Tools → WebSocket Server Settings → Show Connect Info**. |
+| **E052** | This version of OBS can't talk to AI-Editor | The WebSocket server AI-Editor uses is built into OBS 28 and newer. | Update OBS from obsproject.com. |
+| **E053** | AI-Editor could not set up a marker hotkey | Another program already reserved that key, or it isn't a key Windows can reserve (the numpad's Enter key is the common one). The Companion carries on; only that one key doesn't work. | Pick different keys in Settings and start the Companion again. Numpad + and Numpad − work well. |
 | **E020** | A job could not finish | A step failed. The steps that already finished were kept. | Open the **Queue** and press **Resume**. It continues from the step that failed, without repeating finished work. |
 
 ### Stream Companion says "OBS: Not connected"
-- Make sure OBS is open.
+- Make sure OBS is open. The Companion checks again every 5 seconds, so there's no need to restart it.
 - Check **Tools → WebSocket Server Settings** in OBS: server enabled, port matches AI-Editor.
-- Re-copy the password from **Show Connect Info**.
-- Check Windows Firewall isn't blocking AI-Editor (allow it on private networks).
+- If it says **Password not accepted**, run `ai-editor setup-obs` again (code **E051**).
+- Run `ai-editor doctor`: its **OBS** line tells you whether AI-Editor can reach OBS right now.
+
+### I closed the Companion (or OBS) in the middle of a recording
+Start it again. When it reconnects it asks OBS what's running and logs anything it missed. Those lines show **noticed after it happened** in `ai-editor sessions`. The start of a recording is still exact, because OBS reports how long it's been recording.
 
 ### League events aren't being logged
 - Events only appear during a loaded match, not in lobby or champion select.
@@ -1221,8 +1267,10 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 - Restart Stream Companion and check the tray status says **League: Match detected** during a game.
 
 ### My hotkey doesn't do anything
-- Another app (game, Discord, OBS) may use the same keys. Choose a different combination.
-- Some games block hotkeys when running as administrator. Try running Stream Companion as administrator too.
+- Check the **Keys** line in the Companion. If it says **not available**, another program (Discord, OBS, a game launcher) reserved that key first: pick a different one in Settings (code **E053**).
+- The **Marked** line counts up on every press. If it counts up but the marker isn't where you expected, check `ai-editor sessions` — a marker pressed while OBS wasn't recording has nothing to attach to.
+- Games started **as administrator** can stop Windows passing the key on. Run the Stream Companion as administrator too (right-click the terminal → Run as administrator).
+- The Companion must be running. It only reserves the keys while its window is open, which is also why your games get those keys back the moment you close it.
 
 ### "Not enough graphics memory" / analysis crashes
 - Close games and other GPU-heavy apps during analysis.
@@ -1310,6 +1358,8 @@ Yes. On a recording's timeline, select a range → **Create clip**, then **Make 
 ### Your game accounts
 - AI-Editor never reads game memory, injects into games, or automates input.
 - Escape from Tarkov (BattlEye), League of Legends (Vanguard), and Wardogs anti-cheat are not affected by AI-Editor because it only works with your recordings.
+- **Stream Companion**, the only part that runs while you play, talks to **OBS and nothing else**. It doesn't look at which programs are running, doesn't touch the game in any way, and never presses keys for you. Its hotkeys are registered the same way Discord's and OBS's own hotkeys are, through Windows' standard hotkey feature. It doesn't use a keyboard hook, which is what key-logging and macro tools use.
+- These rules are checked automatically: every time AI-Editor is built, a test scans all of its code and fails if anything that could touch a game appears.
 - League events come from Riot's official, built-in local game data feature.
 - Don't install third-party add-ons that claim to "improve detection" by reading games directly.
 

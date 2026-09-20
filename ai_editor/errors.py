@@ -194,6 +194,46 @@ class TwitchDownloadFailed(AIEditorError):
     fix = "Check your internet connection and run the same command again"
 
 
+# --- OBS and Stream Companion ------------------------------------------------
+
+
+class ObsNotReachable(AIEditorError):
+    code = "E050"
+    what = "AI-Editor could not reach OBS"
+    why = "OBS isn't open, or its WebSocket server is switched off"
+    fix = (
+        "Open OBS, click Tools, then WebSocket Server Settings, and tick Enable "
+        "WebSocket server. The port there must match AI-Editor's (4455 unless you changed it)"
+    )
+
+
+class ObsPasswordWrong(AIEditorError):
+    code = "E051"
+    what = "OBS didn't accept AI-Editor's password"
+    why = "OBS asks for a password before it lets any program connect"
+    fix = (
+        "Run ai-editor setup-obs and paste the password from OBS: Tools, then "
+        "WebSocket Server Settings, then Show Connect Info"
+    )
+
+
+class HotkeyUnavailable(AIEditorError):
+    code = "E053"
+    what = "AI-Editor could not set up a marker hotkey"
+    why = "Another program may already be using it, or it isn't a key Windows can reserve"
+    fix = (
+        "Choose different keys in Settings and start the Stream Companion again. "
+        "Numpad + and Numpad - work well, because games rarely use them"
+    )
+
+
+class ObsTooOld(AIEditorError):
+    code = "E052"
+    what = "This version of OBS can't talk to AI-Editor"
+    why = "AI-Editor needs the WebSocket server built into OBS 28 and newer"
+    fix = "Update OBS from obsproject.com"
+
+
 # --- Jobs ------------------------------------------------------------------
 
 
@@ -222,5 +262,9 @@ ALL_ERRORS: tuple[type[AIEditorError], ...] = (
     InvalidVodLink,
     VodNotAvailable,
     TwitchDownloadFailed,
+    ObsNotReachable,
+    ObsPasswordWrong,
+    ObsTooOld,
+    HotkeyUnavailable,
     JobFailed,
 )

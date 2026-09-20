@@ -36,6 +36,7 @@ from .ffmpeg import (
     nvenc_encoders,
     probe,
 )
+from .companion.link import link_recording, stream_offset
 from .games import canonical_game
 from .ingest import Registration, ingest_recording
 from .logging_setup import setup_logging
@@ -165,6 +166,24 @@ def doctor(
     except Exception as exc:  # noqa: BLE001
         problems += 1
         table.add_row("Clip library", FAIL, str(exc))
+
+    # --- OBS ---
+    # OBS being closed is normal, so only a refused password counts as a problem.
+    from .companion.obs import ObsClient
+    from .errors import ObsNotReachable
+
+    client = ObsClient(settings.obs.websocket_host, settings.obs.websocket_port,
+                       settings.obs.websocket_password, timeout=2.0)
+    try:
+        table.add_row("OBS (Stream Companion)", OK, f"Connected to OBS {client.connect()}")
+    except ObsNotReachable:
+        table.add_row("OBS (Stream Companion)", WARN,
+                      "Not reachable. Fine if OBS is closed; otherwise see manual chapter 7.4.")
+    except AIEditorError as exc:
+        problems += 1
+        table.add_row("OBS (Stream Companion)", FAIL, exc.user_message())
+    finally:
+        client.close()
 
     console.print(table)
 
@@ -465,8 +484,22 @@ def _import_file(settings, conn, path: Path, *, game, tracks, source_type, vod_i
     console.print(f"Total time: {_elapsed(time.monotonic() - started)}")
     console.print(f"Preview copy: [bold]{result.proxy_path}[/bold]")
     console.print(f"Working files folder: {result.cache_dir}")
-    console.print(f"Next: [bold]ai-editor analyze {result.registration.recording_id}[/bold]")
-    return result.registration.recording_id
+
+    recording_id = result.registration.recording_id
+    match = link_recording(conn, recording_id)
+    if match:
+        detail = f"session {match.session_id}"
+        if match.marker_total:
+            detail += (f", [bold]{match.markers} moment(s) you marked[/bold]"
+                       + (f" and {match.short_markers} Short-worthy" if match.short_markers else ""))
+        else:
+            detail += ", no markers"
+        if match.stream_offset_sec is not None:
+            detail += f"; this recording starts {match.stream_offset_sec:.0f}s into the stream"
+        console.print(f"Stream Companion: {detail}")
+
+    console.print(f"Next: [bold]ai-editor analyze {recording_id}[/bold]")
+    return recording_id
 
 
 def _safe_filename(text: str) -> str:
@@ -551,9 +584,9 @@ def attach_chat_command(
     recording: str = typer.Argument(..., help="The recording's number from the library, or its file"),
     link: str = typer.Argument(..., help="The Twitch VOD whose chat to attach"),
     starts_at: float = typer.Option(
-        0.0, "--starts-at",
-        help="Seconds into the stream when this recording began. 0 for the VOD itself; "
-        "a few seconds for a local recording made while streaming.",
+        None, "--starts-at",
+        help="Seconds into the stream when this recording began. Worked out from the "
+        "Stream Companion's session log when it was running; otherwise 0.",
     ),
     settings_path: Path = typer.Option(
         DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
@@ -572,7 +605,17 @@ def attach_chat_command(
     conn = init_db(settings.db_path)
     try:
         row = resolve_recording(conn, recording)
-        result = attach_chat(conn, settings, row["id"], link, recording_starts_at=starts_at)
+        offset = starts_at
+        if offset is None:
+            offset = stream_offset(conn, row["id"])
+            if offset is not None:
+                console.print(
+                    f"The Stream Companion logged this recording starting [bold]{offset:.0f}s"
+                    "[/bold] into the stream; lining chat up with that."
+                )
+            else:
+                offset = 0.0
+        result = attach_chat(conn, settings, row["id"], link, recording_starts_at=offset)
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
         raise typer.Exit(code=1) from exc
@@ -790,6 +833,12 @@ def _print_moments(conn, recording_id: int, top: int = 8) -> None:
     )
     moments_table.add_column("Kind")
     moments_table.add_column("Times  (confidence)")
+    if report.markers:
+        moments_table.add_row(
+            "[bold]You marked these[/bold]",
+            "  ".join(clock(t) + (" (Short)" if name == "marker_short" else "")
+                      for t, name in report.markers),
+        )
     moments_table.add_row(
         "Loudest moments" + ("" if report.source_role == "mic" else " (you and the game)"),
         "  ".join(f"{clock(t)} ({v:.1f}x)" for t, v in report.spikes) or "[dim]none found[/dim]",
@@ -808,6 +857,252 @@ def _print_moments(conn, recording_id: int, top: int = 8) -> None:
         or "[dim]none over 20 s[/dim]",
     )
     console.print(moments_table)
+
+
+@app.command("setup-obs")
+def setup_obs(
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Connect AI-Editor to OBS and save the password (manual chapter 7.4).
+
+    The password is typed in hidden and saved to config/settings.local.yaml,
+    which stays on this PC and is never committed to git. It is only saved
+    once OBS has accepted it.
+    """
+    from .companion.obs import ObsClient
+    from .config import save_local_setting
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    console.print(
+        "In OBS: [bold]Tools → WebSocket Server Settings[/bold]. Tick [bold]Enable "
+        "WebSocket server[/bold], click [bold]Show Connect Info[/bold], and copy the "
+        "Server Password.\n"
+    )
+    password = typer.prompt("Paste the OBS password (it won't show as you type)",
+                            hide_input=True, default="", show_default=False).strip()
+    client = ObsClient(settings.obs.websocket_host, settings.obs.websocket_port, password)
+    try:
+        version = client.connect()
+    except AIEditorError as exc:
+        console.print(f"\n[red]{exc.user_message()}[/red]")
+        console.print("Nothing was saved.")
+        raise typer.Exit(code=1) from exc
+    finally:
+        client.close()
+
+    saved = save_local_setting(settings.source_path or settings_path, "obs",
+                               "websocket_password", password)
+    console.print(f"\n[green]Connected to OBS {version}.[/green] Password saved to {saved} "
+                  "(this PC only, never uploaded).")
+    if not password:
+        console.print("[yellow]OBS isn't asking for a password.[/yellow] That works, but any "
+                      "program on your network could control OBS. Tick Enable Authentication "
+                      "in OBS and run this again.")
+    console.print("Next: [bold]ai-editor companion[/bold]")
+
+
+@app.command("companion")
+def companion(
+    test_sound: bool = typer.Option(
+        False, "--test-sound", help="Play both marker sounds and stop, to check you can hear them"
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Run the Stream Companion beside OBS (manual chapter 8).
+
+    Start it before you go live or record, and leave the window open. It logs
+    when OBS starts and stops streaming and recording, so markers and chat
+    line up with your footage. Press Ctrl+C to stop it.
+    """
+    from rich.live import Live
+
+    from .companion.app import Companion
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    if test_sound:
+        _play_marker_sounds(settings)
+        return
+    init_db(settings.db_path).close()
+    app_ = Companion(settings)
+    app_.start_hotkeys()
+    for problem in app_.hotkey_problems:
+        console.print(f"[yellow]{problem}[/yellow]")
+    try:
+        with Live(_companion_panel(app_), console=console, refresh_per_second=1) as live:
+            while True:
+                app_.step(wait=1.0)
+                live.update(_companion_panel(app_))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app_.close()
+    if app_.log.active:
+        console.print("[yellow]Stream Companion stopped while OBS was still going.[/yellow] "
+                      "Start it again soon; it will catch up with what it missed.")
+    else:
+        console.print("Stream Companion stopped.")
+
+
+def _play_marker_sounds(settings: Settings) -> None:
+    """Let the creator check they can hear the markers before going live."""
+    from .companion import sound
+
+    folder = settings.folders.cache / "companion"
+    level = settings.companion.sound_volume
+    for short_worthy, label in ((False, "Mark moment (Numpad +)"), (True, "Short-worthy (Numpad -)")):
+        console.print(f"Playing: [bold]{label}[/bold]")
+        sound.play(sound.click_file(folder, short_worthy=short_worthy, level=level))
+        time.sleep(1.2)
+    console.print(
+        f"\nVolume is set to {level:g} of 1.0 (companion.sound_volume in Settings).\n"
+        "Still too quiet? Windows' own volume applies on top: open the volume mixer "
+        "(right-click the speaker icon in your taskbar) and check Python isn't turned down.\n"
+        "To turn the sound off completely: set companion.confirmation_sound to false."
+    )
+
+
+def _companion_panel(app_) -> Table:
+    obs_text = {
+        "connecting": "[yellow]Connecting…[/yellow]",
+        "connected": f"[green]Connected[/green] (OBS {app_.status.obs_version})",
+        "waiting": "[yellow]Not connected[/yellow] - waiting for OBS (checking every 5 s)",
+        "password": "[red]Password not accepted[/red]",
+        "too_old": "[red]OBS too old[/red]",
+    }[app_.status.obs]
+
+    table = Table(title="AI-Editor Stream Companion", show_header=False, header_style="bold",
+                  caption="Leave this open while you play. Ctrl+C to stop.")
+    table.add_column("What", style="bold")
+    table.add_column("Status")
+    table.add_row("OBS", obs_text)
+    for output, label in (("record", "Recording"), ("stream", "Streaming")):
+        state = app_.log.outputs[output]
+        if state.active and state.started_wall:
+            since = state.started_wall.astimezone().strftime("%H:%M:%S")
+            text = f"[green]On[/green] since {since}" + (" [yellow](paused)[/yellow]" if state.paused else "")
+        else:
+            text = "[dim]Off[/dim]"
+        table.add_row(label, text)
+    table.add_row("Session", app_.log.session_id or "[dim]starts when you record or go live[/dim]")
+    marked = f"{app_.markers['moment']} moment, {app_.markers['short']} Short-worthy"
+    if app_.last_marker:
+        marked += f"  (last at {app_.last_marker})"
+    table.add_row("Marked", marked)
+    table.add_row("Keys", app_.hotkey_summary())
+    if app_.status.sound_off_because:
+        table.add_row("Sound", f"[dim]silent: {app_.status.sound_off_because}[/dim]")
+    table.add_row("Logged", f"{app_.log.events_logged} event(s) this run")
+    if app_.status.message:
+        table.add_row("", f"[red]{app_.status.message}[/red]")
+    return table
+
+
+@app.command("sessions")
+def sessions(
+    session_id: str = typer.Argument(None, help="A session to show in full; leave out to list them"),
+    last: int = typer.Option(10, "--last", "-n", help="How many recent sessions to list"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Show the Stream Companion's session log (manual chapter 8.4)."""
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        if session_id:
+            _print_session(conn, session_id)
+        else:
+            _print_sessions(conn, last)
+    finally:
+        conn.close()
+
+
+def _local_time(iso: str) -> str:
+    from datetime import datetime
+
+    return datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _print_sessions(conn, last: int) -> None:
+    rows = conn.execute(
+        "SELECT session_id, MIN(wall_clock) AS first, MAX(wall_clock) AS latest, COUNT(*) AS events, "
+        "SUM(event_type = 'obs_record_started') AS recordings, "
+        "SUM(event_type = 'obs_stream_started') AS streams, "
+        "SUM(event_type IN ('marker', 'marker_short')) AS markers, "
+        "(SELECT GROUP_CONCAT('#' || r.id, ' ') FROM recordings r "
+        " WHERE r.session_id = companion_events.session_id) AS imported "
+        "FROM companion_events GROUP BY session_id ORDER BY first DESC LIMIT ?",
+        (last,),
+    ).fetchall()
+    if not rows:
+        console.print("No sessions yet. Run [bold]ai-editor companion[/bold], then record or go live in OBS.")
+        return
+    table = Table(title="Stream Companion sessions", header_style="bold")
+    for column in ("Session", "Started", "Last event", "Recorded", "Streamed", "Markers",
+                   "Events", "In library"):
+        table.add_column(column)
+    for row in rows:
+        table.add_row(row["session_id"], _local_time(row["first"]), _local_time(row["latest"]),
+                      OK if row["recordings"] else "-", OK if row["streams"] else "-",
+                      str(row["markers"]), str(row["events"]), row["imported"] or "-")
+    console.print(table)
+    console.print("Details: [bold]ai-editor sessions <session>[/bold]")
+
+
+EVENT_LABELS = {
+    "obs_record_started": "Recording started",
+    "obs_record_stopped": "Recording stopped",
+    "obs_record_paused": "Recording paused",
+    "obs_record_resumed": "Recording resumed",
+    "obs_record_file_changed": "Recording continued in a new file",
+    "obs_stream_started": "Stream started",
+    "obs_stream_stopped": "Stream stopped",
+    "obs_stream_reconnecting": "Stream connection dropped",
+    "obs_stream_reconnected": "Stream reconnected",
+    "obs_disconnected": "Lost connection to OBS",
+    "obs_reconnected": "Reconnected to OBS",
+    "obs_closing": "OBS closed",
+    "marker": "Marker",
+    "marker_short": "Marker (Short-worthy)",
+}
+
+
+def _print_session(conn, session_id: str) -> None:
+    import json
+
+    from .analysis.captions import clock
+
+    rows = conn.execute(
+        "SELECT * FROM companion_events WHERE session_id = ? ORDER BY wall_clock, id", (session_id,)
+    ).fetchall()
+    if not rows:
+        console.print(f"[red]No session called {session_id}.[/red] Run [bold]ai-editor sessions[/bold] to list them.")
+        raise typer.Exit(code=1)
+    table = Table(title=f"Session {session_id}", header_style="bold")
+    for column in ("Time", "What happened", "Into stream", "Into recording", "Detail"):
+        table.add_column(column)
+    for row in rows:
+        payload = json.loads(row["payload_json"]) if row["payload_json"] else {}
+        detail = []
+        if payload.get("path"):
+            detail.append(Path(payload["path"]).name)
+        if payload.get("noticed_late"):
+            detail.append("[yellow]noticed after it happened[/yellow]")
+        table.add_row(
+            _local_time(row["wall_clock"]),
+            EVENT_LABELS.get(row["event_type"], row["event_type"]),
+            clock(row["stream_time_sec"]) if row["stream_time_sec"] is not None else "-",
+            clock(row["recording_time_sec"]) if row["recording_time_sec"] is not None else "-",
+            "; ".join(detail),
+        )
+    console.print(table)
 
 
 @app.command("library")

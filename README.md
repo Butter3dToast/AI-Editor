@@ -29,7 +29,7 @@ a hard rule, not a preference.
 | **1A** | Ingest: local OBS recordings, proxies, audio extraction | **Complete** |
 | **1B** | Audio analysis: transcription, silence, audio events | **Complete** |
 | **1C** | Twitch VOD download, chat, Demucs voice separation | **Complete** |
-| 1D | Stream Companion: OBS WebSocket, marker hotkeys | Not started |
+| **1D** | Stream Companion: OBS WebSocket, marker hotkeys | **Complete** |
 | 1E | Scoring and clip segmentation | Not started |
 | 1F | Recipes: highlights, Let's Play split optimiser | Not started |
 | 1G | Rendering (NVENC), captions, OTIO/FCPXML export | Not started |
@@ -64,6 +64,9 @@ ai-editor analyze 1               # Transcript, loudness, sound events
 ai-editor moments 1               # What analysis found, with times to check
 ai-editor import-twitch <link>    # Download a public VOD, import it, attach chat
 ai-editor attach-chat 1 <link>    # Add a VOD's chat to any recording
+ai-editor setup-obs               # Connect to OBS (password saved locally only)
+ai-editor companion               # Stream Companion: markers and OBS session log
+ai-editor sessions                # What the Companion logged
 pytest
 ```
 
@@ -84,6 +87,13 @@ ai_editor/
   ingest.py          Import: registration, proxy (GPU with fallbacks), audio
   games.py           Known games and filename-based game suggestion
   twitch.py          TwitchDownloader wrapper: VOD info, video and chat downloads
+  companion/         Stream Companion (runs beside OBS while you play)
+    obs.py           OBS WebSocket 5 client: login, requests, events
+    session.py       Session log: what OBS did and when
+    hotkeys.py       Marker hotkeys via Windows RegisterHotKey (no keyboard hook)
+    sound.py         Confirmation click, silenced when OBS captures Desktop Audio
+    link.py          Matching a session to the recording it produced
+    app.py           The loop that ties them together
   models.py          AI model loading: one on the GPU at a time, downloads once
   analysis/
     pipeline.py      The resumable analysis job and storing its results

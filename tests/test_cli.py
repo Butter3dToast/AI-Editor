@@ -14,7 +14,7 @@ from ai_editor.cli import app
 runner = CliRunner()
 
 COMMANDS = ["version", "doctor", "init-db", "probe", "import", "import-twitch", "attach-chat",
-            "library", "analyze", "moments"]
+            "library", "analyze", "moments", "setup-obs", "companion", "sessions"]
 
 
 def test_top_level_help_lists_every_command():
@@ -34,6 +34,12 @@ def test_library_on_an_empty_library(settings):
     result = runner.invoke(app, ["library", "--settings", str(settings.source_path)])
     assert result.exit_code == 0
     assert "empty" in result.output
+
+
+def test_sessions_before_any_exist(settings):
+    result = runner.invoke(app, ["sessions", "--settings", str(settings.source_path)])
+    assert result.exit_code == 0
+    assert "No sessions yet" in result.output
 
 
 def test_moments_for_a_missing_recording_is_a_readable_error(settings):

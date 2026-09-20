@@ -30,15 +30,26 @@ queue:
   shutdown_when_finished: false
 
 companion:
-  mark_moment_hotkey: ctrl+alt+m
-  mark_short_hotkey: ctrl+alt+s
+  # Keys that mark a moment while you play. The Companion takes these keys over
+  # while it runs, so games won't see them: pick keys your games don't use.
+  # Windows cannot separate the numpad's Enter from the main Enter key, so that
+  # one can't be used. Examples: numpad+, numpad-, f13-f24, ctrl+alt+m.
+  mark_moment_hotkey: numpad+
+  mark_short_hotkey: numpad-
+  # A quiet click when you mark. It is skipped automatically whenever OBS is
+  # capturing Desktop Audio, so viewers can never hear it.
   confirmation_sound: true
+  # How loud that click is, 0.05 to 1.0. Windows' own volume applies on top:
+  # if it is still too quiet, check the volume mixer for Python.
+  sound_volume: 0.9
   start_with_windows: false
 
 obs:
   websocket_host: 127.0.0.1
   websocket_port: 4455
-  websocket_password: "" # Copy from OBS: Tools > WebSocket Server Settings > Show Connect Info
+  # Leave this empty. Run "ai-editor setup-obs" instead: it saves the password to
+  # config/settings.local.yaml, which stays on this PC and is never committed.
+  websocket_password: ""
 
 analysis:
   # faster-whisper model. large-v3 was clearly more accurate on the creator's speech than

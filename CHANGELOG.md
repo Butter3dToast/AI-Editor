@@ -3,6 +3,53 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.5.0 — Phase 1D: Stream Companion — 20 September 2026
+
+AI-Editor can now watch OBS while you play, and you can mark great moments as
+they happen.
+
+**New**
+
+- **`ai-editor companion`**: a small window you leave open while you stream or
+  record. It logs when OBS starts and stops recording and streaming, reconnects
+  by itself if OBS closes, and uses next to no computer power.
+- **Marker hotkeys:** **Numpad +** marks a moment, **Numpad -** marks one that
+  would make a good Short. A quiet click confirms it. Markers are the strongest
+  signal AI-Editor has, because you chose them yourself.
+- **The click can never reach your stream.** Before playing it, the Companion
+  asks OBS what it is capturing, and stays silent if a Desktop Audio source
+  would pick it up. `ai-editor companion --test-sound` plays both sounds so you
+  can check you'll hear them.
+- **Your markers become moments.** Importing a recording matches it to the
+  session that produced it — by the file OBS was writing, or by time if the
+  file was renamed or converted — and your markers appear at the top of the
+  moments list.
+- **Chat lines itself up.** The Companion logs how far into the stream your
+  local recording began, so `ai-editor attach-chat` no longer needs
+  `--starts-at`.
+- **`ai-editor sessions`** shows the session log, and `ai-editor sessions
+  <session>` shows one in full.
+- `ai-editor setup-obs` connects to OBS. The password is saved only in
+  `config/settings.local.yaml`, which is never committed, and is only stored
+  once OBS accepts it.
+- `ai-editor doctor` now has an OBS line.
+- Four new error messages (E050–E053) in manual chapter 25.
+
+**Your game accounts**
+
+The Companion talks to OBS and nothing else. It never looks at which programs
+are running, never touches a game, and never presses keys for you. Its hotkeys
+use the same standard Windows feature Discord and OBS use, not a keyboard hook.
+A test now scans every line of AI-Editor and fails the build if anything that
+could touch a game ever appears (manual chapter 27).
+
+**Fixed**
+
+- Closing the Companion during a recording and starting it again no longer logs
+  that recording twice.
+- The confirmation click was too quiet to hear. It is now louder and a little
+  longer, and the Short-worthy one is two rising blips.
+
 ## 0.4.0 — Phase 1C: Twitch VODs, chat, and voice separation — 19 September 2026
 
 Your stream footage and Twitch chat can now come into AI-Editor.

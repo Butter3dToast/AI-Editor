@@ -75,6 +75,8 @@ class MomentReport:
     events: dict[str, list[tuple[int, float]]] = field(default_factory=dict)
     quiet_stretches: list[tuple[int, int]] = field(default_factory=list)
     phrases_set_aside: int = 0
+    # Moments the creator marked themselves with the Companion's hotkeys.
+    markers: list[tuple[int, str]] = field(default_factory=list)
 
 
 def build_report(conn: sqlite3.Connection, recording_id: int, top: int = 8) -> MomentReport:
@@ -105,8 +107,15 @@ def build_report(conn: sqlite3.Connection, recording_id: int, top: int = 8) -> M
     except (ValueError, TypeError, AttributeError):
         set_aside = 0
 
+    marker_rows = conn.execute(
+        "SELECT t_sec, name FROM signals WHERE recording_id = ? AND name IN "
+        "('marker', 'marker_short') ORDER BY t_sec",
+        (recording_id,),
+    ).fetchall()
+
     return MomentReport(
         phrases_set_aside=set_aside,
+        markers=[(int(r["t_sec"]), r["name"]) for r in marker_rows],
         duration_sec=seconds,
         words=word_row["n"],
         source_role=word_row["role"],

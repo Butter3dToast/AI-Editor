@@ -69,9 +69,10 @@ class Queue(BaseModel):
 
 
 class Companion(BaseModel):
-    mark_moment_hotkey: str = "ctrl+alt+m"
-    mark_short_hotkey: str = "ctrl+alt+s"
+    mark_moment_hotkey: str = "numpad+"
+    mark_short_hotkey: str = "numpad-"
     confirmation_sound: bool = True
+    sound_volume: float = Field(0.9, ge=0.05, le=1.0)
     start_with_windows: bool = False
 
 
@@ -270,13 +271,12 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     if not settings_path.exists():
         raise SettingsInvalid(f"No settings file at {settings_path}")
 
-    try:
-        raw: Any = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
-        raise SettingsInvalid(f"settings.yaml could not be read: {exc}") from exc
-
-    if not isinstance(raw, dict):
-        raise SettingsInvalid("settings.yaml must contain a list of settings")
+    raw = _read_yaml(settings_path)
+    # Private values such as the OBS password live in a file beside
+    # settings.yaml that git ignores, so they can never reach GitHub.
+    local_path = local_settings_path(settings_path)
+    if local_path.exists():
+        raw = _merge(raw, _read_yaml(local_path))
 
     try:
         settings = Settings(**raw)
@@ -288,6 +288,45 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
 
     settings.source_path = settings_path
     return settings
+
+
+def local_settings_path(settings_path: Path) -> Path:
+    """settings.yaml -> settings.local.yaml, in the same folder."""
+    return settings_path.with_name(f"{settings_path.stem}.local{settings_path.suffix}")
+
+
+def save_local_setting(settings_path: Path, section: str, key: str, value: Any) -> Path:
+    """Write one value into the private local settings file, keeping the rest."""
+    local_path = local_settings_path(settings_path)
+    raw = _read_yaml(local_path) if local_path.exists() else {}
+    raw.setdefault(section, {})[key] = value
+    local_path.write_text(
+        "# Private settings for this PC only. Never committed to git (see .gitignore).\n"
+        + yaml.safe_dump(raw, sort_keys=False),
+        encoding="utf-8",
+    )
+    return local_path
+
+
+def _read_yaml(path: Path) -> dict[str, Any]:
+    try:
+        raw: Any = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise SettingsInvalid(f"{path.name} could not be read: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise SettingsInvalid(f"{path.name} must contain a list of settings")
+    return raw
+
+
+def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Section by section: the local file only replaces the values it names."""
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _explain(exc: ValidationError) -> str:
