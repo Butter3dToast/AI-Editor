@@ -616,6 +616,9 @@ def attach_chat_command(
             else:
                 offset = 0.0
         result = attach_chat(conn, settings, row["id"], link, recording_starts_at=offset)
+        # Chat activity changes which moments are best, so score and cut again.
+        if row["analysis_status"] == "complete":
+            _refresh_clips(conn, settings, row)
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
         raise typer.Exit(code=1) from exc
@@ -648,6 +651,7 @@ ANALYSIS_LABELS = {
     "transcribe": "Transcribing speech",
     "sound_events": "Listening for laughter, shouts, gunfire",
     "loudness": "Measuring loudness",
+    "scenes": "Finding scene changes (menus, loading)",
 }
 
 
@@ -760,7 +764,13 @@ def analyze(
     console.print(f"Total time: {_elapsed(time.monotonic() - started)}\n")
 
     _print_moments(conn, result.recording_id)
+    # Everything needed to rank moments is now stored, so cut the clips straight away.
+    row = conn.execute("SELECT * FROM recordings WHERE id = ?", (result.recording_id,)).fetchone()
+    clips, _ = _refresh_clips(conn, settings, row) if row else (None, None)
     conn.close()
+    if clips:
+        console.print(f"\n[bold]{len(clips)} clips[/bold] found. See them with: "
+                      f"[bold]ai-editor clips {result.recording_id} --export 10[/bold]")
 
     if result.proxy_srt_path:
         console.print(
@@ -1103,6 +1113,209 @@ def _print_session(conn, session_id: str) -> None:
             "; ".join(detail),
         )
     console.print(table)
+
+
+SIGNAL_LABELS = {
+    "marker": "you marked it",
+    "marker_short": "you marked it (Short)",
+    "laughter": "laughter",
+    "scream": "screaming",
+    "shout": "shouting",
+    "gunfire": "gunfire",
+    "explosion": "explosions",
+    "chat_z": "chat busy",
+    "energy_z": "loud",
+    "speech": "talking",
+    "combination": "several at once",
+}
+
+
+def _refresh_score(conn, settings: Settings, recording_id: int, duration_sec: float | None):
+    """Work out the hype score from whatever signals the recording now has."""
+    from .analysis.hype import build
+
+    seconds = int(duration_sec or 0)
+    if seconds <= 0:
+        return None
+    return build(conn, settings, recording_id, seconds)
+
+
+def _refresh_clips(conn, settings: Settings, row):
+    """Score the recording and cut its candidate clips. Instant: nothing is re-analysed.
+
+    Returns (clips, score result), or (None, None) if there is nothing to score.
+    """
+    from .analysis.clips import build_clips, explain, load_words, store_clips
+    from .analysis.hype import load_signals
+    from .analysis.pipeline import load_scene_cuts
+
+    result = _refresh_score(conn, settings, row["id"], row["duration_sec"])
+    if result is None:
+        return None, None
+    words = load_words(conn, row["id"])
+    clips = build_clips(result.score, words=words, cuts=load_scene_cuts(settings, row),
+                        duration=float(row["duration_sec"]), settings=settings.clips)
+    for clip in clips:
+        clip.reasons = explain(clip, result.parts)
+    store_clips(conn, row["id"], clips,
+                signals=load_signals(conn, row["id"], len(result.score)), words=words)
+    return clips, result
+
+
+@app.command("score")
+def score(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    top: int = typer.Option(15, "--top", "-n", help="How many moments to list"),
+    gap: int = typer.Option(45, "--gap", help="Seconds to keep between listed moments"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Rank the best moments in a recording (spec section 7.3).
+
+    Everything analysis heard is combined into one score per second: your
+    markers, laughter, shouting, gunfire, sudden loudness and chat. Cutting
+    these into clips is the next step; this is the list to check first.
+    """
+    from .analysis import resolve_recording
+    from .analysis.audio_signals import top_moments
+    from .analysis.captions import clock
+    from .analysis.hype import why
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+        if row["analysis_status"] != "complete":
+            console.print(f"Recording #{row['id']} hasn't been analysed yet. "
+                          f"Run: ai-editor analyze {row['id']}")
+            raise typer.Exit(code=1)
+        result = _refresh_score(conn, settings, row["id"], row["duration_sec"])
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+    if result is None or not result.score.size:
+        console.print("[yellow]Nothing to score in that recording.[/yellow]")
+        raise typer.Exit(code=1)
+
+    peaks = top_moments(result.score, count=top, min_gap=gap, threshold=0.15)
+    table = Table(title=f"Best moments in #{row['id']}: {row['title']}", header_style="bold")
+    table.add_column("#", justify="right")
+    table.add_column("Time")
+    table.add_column("Score", justify="right")
+    table.add_column("Why")
+    for place, (second, value) in enumerate(
+        sorted(peaks, key=lambda p: p[1], reverse=True), start=1
+    ):
+        reasons = ", ".join(
+            f"{SIGNAL_LABELS.get(name, name)}" for name, _ in why(result.parts, second)
+        )
+        table.add_row(str(place), clock(second), f"{value:.2f}", reasons or "-")
+    console.print(table)
+    console.print(
+        "Scores are relative to this recording: 1.00 is its best moment.\n"
+        "Jump to these times in the preview copy and tell me which are wrong."
+    )
+    if result.missing:
+        console.print(
+            "[dim]Not available in this recording: "
+            + ", ".join(SIGNAL_LABELS.get(n, n) for n in result.missing)
+            + ".[/dim]"
+        )
+
+
+@app.command("clips")
+def clips_command(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    top: int = typer.Option(20, "--top", "-n", help="How many clips to list"),
+    export: int = typer.Option(
+        0, "--export", "-e",
+        help="Also save the best N clips as small videos you can watch (with subtitles)",
+    ),
+    open_folder: bool = typer.Option(
+        False, "--open", help="Open the previews folder in File Explorer afterwards"
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Cut a recording's best moments into clips with clean edges (spec section 7.3).
+
+    Each clip starts before the build-up, ends after the reaction, never cuts
+    mid-word, and never runs into a menu or loading screen. Use --export to
+    watch them.
+    """
+    from .analysis import resolve_recording
+    from .analysis.captions import clock
+    from .analysis.clips import load_words
+    from .analysis.previews import export_previews, previews_folder
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+        if row["analysis_status"] != "complete":
+            console.print(f"Recording #{row['id']} hasn't been analysed yet. "
+                          f"Run: ai-editor analyze {row['id']}")
+            raise typer.Exit(code=1)
+        clips, _ = _refresh_clips(conn, settings, row)
+        if not clips:
+            console.print("[yellow]No moment in that recording scored high enough to be a clip.[/yellow] "
+                          "Lower clips.min_score in Settings to see more.")
+            raise typer.Exit(code=1)
+
+        ranked = sorted(clips, key=lambda c: c.score, reverse=True)
+        table = Table(title=f"Clips in #{row['id']}: {row['title']}  ({len(clips)} found)",
+                      header_style="bold")
+        for column in ("#", "Start", "End", "Length", "Score", "Why", "What was said"):
+            table.add_column(column, overflow="fold" if column == "What was said" else "ellipsis")
+        words = load_words(conn, row["id"])
+        for rank, clip in enumerate(ranked[:top], start=1):
+            said = " ".join(w.text for w in words if clip.start <= w.start and w.end <= clip.end)
+            table.add_row(
+                str(rank), clock(clip.start), clock(clip.end), f"{clip.length:.0f}s",
+                f"{clip.score:.2f}",
+                ", ".join(SIGNAL_LABELS.get(n, n) for n, _ in clip.reasons) or "-",
+                (said[:90] + "…") if len(said) > 90 else (said or "[dim]no speech[/dim]"),
+            )
+        console.print(table)
+
+        if export:
+            progress = _progress_bar()
+            task = progress.add_task("Saving clip previews", total=1.0)
+            progress.start()
+            try:
+                files = export_previews(conn, settings, row, words, count=export,
+                                        on_progress=lambda f: progress.update(task, completed=f))
+            finally:
+                progress.stop()
+            folder = previews_folder(settings, row["id"], row["title"])
+            console.print(f"\n[green]{len(files)} previews saved[/green] to:\n  {folder}\n"
+                          "Named by rank, start time and score. Open them in VLC; the "
+                          "subtitles load by themselves.")
+            if open_folder:
+                import os
+
+                os.startfile(folder)  # noqa: S606 -- opens File Explorer on our own folder
+            else:
+                console.print(f"To open the folder: [bold]ai-editor clips {row['id']} "
+                              f"--export {export} --open[/bold]")
+        else:
+            console.print(f"Watch them: [bold]ai-editor clips {row['id']} --export 10 --open[/bold]")
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
 
 
 @app.command("library")

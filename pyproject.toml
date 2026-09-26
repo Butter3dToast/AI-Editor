@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-editor"
-version = "0.5.0"
+version = "0.6.0"
 description = "AI-Editor - a local assistant editor that turns stream and Let's Play recordings into YouTube content"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,8 @@ dependencies = [
     "torchlibrosa>=0.1",
     # Voice separation for single mixed tracks (spec section 7.3).
     "demucs>=4.1",
+    # Scene changes for clip edges (spec section 7.3); see analysis/scenes.py.
+    "scenedetect[opencv]>=0.6.4",
     # Stream Companion's connection to OBS (spec section 7.1).
     "websocket-client>=1.8",
 ]

@@ -7,6 +7,7 @@ Steps, each resumable and cached like the import (spec sections 3 and 5):
 2. transcribe     -- Whisper, word by word                        (GPU)
 3. sound_events   -- laughter, shouting, gunfire...              (GPU)
 4. loudness       -- per-second volume of voice and game tracks   (CPU)
+5. scenes         -- where the picture cuts: menus, loading...    (CPU)
 
 The two GPU steps run one after the other and each unloads its model before
 the next begins (spec section 3). Every step writes a file; the database is
@@ -33,6 +34,7 @@ from ..ingest import recording_cache_dir
 from ..jobs import JobQueue, make_cache_key
 from ..logging_setup import get_logger
 from . import audio_signals, captions
+from .scenes import detect_scene_cuts
 from .separation import BACKING_FILE, VOCALS_FILE, separate_voices
 from .sound_events import detect_sound_events
 from .transcript import accepted_words, transcribe, voice_detector_on
@@ -42,7 +44,8 @@ log = get_logger(__name__)
 # Bump when a step's output changes meaning, so old results are regenerated.
 ANALYSIS_VERSION = 3
 
-STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness")
+STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness", "scenes")
+SCENES_FILE = "scenes.json"
 SEPARATION_STEP = "separate_voices"
 
 ProgressCallback = Callable[[str, float], None]
@@ -317,6 +320,18 @@ def analyze_recording(
                 _measure_loudness(voice_16k, game_32k, reporter("loudness")),
             )),
         ),
+        (
+            "scenes",
+            # Reads the picture, not the sound, so the audio track choice
+            # doesn't matter to it.
+            make_cache_key(digest, "scenes", ANALYSIS_VERSION, settings.analysis.scene_threshold),
+            timed("scenes", lambda: _write_json(
+                out_dir / SCENES_FILE,
+                detect_scene_cuts(_proxy_or_fail(row), duration,
+                                  threshold=settings.analysis.scene_threshold,
+                                  on_progress=reporter("scenes")),
+            )),
+        ),
     ]
     try:
         queue.run(job_id, steps)
@@ -349,6 +364,22 @@ def analyze_recording(
         tracks=tracks,
         steps=[StepReport(name, name not in ran, ran.get(name, 0.0)) for name in step_names],
     )
+
+
+def _proxy_or_fail(row: sqlite3.Row) -> Path:
+    """The preview copy that scene detection reads; importing makes it."""
+    proxy = Path(row["proxy_path"]) if row["proxy_path"] else None
+    if proxy is None or not proxy.exists():
+        raise NotImported("The preview copy is missing")
+    return proxy
+
+
+def load_scene_cuts(settings: Settings, row: sqlite3.Row) -> list[float]:
+    """Scene-change times for a recording, or none if they weren't measured."""
+    path = recording_cache_dir(settings, row["content_hash"]) / "analysis" / SCENES_FILE
+    if not path.exists():
+        return []
+    return [float(t) for t in json.loads(path.read_text(encoding="utf-8")).get("cuts", [])]
 
 
 def _measure_loudness(
@@ -417,6 +448,13 @@ def store_results(
         signals["game_db"] = game_db
     for group, values in events.items():
         signals[group] = np.array(values, dtype=np.float32)
+    scenes_path = out_dir / SCENES_FILE
+    if scenes_path.exists():
+        cut = np.zeros(seconds, dtype=np.float32)
+        for t in json.loads(scenes_path.read_text(encoding="utf-8")).get("cuts", []):
+            if 0 <= int(t) < seconds:
+                cut[int(t)] = 1.0
+        signals["scene_cut"] = cut
 
     # Only the signals analysis produces are replaced: chat activity comes from
     # Twitch separately (analysis/chat.py) and must survive a re-analysis.

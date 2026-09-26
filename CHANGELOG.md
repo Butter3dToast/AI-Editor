@@ -3,6 +3,59 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.6.0 — Phase 1E: Scoring and clips — 26 September 2026
+
+AI-Editor now picks your best moments and cuts them into clips you can watch.
+
+**New**
+
+- **`ai-editor score <recording>`** ranks the best moments in a recording and
+  says why each one scored: your markers, laughter, shouting, gunfire, chat,
+  loudness.
+- **`ai-editor clips <recording>`** cuts those moments into clips of 15–90
+  seconds, and `--export 10 --open` saves the best 10 as small videos with
+  subtitles and opens the folder. Clips are made automatically at the end of
+  every analysis, in about 2 seconds.
+- **Clean edges.** Each clip starts 30 seconds before the moment, so the
+  build-up is there, and ends once the reaction finishes. It never cuts
+  anyone off mid-word, and never opens on or runs into a menu, loading screen
+  or respawn screen.
+- **Scene detection** is a new analysis step (about 3 minutes per 2 hours).
+  Re-analysing an older recording runs only this step.
+- Clips you rate, pin or use in a video are never replaced when clips are
+  rebuilt (ready for the review screen in Phase 1H).
+- Everything is tunable under `scoring` and `clips` in Settings, and changes
+  take effect in seconds, without re-analysing (manual chapters 11.1b, 11.1c
+  and 24).
+
+**Tuned on your footage**
+
+- **Your markers count most**, and they count backwards: you press after the
+  good bit, so a press lifts the minute before it.
+- **Funny beats loud.** On the Wardogs stream the moment that won on loudness
+  alone was ordinary; the ones you picked out had laughter in them.
+- **A fight and a reaction together beat either alone.** Every clip you liked
+  had both; every one you rejected had only one. Of the 14 clips you judged,
+  the new top 5 are all keepers and 6–10 are all the ones you rejected.
+- **Random shooting isn't a firefight:** gunfire is judged over 15 seconds.
+- **Cutscenes don't chop clips.** Dawnwalker's cutscenes cut between camera
+  angles every few seconds; those no longer count as scene changes that stop
+  a clip. Neither does getting downed mid-fight.
+
+**Fixed**
+
+- Clip preview folders no longer have a `#` in their name, which broke
+  typing the path into PowerShell.
+
+**Known limits** (later phases)
+
+- Spectating after you die sounds like a fight, so it can still score. The
+  Wardogs game profile (Phase 2) will recognise the death and spectator
+  screens.
+- Long clips can take a while to reach the punchline, and some hold several
+  jokes. Trimming and splitting them is the video recipes' job (Phase 1F,
+  and Shorts in Phase 2).
+
 ## 0.5.0 — Phase 1D: Stream Companion — 20 September 2026
 
 AI-Editor can now watch OBS while you play, and you can mark great moments as

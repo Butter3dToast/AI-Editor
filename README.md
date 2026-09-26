@@ -30,7 +30,7 @@ a hard rule, not a preference.
 | **1B** | Audio analysis: transcription, silence, audio events | **Complete** |
 | **1C** | Twitch VOD download, chat, Demucs voice separation | **Complete** |
 | **1D** | Stream Companion: OBS WebSocket, marker hotkeys | **Complete** |
-| 1E | Scoring and clip segmentation | Not started |
+| **1E** | Scoring and clip segmentation | **Complete** |
 | 1F | Recipes: highlights, Let's Play split optimiser | Not started |
 | 1G | Rendering (NVENC), captions, OTIO/FCPXML export | Not started |
 | 1H | Gradio interface, storage management | Not started |
@@ -67,6 +67,8 @@ ai-editor attach-chat 1 <link>    # Add a VOD's chat to any recording
 ai-editor setup-obs               # Connect to OBS (password saved locally only)
 ai-editor companion               # Stream Companion: markers and OBS session log
 ai-editor sessions                # What the Companion logged
+ai-editor score 1                 # Rank the best moments, and why each scored
+ai-editor clips 1 --export 10 --open  # Cut them into clips and watch the best 10
 pytest
 ```
 
@@ -105,6 +107,10 @@ ai_editor/
     audio_signals.py Loudness, silence, spikes, speech coverage (pure numpy)
     captions.py      Words into subtitle cues; SRT output
     moments.py       The human-readable report of what was found
+    hype.py          One score per second from every signal (weights in settings)
+    scenes.py        Scene changes (PySceneDetect adaptive) for clip edges
+    clips.py         Peaks into clips: lead-in, scene walls, never mid-word
+    previews.py      Clip previews cut from the proxy, with subtitles
   errors.py          Plain-language errors, each mapped to a manual entry
   logging_setup.py   File logs get tracebacks; the creator never does
   cli.py             Command line interface

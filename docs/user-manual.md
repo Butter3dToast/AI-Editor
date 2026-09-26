@@ -569,6 +569,7 @@ For each recording AI-Editor:
    - **Transcribing speech** — writes down every word, with the moment it was said.
    - **Listening for laughter, shouts, gunfire** — recognises those sounds second by second.
    - **Measuring loudness** — how loud each second is, to find silence and sudden spikes.
+   - **Finding scene changes** — where the picture cuts to a menu, loading screen or scoreboard, so clips don't run into one. About 3 minutes per 2 hours.
 5. When it's done, AI-Editor shows **what it heard**: how much talking, how much near-silence, and a list of **moments to check** with times such as `0:41:07`.
 
 **Checking the results yourself**
@@ -584,6 +585,56 @@ For each recording AI-Editor:
 - **"Set aside" phrases.** Over music or loud game sound, the speech-recognition AI sometimes "hears" words nobody said — very often YouTube-style sign-offs such as *"see you next time"*. AI-Editor sets aside phrases that are both unsure **and** unnaturally slow, and says how many it set aside. It never removes words just because of *what* they say, so your real sign-offs are kept.
 - **Stopping partway is safe.** Press `Ctrl + C`; run the same command again later and it carries on.
 - **Changed the silence threshold?** Run `ai-editor analyze` again — it takes seconds, because nothing slow is redone; the saved results are simply re-read with the new setting.
+
+### 11.1b Ranking the best moments (until the app window arrives)
+
+Analysis records *what* it heard, second by second. Ranking turns all of it into one number per second — **how good is this moment** — so the best bits can be found without watching the whole recording.
+
+```powershell
+ai-editor score 1
+```
+
+You get the best moments, highest first, with the reason each one scored:
+
+| Column | Means |
+|---|---|
+| **Time** | Where to jump to in the preview copy. |
+| **Score** | Compared with this recording's own best moment, which always scores 1.00. A 2-hour stream and a quiet Let's Play are both scored on their own terms. |
+| **Why** | Which signals lifted it: *you marked it*, *laughter*, *gunfire*, *chat busy*, *loud*, *talking*. |
+
+It also lists anything it couldn't use — for example *chat busy* on a local recording with no chat attached, or *you marked it* when the Stream Companion wasn't running.
+
+**What counts, and how much,** is in Settings under `scoring` (chapter 24). The defaults:
+
+- **Your markers count most.** They also count *backwards*: you press after the good bit, so a press lifts the **minute before** it, easing off the further back it goes. That's `marker_lookback_sec`.
+- Then laughter, screaming, shouting, chat activity, explosions, gunfire, and sudden loudness.
+- Silence counts against a moment, and talking counts slightly for it.
+
+Scores are worked out fresh each time, so changing a weight and running `ai-editor score` again is instant — nothing is re-analysed. Attaching chat or importing markers changes them too.
+
+**This is the list to argue with.** Jump to the times in VLC and tell your engineer which are wrong; the weights exist to be corrected.
+
+### 11.1c Clips (until the app window arrives)
+
+After analysis, AI-Editor cuts the best moments into **clips**: the candidates every video recipe chooses from later. You don't have to do anything for this — it happens at the end of every analysis, and takes a couple of seconds.
+
+```powershell
+ai-editor clips 1
+ai-editor clips 1 --export 10
+```
+
+The first lists the clips, best first, with start and end, length, score, why it scored, and what was said. The second also saves the best 10 as small videos in your Outputs folder, under `clip-previews\Recording 1 - <title>`, named by rank, time and score, each with its subtitles beside it. Add `--open` to open that folder in File Explorer. (Typing a folder's path into the terminal doesn't open it — PowerShell tries to run it as a command.)
+
+**How the edges are chosen**
+
+1. The **core** is the stretch around a peak that stays above half its score. A long fight is one clip, not a dozen.
+2. **Context before:** 30 seconds before the core, because the cause of a reaction comes before it — the joke before the laugh, the fight before the kill.
+3. **After:** 4 seconds, so the reaction finishes.
+4. **Scene changes:** a clip never opens on, or runs on into, a menu, loading screen, respawn screen or scoreboard. Cutscenes cut between camera angles every few seconds, and those don't stop a clip. Neither does a change with action right before it — getting downed mid-fight is a scene change too, and the fight belongs in the clip.
+5. **Clean edges:** each edge moves up to 6 seconds to land on a pause or the end of a sentence, and **never inside a word**. If you're talking straight through a scene change, the half-word is dropped rather than cut in two.
+6. Clips are 15–90 seconds. The recipes trim them further to fit each video.
+
+Clips you've rated, pinned or used in a video are never replaced when clips are rebuilt.
 
 ### 11.2 How long it takes
 
@@ -1204,6 +1255,18 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Analysis | Voice detector | Auto | Whether AI-Editor skips parts with no speech before transcribing. **Auto** uses it only on a separate microphone track, where it's reliable and stops the AI inventing words over silence. On a mixed track it's off, because there it misses speech under game music. **On** or **Off** force it either way. |
 | Analysis | Silence threshold | −50 dB (−90 to −10) | Anything quieter than this counts as silence. Raise it (towards −40) if quiet background hum stops AI-Editor spotting dead air. Changing it takes effect the next time you run analyze, without redoing the slow steps. |
 | Analysis | Sound listening window | 2 seconds (1–10) | How much audio is heard at once when listening for laughter, shouting and gunfire. Longer is steadier but can blur two quick moments together. |
+| Scoring | Weights | Markers 4.0; laughter 2.5; screaming 1.2; chat 1.2; shouting 1.0; explosions 0.9; gunfire 0.8; loudness 0.5; talking 0.2; silence −0.5 | How much each thing lifts a moment's score (chapter 11.1b). Raise the one you think is being missed, lower the one that keeps winning wrongly. A weight for a signal a recording doesn't have is simply skipped. |
+| Scoring | Sustain | Gunfire 15 s, explosions 10 s | Sounds that only mean something when they keep going. One shot is someone testing their gun; fifteen seconds of it is a firefight. Raise it to ignore short bursts, lower it to catch quick exchanges. |
+| Scoring | Combination bonus / threshold | 1.2 / 0.1 | Added for each extra *kind* of thing happening at once — a fight **and** a reaction beats either alone. Kinds are: your markers, reactions (laughter, shouting, screaming), action (gunfire, explosions), audience (chat), and loudness. The threshold is how strong a signal must be to count; it's low on purpose, because the sound model hears laughter faintly. Every Wardogs clip you liked had both a fight and you reacting; every one you rejected had only one. Set the bonus to 0 to score every signal on its own. |
+| Scoring | Marker look-back / look-ahead | 60 s / 10 s | How far either side of a marker press counts as the moment you meant. You press *after* the good bit, so the look-back is the important one. Too short and the build-up is missed; too long and ordinary play gets lifted with it. |
+| Scoring | Smoothing | 5 seconds | How many seconds are judged together. Higher favours moments that stay good; lower lets a single loud second win. |
+| Scoring | Z-score full scale | 3.0 | How unusual loudness or chat activity has to be to count as "as high as it gets". Lower makes AI-Editor more excitable. |
+| Clips | Minimum score | 0.2 | How good a moment must be (1.0 = the recording's best) to become a clip. Lower gives more clips to choose from; higher, only the standouts. At 0.2 a 2-hour stream gives about 20–25 clips. |
+| Clips | Lead-in / tail | 30 s / 4 s | Context before the moment and after it. Generous on purpose: videos trim clips down, but can't add back what was left out. Raise the lead-in if clips start too late to understand what happened. |
+| Clips | Length | 15–90 s | Shortest and longest clip. A clip boxed in by two menus can be shorter. |
+| Clips | Snap distance / pause | 6 s / 0.5 s | How far an edge may move to land on a pause or sentence end, and how long a gap in speech counts as a pause. |
+| Clips | Busy scene changes | More than 3 within 30 s | Scene changes closer together than this are camera editing (cutscenes), so they don't stop a clip. Lower it if clips run into menus; raise it if cutscene clips start too late. |
+| Analysis | Scene threshold | 5.0 | How different the picture must look to count as a scene change. Lower finds more (including fast camera turns); higher misses quick menus. Changing it re-runs only scene detection. |
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
 | Highlights | Target length / min score / ordering | 10 min / 0.6 / Balanced | See chapter 16.2. |
 | Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |

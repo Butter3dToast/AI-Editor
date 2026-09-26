@@ -91,6 +91,88 @@ class Analysis(BaseModel):
     voice_detector: Literal["auto", "on", "off"] = "auto"
     silence_threshold_db: float = Field(-50.0, ge=-90.0, le=-10.0)
     event_window_sec: float = Field(2.0, ge=1.0, le=10.0)
+    # How different a frame must look from the ones around it to count as a cut.
+    scene_threshold: float = Field(5.0, ge=1.0, le=20.0)
+
+
+class Scoring(BaseModel):
+    """How the per-second signals add up into one "how good is this moment" score.
+
+    Every weight is documented in manual chapter 24. Markers dominate on
+    purpose (spec section 7.3: "the creator's own picks; very high weight").
+    """
+
+    weights: dict[str, float] = Field(default_factory=lambda: {
+        "marker": 4.0,
+        "marker_short": 4.0,
+        # Funny beats loud: on the creator's Wardogs stream, the moment that
+        # won on loudness alone was ordinary, and the two they picked out as
+        # best were the ones with laughter in them.
+        "laughter": 2.5,
+        "scream": 1.2,
+        "shout": 1.0,
+        "explosion": 0.9,
+        "gunfire": 0.8,
+        "chat_z": 1.2,
+        "energy_z": 0.5,
+        "speech": 0.2,
+        "silence": -0.5,
+    })
+    # Sounds that only mean something when they keep going. A single shot is
+    # someone testing their gun; fifteen seconds of it is a firefight. Each
+    # named signal is averaged over this many seconds before it counts.
+    sustain_sec: dict[str, float] = Field(default_factory=lambda: {
+        "gunfire": 15.0,
+        "explosion": 10.0,
+    })
+    # Added for each extra kind of thing happening at once. Every Wardogs clip
+    # the creator liked was a fight *and* them reacting; every one they
+    # rejected was only one of the two (see hype.combination_bonus).
+    combination_bonus: float = Field(1.2, ge=0.0, le=5.0)
+    # How strong a signal must be to count as one of those kinds. Low on
+    # purpose: the sound model hears laughter faintly.
+    combination_threshold: float = Field(0.1, ge=0.0, le=1.0)
+    # A marker is pressed after the good bit, so it counts backwards from the press.
+    marker_lookback_sec: float = Field(60.0, ge=1.0, le=300.0)
+    marker_lookahead_sec: float = Field(10.0, ge=0.0, le=120.0)
+    # Peaks are judged on a few seconds together, not one loud second.
+    smooth_sec: float = Field(5.0, ge=1.0, le=60.0)
+    # Loudness and chat are z-scores; this is what counts as "as high as it gets".
+    zscore_full_scale: float = Field(3.0, gt=0.0)
+
+
+class Clips(BaseModel):
+    """How peaks in the score become clips with clean edges (spec section 7.3)."""
+
+    # A moment must score at least this (1.0 = the recording's best) to become
+    # a clip. 0.2 keeps enough candidates for a 10-minute highlight (Wardogs:
+    # 25 clips, 13 minutes) without changing which rank first.
+    min_score: float = Field(0.2, ge=0.0, le=1.0)
+    # The part of a peak that stays above this share of its top is its core.
+    core_fraction: float = Field(0.5, gt=0.0, lt=1.0)
+    # Context before the core. Laughter comes after the funny thing (the creator:
+    # "it could have happened 10 or 30 seconds before"), and the clip they liked
+    # most was worth it for the 40 seconds of fight leading up to the moment.
+    # Generous on purpose: recipes trim clips, but can't add back what was left out.
+    lead_in_sec: float = Field(30.0, ge=0.0, le=120.0)
+    # After the core, so the reaction can finish.
+    tail_sec: float = Field(4.0, ge=0.0, le=60.0)
+    min_length_sec: float = Field(15.0, ge=3.0, le=300.0)
+    max_length_sec: float = Field(90.0, ge=10.0, le=600.0)
+    # How far an edge may move to land on a clean point (a pause, the end of
+    # a sentence, a scene change).
+    snap_sec: float = Field(6.0, ge=0.0, le=30.0)
+    # A gap in speech at least this long counts as a pause.
+    pause_sec: float = Field(0.5, ge=0.1, le=5.0)
+    # A scene change only stops a clip if it stands alone: more than this
+    # many others within scene_busy_window_sec either side means camera
+    # editing (a cutscene), not a menu or loading screen.
+    scene_busy_count: int = Field(3, ge=1, le=50)
+    scene_busy_window_sec: float = Field(30.0, ge=5.0, le=300.0)
+
+    def check_consistency(self) -> None:
+        if self.min_length_sec >= self.max_length_sec:
+            raise ValueError("clips.min_length_sec must be below max_length_sec")
 
 
 class Leftover(BaseModel):
@@ -235,6 +317,8 @@ class Settings(BaseModel):
     companion: Companion = Companion()
     obs: Obs = Obs()
     analysis: Analysis = Analysis()
+    scoring: Scoring = Scoring()
+    clips: Clips = Clips()
     lets_play: LetsPlay = LetsPlay()
     highlights: Highlights = Highlights()
     shorts: Shorts = Shorts()
@@ -259,6 +343,7 @@ class Settings(BaseModel):
     def check_consistency(self) -> None:
         self.lets_play.check_consistency()
         self.shorts.check_consistency()
+        self.clips.check_consistency()
 
 
 def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:

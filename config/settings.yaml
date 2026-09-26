@@ -68,6 +68,52 @@ analysis:
   voice_detector: auto # auto | on | off
   silence_threshold_db: -50 # Quieter than this counts as silence
   event_window_sec: 2 # Length of audio heard at once when listening for laughter, gunfire...
+  scene_threshold: 5.0 # How different the picture must look to count as a scene change
+
+scoring:
+  # How much each thing lifts a moment's score (manual chapter 11.1b).
+  # Your own markers count most, as the spec requires.
+  weights:
+    marker: 4.0
+    marker_short: 4.0
+    laughter: 2.5
+    scream: 1.2
+    chat_z: 1.2
+    shout: 1.0
+    energy_z: 0.5 # unusually loud for this recording
+    explosion: 0.9
+    gunfire: 0.8
+    speech: 0.2 # someone is talking
+    silence: -0.5 # dead air counts against a moment
+  # A marker is pressed after the good bit, so it lifts the minute before it.
+  marker_lookback_sec: 60
+  marker_lookahead_sec: 10
+  smooth_sec: 5 # how many seconds are judged together
+  zscore_full_scale: 3.0 # how unusual loudness or chat has to be to count fully
+  # Sounds that only mean something when they keep going: one shot is someone
+  # testing their gun, fifteen seconds of it is a firefight.
+  sustain_sec:
+    gunfire: 15
+    explosion: 10
+  # Added for each extra kind of thing happening at once (a fight AND a
+  # reaction beats either alone). Set to 0 to score each signal on its own.
+  combination_bonus: 1.2
+  combination_threshold: 0.1 # low on purpose: the sound model hears laughter faintly
+
+clips:
+  # How the best moments become clips (manual chapter 11.1c).
+  min_score: 0.2 # 1.0 = the recording's best moment
+  core_fraction: 0.5 # the part of a peak above half its height is its core
+  lead_in_sec: 30 # context before the moment: the build-up and the cause of the laugh
+  tail_sec: 4 # after it, so the reaction can finish
+  min_length_sec: 15
+  max_length_sec: 90
+  snap_sec: 6 # how far an edge may move to land on a pause or sentence end
+  pause_sec: 0.5 # a gap in speech this long counts as a pause
+  # A scene change only stops a clip if it stands alone (a menu, loading).
+  # More than this many others within the window means cutscene camera work.
+  scene_busy_count: 3
+  scene_busy_window_sec: 30
 
 lets_play: # Spec section 7.6 Recipe A
   mode: split # split | condense

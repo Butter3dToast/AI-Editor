@@ -195,7 +195,7 @@ def test_rerun_reuses_everything_and_creates_no_duplicates(conn, settings, tmp_p
     rows_before = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
 
     again = pipeline.analyze_recording(conn, settings, str(rec_id))
-    assert [s.reused for s in again.steps] == [True, True, True, True]
+    assert [s.reused for s in again.steps] == [True, True, True, True, True]
     assert fakes.transcribe_calls == 1, "Whisper must not run twice"
     assert conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == rows_before
     assert conn.execute("SELECT COUNT(*) FROM transcript_words").fetchone()[0] == 2
@@ -234,7 +234,7 @@ def test_interrupted_analysis_resumes_without_redoing_transcription(
     monkeypatch.setattr(pipeline, "detect_sound_events", fakes.events)
     resumed = pipeline.analyze_recording(conn, settings, str(rec_id))
     assert resumed.status == COMPLETE
-    assert [s.reused for s in resumed.steps] == [True, True, False, False]
+    assert [s.reused for s in resumed.steps] == [True, True, False, False, False]
     assert fakes.transcribe_calls == 1
 
 
