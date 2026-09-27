@@ -21,7 +21,8 @@ from typing import Callable
 from ..config import Settings
 from ..errors import AIEditorError, HotkeyUnavailable, ObsNotReachable, ObsPasswordWrong, ObsTooOld
 from ..logging_setup import get_logger
-from . import sound
+from ..games import game_for_scene
+from . import obs_markers, sound
 from .hotkeys import HotkeyListener, describe
 from .obs import DISCONNECTED, ObsClient, ObsRequestFailed
 from .session import OUTPUTS, SessionLog
@@ -79,9 +80,12 @@ class Companion:
         self._listener_factory = listener_factory or HotkeyListener
         self.listener: HotkeyListener | None = None
         self._sound_checked_at = 0.0
+        self.scene: str | None = None
         self.markers: dict[str, int] = {"moment": 0, "short": 0}
         self.last_marker: str | None = None
         self.hotkey_problems: list[str] = []
+        # The marker sources in OBS, when the keys are bound there (obs_markers).
+        self.obs_markers: dict[str, int] = {}
 
     # --- Hotkeys -------------------------------------------------------------
 
@@ -90,8 +94,17 @@ class Companion:
         return {"moment": self.settings.companion.mark_moment_hotkey,
                 "short": self.settings.companion.mark_short_hotkey}
 
+    @property
+    def keys_in_obs(self) -> bool:
+        return self.settings.companion.marker_keys == "obs"
+
     def start_hotkeys(self) -> None:
-        """Reserve the marker keys with Windows. Problems are shown, never fatal."""
+        """Reserve the marker keys with Windows. Problems are shown, never fatal.
+
+        Not when OBS catches the keys: then the Companion leaves them alone.
+        """
+        if self.keys_in_obs:
+            return
         try:
             self.listener = self._listener_factory(self.hotkeys, self._on_hotkey)
             self.listener.start()
@@ -136,7 +149,12 @@ class Companion:
         if self._was_connected and self.log.active:
             self.log.log("obs_reconnected")
         self._was_connected = True
+        was_active = self.log.active
         self._catch_up()
+        self._read_scene()
+        self._find_obs_markers()
+        if self.log.active and not was_active:
+            self._log_scene()  # started (or resumed) mid-session: note the game now
 
     def _sound_check(self, client: ObsClient) -> str | None:
         """Decide whether the confirmation click can be heard by anyone else."""
@@ -192,9 +210,62 @@ class Companion:
         elif event_type == "RecordFileChanged":
             record = self._duration("record")
             self.log.file_changed(data.get("newOutputPath", ""), record)
+        elif event_type == "CurrentProgramSceneChanged":
+            self.scene = data.get("sceneName")
+            self._log_scene()
+        elif event_type == "SceneItemEnableStateChanged":
+            name = obs_markers.pressed(data, self.obs_markers)
+            if name:
+                self.mark(name)
+                self._rearm(name)
+        elif event_type in ("SceneCreated", "SceneRemoved", "SceneItemCreated", "SceneItemRemoved"):
+            if self.keys_in_obs:
+                self._find_obs_markers()  # set up, or taken apart, while we run
         elif event_type == "ExitStarted":
             if self.log.active:
                 self.log.log("obs_closing")
+
+    # --- Marker keys bound in OBS ----------------------------------------------
+
+    def _find_obs_markers(self) -> None:
+        if not self.keys_in_obs or self.client is None:
+            return
+        try:
+            self.obs_markers = obs_markers.find(self.client)
+        except (AIEditorError, ObsRequestFailed) as exc:
+            log.warning("Couldn't look for the marker scene in OBS: %s", exc)
+            return
+        # Left switched on (OBS closed mid-press, say): the next press would
+        # change nothing, so OBS wouldn't report it.
+        for name in self.obs_markers:
+            self._rearm(name)
+
+    def _rearm(self, name: str) -> None:
+        item = self.obs_markers.get(name)
+        if item is None or self.client is None:
+            return
+        try:
+            obs_markers.rearm(self.client, item)
+        except (AIEditorError, ObsRequestFailed) as exc:
+            log.warning("Couldn't switch the %s marker back off in OBS: %s", name, exc)
+
+    # --- Scenes: which game is on screen ---------------------------------------
+
+    @property
+    def game(self) -> str | None:
+        return game_for_scene(self.scene, self.settings.companion.scene_games)
+
+    def _read_scene(self) -> None:
+        try:
+            self.scene = self.client.current_scene() if self.client else None
+        except (AIEditorError, ObsRequestFailed) as exc:
+            log.warning("Couldn't read the current OBS scene: %s", exc)
+
+    def _log_scene(self) -> None:
+        """Note the scene (and game) in the session log, while recording or streaming."""
+        if self.log.active:
+            self.log.scene_changed(self.scene, self.game, record_sec=self._duration("record"),
+                                   stream_sec=self._duration("stream"))
 
     def _output_changed(self, output: str, data: dict) -> None:
         state = data.get("outputState")
@@ -202,7 +273,13 @@ class Companion:
         path = data.get("outputPath") or None
         if state == STARTED:
             this = self._duration(output) or 0.0
+            was_active = self.log.active
             self.log.started(output, this, other_sec=self._duration(other), path=path)
+            # Which game the session, or this recording, opens on. A recording
+            # started after going live needs its own entry: the one logged at
+            # the start of the stream has no place in the recording's timeline.
+            if not was_active or output == "record":
+                self._log_scene()
         elif state == STOPPED:
             self.log.stopped(output, other_sec=self._duration(other), path=path)
         elif state in (PAUSED, RESUMED) and output == "record":
@@ -255,7 +332,16 @@ class Companion:
             self.client.close()
 
     def hotkey_summary(self) -> str:
-        """What the status panel shows under "Markers"."""
+        """What the status panel shows under "Keys"."""
+        if self.keys_in_obs:
+            if self.client is None:
+                return "[dim]set in OBS; waiting for OBS[/dim]"
+            if not self.obs_markers:
+                return ("[red]not set up in OBS yet[/red]: run [bold]ai-editor setup-obs "
+                        "--markers[/bold] (manual 7.4a)")
+            names = [f"Show '{obs_markers.MARKER_SOURCES[n]}'" for n in ("moment", "short")
+                     if n in self.obs_markers]
+            return "set in OBS: " + ", ".join(names)
         parts = []
         for name, label in (("moment", "moment"), ("short", "Short-worthy")):
             key = self.hotkeys[name]

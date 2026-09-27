@@ -167,6 +167,12 @@ class SessionLog:
                  payload=None if placeable else {"while_idle": True})
         return placeable
 
+    def scene_changed(self, scene: str | None, game: str | None, *,
+                      record_sec: float | None = None, stream_sec: float | None = None) -> None:
+        """Which OBS scene (and so which game) is on screen from now on."""
+        self.log("obs_scene", record_sec=record_sec, stream_sec=stream_sec,
+                 payload={"scene": scene, "game": game})
+
     def file_changed(self, path: str, record_sec: float | None = None) -> None:
         """OBS split the recording into a new file (automatic file splitting)."""
         self.outputs["record"].path = path

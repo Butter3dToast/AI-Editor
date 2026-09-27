@@ -69,11 +69,21 @@ class Queue(BaseModel):
 
 
 class Companion(BaseModel):
+    # Who catches the marker keys. "obs": you bind them in OBS's hotkey
+    # settings (manual 7.4a), which keeps working inside games that switch
+    # other programs' hotkeys off, as League does. "windows": the Companion
+    # reserves the two keys below itself.
+    marker_keys: Literal["obs", "windows"] = "obs"
     mark_moment_hotkey: str = "numpad+"
     mark_short_hotkey: str = "numpad-"
-    confirmation_sound: bool = True
+    # Off: on 26 Sep the click reached the stream through the creator's stand-up
+    # mic, which the Desktop Audio check in companion/sound.py can't see.
+    confirmation_sound: bool = False
     sound_volume: float = Field(0.9, ge=0.05, le=1.0)
     start_with_windows: bool = False
+    # Which game each OBS scene shows, for scenes whose name doesn't say it.
+    # A scene named after its game ("Wardogs", "Tarkov Main") needs no entry.
+    scene_games: dict[str, str] = Field(default_factory=dict)
 
 
 class Obs(BaseModel):
@@ -88,6 +98,13 @@ class Analysis(BaseModel):
     voice_separation: Literal["vods", "mixed", "off"] = "vods"
     signal_rate_hz: int = Field(1, ge=1, le=10)
     language: str = "en"
+    # Names the speech recognition doesn't know come out as ordinary words
+    # that sound the same; these put them right afterwards (heard -> meant).
+    # Telling Whisper the names beforehand was tried and dropped: every
+    # version of it made Whisper "hear" words nobody said (see
+    # transcript.fix_spellings).
+    spellings: dict[str, str] = Field(default_factory=lambda: {
+        "talk of": "Tarkov", "tarkoff": "Tarkov", "war dogs": "Wardogs", "war dog's": "Wardogs"})
     voice_detector: Literal["auto", "on", "off"] = "auto"
     silence_threshold_db: float = Field(-50.0, ge=-90.0, le=-10.0)
     event_window_sec: float = Field(2.0, ge=1.0, le=10.0)
@@ -139,6 +156,14 @@ class Scoring(BaseModel):
     smooth_sec: float = Field(5.0, ge=1.0, le=60.0)
     # Loudness and chat are z-scores; this is what counts as "as high as it gets".
     zscore_full_scale: float = Field(3.0, gt=0.0)
+    # A picture this dark (0 black - 255 white) counts as a black screen: it is
+    # never a moment, and clips don't start or end on one. Video black is 16.
+    dark_level: float = Field(24.0, ge=0.0, le=128.0)
+    # ...for at least this many seconds in a row: a loading or setup screen.
+    # Shorter ones are part of the moment: a blinking effect (one dark second
+    # every 6 s on Wardogs) or a crash (5 s of black while the creator said
+    # "I'm so sorry, I thought I could put it off" -- the helicopter clip).
+    dark_min_sec: int = Field(10, ge=1, le=120)
 
 
 class Clips(BaseModel):
@@ -164,6 +189,21 @@ class Clips(BaseModel):
     snap_sec: float = Field(6.0, ge=0.0, le=30.0)
     # A gap in speech at least this long counts as a pause.
     pause_sec: float = Field(0.5, ge=0.1, le=5.0)
+    # A clip only ends where the speaker then stays quiet at least this long.
+    # A breath between sentences isn't a stop: on the creator's League stream
+    # a 0.56 s gap after "Keep her alive." was followed by "I..." and then 10 s
+    # of silence on the mic -- the thought ended after the "I", not before it.
+    end_pause_sec: float = Field(1.0, ge=0.1, le=5.0)
+    # How much longer a clip may run to reach such a pause, so it never ends
+    # while the creator is mid-thought (League: "cuts off where I am talking").
+    end_extend_sec: float = Field(10.0, ge=0.0, le=60.0)
+    # Nor while the fight is still going. Wardogs: a clip ended with gunfire
+    # still coming in bursts, and the creator: "the tool would have captured
+    # me killing some people". Shooting at least fight_level, recurring within
+    # fight_gap_sec, counts as the same fight, for up to fight_extend_sec more.
+    fight_level: float = Field(0.2, ge=0.0, le=1.0)
+    fight_gap_sec: float = Field(10.0, ge=1.0, le=60.0)
+    fight_extend_sec: float = Field(30.0, ge=0.0, le=120.0)
     # A scene change only stops a clip if it stands alone: more than this
     # many others within scene_busy_window_sec either side means camera
     # editing (a cutscene), not a menu or loading screen.
@@ -196,12 +236,30 @@ class SplitPenalties(BaseModel):
 
 
 class LetsPlay(BaseModel):
+    # Games recorded as Let's Play series. Their recordings are episodes, not
+    # streams, so they stay out of stream highlights.
+    games: list[str] = Field(default_factory=lambda: ["The Blood of Dawnwalker"])
     mode: Literal["split", "condense"] = "split"
     target_min: float = Field(30.0, gt=0)
     normal_range_min: tuple[float, float] = (25.0, 35.0)
     story_extension_preferred_max_min: float = 45.0
     story_extension_hard_max_min: float = 60.0
     trim_level: Literal["light", "standard", "tight"] = "light"
+    # The always-trim pass (recipes/letsplay.py). Silence longer than this is
+    # cut down, keeping dead_air_keep_sec either side. The creator chose 20 s.
+    dead_air_sec: float = Field(20.0, ge=5.0, le=300.0)
+    dead_air_keep_sec: float = Field(3.0, ge=0.5, le=15.0)
+    # A black screen this long, with nobody talking, is a loading screen.
+    loading_min_sec: int = Field(2, ge=1, le=60)
+    # A picture changing less than this from one second to the next is still:
+    # a menu, the map, the inventory. Cut after still_min_sec, unless talking.
+    still_level: float = Field(1.0, ge=0.0, le=50.0)
+    still_min_sec: int = Field(5, ge=1, le=120)
+    # The game's on-screen display showing at least this much means play;
+    # less, with nobody talking, is a cutscene or a choice and is never cut.
+    hud_level: float = Field(0.15, ge=0.0, le=1.0)
+    # Moments scoring this well (1.0 = the episode's best) are never trimmed.
+    protect_score: float = Field(0.5, ge=0.0, le=1.0)
     penalties: SplitPenalties = SplitPenalties()
     bonus_hook_ending: float = -5.0
     leftover: Leftover = Leftover()
@@ -240,7 +298,21 @@ class LetsPlay(BaseModel):
 
 class Highlights(BaseModel):
     target_length_min: float = Field(10.0, gt=0)
-    min_clip_score: float = Field(0.6, ge=0.0, le=1.0)
+    # The quality bar: nothing below it goes in to fill time. On the creator's
+    # Wardogs verdicts every clip they liked scored 0.56 or more, and the
+    # first one they rejected 0.54.
+    min_clip_score: float = Field(0.55, ge=0.0, le=1.0)
+    # Where clips come from when one stream isn't enough. oldest_first uses
+    # up the earliest stream's good clips, then the next (the creator's own
+    # description: "4 min from the previous and 6 min from the next");
+    # best_first takes the highest-scoring clips from any stream.
+    fill_order: Literal["oldest_first", "best_first"] = "oldest_first"
+    # Each clip is trimmed down to its moment: this much before it, and no
+    # longer than max_clip_sec overall. Library clips are generous on purpose;
+    # a highlight video needs pace ("some are long winded and don't get to
+    # the punchline").
+    lead_in_sec: float = Field(15.0, ge=0.0, le=120.0)
+    max_clip_sec: float = Field(50.0, ge=10.0, le=300.0)
     ordering: Literal["chronological", "balanced", "best_last"] = "balanced"
     hook: bool = True
     hook_seconds: tuple[float, float] = (5.0, 15.0)

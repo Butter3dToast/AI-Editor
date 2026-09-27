@@ -195,7 +195,7 @@ def test_rerun_reuses_everything_and_creates_no_duplicates(conn, settings, tmp_p
     rows_before = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
 
     again = pipeline.analyze_recording(conn, settings, str(rec_id))
-    assert [s.reused for s in again.steps] == [True, True, True, True, True]
+    assert [s.reused for s in again.steps] == [True, True, True, True, True, True]
     assert fakes.transcribe_calls == 1, "Whisper must not run twice"
     assert conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == rows_before
     assert conn.execute("SELECT COUNT(*) FROM transcript_words").fetchone()[0] == 2
@@ -234,7 +234,7 @@ def test_interrupted_analysis_resumes_without_redoing_transcription(
     monkeypatch.setattr(pipeline, "detect_sound_events", fakes.events)
     resumed = pipeline.analyze_recording(conn, settings, str(rec_id))
     assert resumed.status == COMPLETE
-    assert [s.reused for s in resumed.steps] == [True, True, False, False, False]
+    assert [s.reused for s in resumed.steps] == [True, True, False, False, False, False]
     assert fakes.transcribe_calls == 1
 
 
@@ -317,3 +317,48 @@ def test_windowed_scores_cover_every_second():
     starts = window_starts(7, 2.0)
     per_second = spread_to_seconds(np.ones((len(starts), 1), np.float32), starts, 2.0, 7)
     assert per_second[:, 0].tolist() == [1.0] * 7
+
+
+# --- Spelling fixes -------------------------------------------------------------
+
+
+def _w(text, s, e, p=0.9):
+    return {"w": text, "s": s, "e": e, "p": p}
+
+
+def test_a_misheard_game_name_is_put_right():
+    """ "gonna go play talk of now with David" was the creator saying Tarkov."""
+    from ai_editor.analysis.transcript import fix_spellings
+
+    words = [_w("play", 0.0, 0.3), _w("talk", 0.3, 0.5, 0.8), _w("of?", 0.5, 0.8, 0.7), _w("now", 0.9, 1.1)]
+    fixed = fix_spellings(words, {"talk of": "Tarkov"})
+    assert [w["w"] for w in fixed] == ["play", "Tarkov?", "now"]
+    assert (fixed[1]["s"], fixed[1]["e"], fixed[1]["p"]) == (0.3, 0.8, 0.7)
+
+
+def test_spelling_fixes_match_whole_words_only():
+    from ai_editor.analysis.transcript import fix_spellings
+
+    words = [_w("talking", 0, 1), _w("often", 1, 2), _w("War", 2, 3), _w("dogs.", 3, 4)]
+    fixed = fix_spellings(words, {"talk of": "Tarkov", "war dogs": "Wardogs"})
+    assert [w["w"] for w in fixed] == ["talking", "often", "Wardogs."]
+
+
+def test_spelling_fixes_apply_when_the_transcript_is_read():
+    from ai_editor.analysis.transcript import accepted_words
+
+    transcript = {"language": "en", "segments": [{
+        "s": 0.0, "e": 1.0, "text": "talk of", "avg_logprob": -0.2, "no_speech_prob": 0.0,
+        "compression_ratio": 1.0, "words": [_w("talk", 0.0, 0.4), _w("of", 0.4, 0.8)]}]}
+    kept, _ = accepted_words(transcript, {"talk of": "Tarkov"})
+    assert [w["w"] for w in kept] == ["Tarkov"]
+
+
+def test_no_hint_is_given_to_the_speech_recognition():
+    """Every hint tried was echoed into the transcript as words nobody said."""
+    import inspect
+
+    from ai_editor.analysis import transcript
+
+    source = inspect.getsource(transcript.transcribe)
+    assert "hotwords=" not in source and "initial_prompt=" not in source

@@ -30,19 +30,29 @@ queue:
   shutdown_when_finished: false
 
 companion:
-  # Keys that mark a moment while you play. The Companion takes these keys over
+  # Who catches the marker keys. obs = you bind them in OBS's own hotkey settings
+  # (manual 7.4a): that keeps working inside games like League, which switch other
+  # programs' hotkeys off while they're in front. windows = the Companion reserves
+  # the two keys below itself.
+  marker_keys: obs # obs | windows
+  # Keys that mark a moment while you play (only used with marker_keys: windows). The Companion takes these keys over
   # while it runs, so games won't see them: pick keys your games don't use.
   # Windows cannot separate the numpad's Enter from the main Enter key, so that
   # one can't be used. Examples: numpad+, numpad-, f13-f24, ctrl+alt+m.
   mark_moment_hotkey: numpad+
   mark_short_hotkey: numpad-
-  # A quiet click when you mark. It is skipped automatically whenever OBS is
-  # capturing Desktop Audio, so viewers can never hear it.
-  confirmation_sound: true
+  # A click when you mark. Keep it off: on 26 Sep it reached the stream through
+  # the microphone (a stand-up mic hears your headphones), which no OBS setting
+  # can reveal. It stays silent anyway while OBS captures Desktop Audio.
+  confirmation_sound: false
   # How loud that click is, 0.05 to 1.0. Windows' own volume applies on top:
   # if it is still too quiet, check the volume mixer for Python.
   sound_volume: 0.9
   start_with_windows: false
+  # Which game each OBS scene shows, for scenes whose name doesn't say it. Scenes
+  # named after their game ("Wardogs", "Escape From Tarkov") need no entry.
+  # Example:  scene_games: {"Scene 2": "Escape from Tarkov"}
+  scene_games: {}
 
 obs:
   websocket_host: 127.0.0.1
@@ -63,6 +73,15 @@ analysis:
   voice_separation: vods # vods | mixed | off
   signal_rate_hz: 1 # Signals are stored once per second (spec section 7.3)
   language: en # Language you speak on stream. "auto" detects it, a little slower.
+  # Words the speech recognition mishears, and what you really said. Game and
+  # friends' names it doesn't know come out as ordinary words that sound alike.
+  # Add your own as  heard: meant  -- it takes effect on the next analyze,
+  # without transcribing again.
+  spellings:
+    talk of: Tarkov
+    tarkoff: Tarkov
+    war dogs: Wardogs
+    war dog's: Wardogs
   # Skip non-speech before transcribing? auto = only on a separate mic track, where
   # it's reliable. On a mixed track it misses speech under game music.
   voice_detector: auto # auto | on | off
@@ -90,6 +109,8 @@ scoring:
   marker_lookahead_sec: 10
   smooth_sec: 5 # how many seconds are judged together
   zscore_full_scale: 3.0 # how unusual loudness or chat has to be to count fully
+  dark_level: 24 # a picture this dark (0-255) is a black screen: never a moment
+  dark_min_sec: 10 # ...for at least this long: a loading screen. A shorter black (a crash, a death) is part of the moment
   # Sounds that only mean something when they keep going: one shot is someone
   # testing their gun, fifteen seconds of it is a firefight.
   sustain_sec:
@@ -110,18 +131,36 @@ clips:
   max_length_sec: 90
   snap_sec: 6 # how far an edge may move to land on a pause or sentence end
   pause_sec: 0.5 # a gap in speech this long counts as a pause
+  end_pause_sec: 1.0 # a clip only ends where you then stay quiet this long
+  end_extend_sec: 10 # and may run this much longer to get there, so you're never cut off
+  # Nor while a fight is still going: shooting at least fight_level that comes back
+  # within fight_gap_sec is the same fight, followed for up to fight_extend_sec.
+  fight_level: 0.2
+  fight_gap_sec: 10
+  fight_extend_sec: 30
   # A scene change only stops a clip if it stands alone (a menu, loading).
   # More than this many others within the window means cutscene camera work.
   scene_busy_count: 3
   scene_busy_window_sec: 30
 
 lets_play: # Spec section 7.6 Recipe A
+  # Games you record as Let's Play episodes. Their recordings are never used in
+  # stream highlights, only in Let's Play videos.
+  games: ["The Blood of Dawnwalker"]
   mode: split # split | condense
   target_min: 30
   normal_range_min: [25, 35]
   story_extension_preferred_max_min: 45
   story_extension_hard_max_min: 60
   trim_level: light # light | standard | tight
+  # What the always-trim pass removes (nobody talking, nothing happening):
+  dead_air_sec: 20 # silence longer than this is cut down...
+  dead_air_keep_sec: 3 # ...keeping this much either side, so the jump isn't jarring
+  loading_min_sec: 2 # a black screen this long is a loading screen
+  still_level: 1.0 # a picture changing less than this is a menu, map or inventory...
+  still_min_sec: 5 # ...cut after this long, unless you're talking over it
+  hud_level: 0.15 # below this the game's HUD is hidden: a cutscene, never cut when quiet
+  protect_score: 0.5 # moments scoring this well are never trimmed
   penalties:
     per_min_outside_normal_range: 1.0
     per_min_over_45: 4.0
@@ -139,9 +178,16 @@ lets_play: # Spec section 7.6 Recipe A
 
 highlights: # Spec section 7.6 Recipe B
   target_length_min: 10
-  min_clip_score: 0.6
+  # Quality bar: nothing below it goes in to fill time. Every Wardogs clip you
+  # liked scored 0.56 or more; the first you rejected scored 0.54.
+  min_clip_score: 0.55
+  # When one stream runs out of good clips, carry on from the next:
+  # oldest_first uses up the earliest stream first; best_first mixes freely.
+  fill_order: oldest_first # oldest_first | best_first
+  lead_in_sec: 15 # each clip is trimmed to this much before its moment...
+  max_clip_sec: 50 # ...and no longer than this, so the video keeps its pace
   ordering: balanced # chronological | balanced | best_last
-  hook: true
+  hook: true # open with a teaser of the best moment
   hook_seconds: [5, 15]
   allow_reused_clips: false
   always_include_pinned: true

@@ -8,6 +8,7 @@ Steps, each resumable and cached like the import (spec sections 3 and 5):
 3. sound_events   -- laughter, shouting, gunfire...              (GPU)
 4. loudness       -- per-second volume of voice and game tracks   (CPU)
 5. scenes         -- where the picture cuts: menus, loading...    (CPU)
+6. picture        -- brightness, motion, HUD per second: black screens, menus, cutscenes
 
 The two GPU steps run one after the other and each unloads its model before
 the next begins (spec section 3). Every step writes a file; the database is
@@ -34,6 +35,7 @@ from ..ingest import recording_cache_dir
 from ..jobs import JobQueue, make_cache_key
 from ..logging_setup import get_logger
 from . import audio_signals, captions
+from .picture import measure_picture
 from .scenes import detect_scene_cuts
 from .separation import BACKING_FILE, VOCALS_FILE, separate_voices
 from .sound_events import detect_sound_events
@@ -44,8 +46,9 @@ log = get_logger(__name__)
 # Bump when a step's output changes meaning, so old results are regenerated.
 ANALYSIS_VERSION = 3
 
-STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness", "scenes")
+STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness", "scenes", "picture")
 SCENES_FILE = "scenes.json"
+PICTURE_FILE = "picture.json"
 SEPARATION_STEP = "separate_voices"
 
 ProgressCallback = Callable[[str, float], None]
@@ -305,7 +308,7 @@ def analyze_recording(
         (
             "sound_events",
             make_cache_key(digest, "sound_events", ANALYSIS_VERSION, *track_key,
-                           settings.analysis.event_window_sec),
+                           settings.analysis.event_window_sec, "dialogue", "melee"),
             timed("sound_events", lambda: _write_json(
                 out_dir / "sound_events.json",
                 detect_sound_events(settings, voice_32k, game_32k, seconds,
@@ -330,6 +333,15 @@ def analyze_recording(
                 detect_scene_cuts(_proxy_or_fail(row), duration,
                                   threshold=settings.analysis.scene_threshold,
                                   on_progress=reporter("scenes")),
+            )),
+        ),
+        (
+            "picture",
+            make_cache_key(digest, "picture", ANALYSIS_VERSION, "motion", "hud", "video-range"),
+            timed("picture", lambda: _write_json(
+                out_dir / PICTURE_FILE,
+                measure_picture(_proxy_or_fail(row), out_dir / "work", duration,
+                                   reporter("picture")),
             )),
         ),
     ]
@@ -416,7 +428,7 @@ def store_results(
     events = json.loads((out_dir / "sound_events.json").read_text(encoding="utf-8"))
     loudness = json.loads((out_dir / "loudness.json").read_text(encoding="utf-8"))
 
-    kept, dropped = accepted_words(transcript)
+    kept, dropped = accepted_words(transcript, settings.analysis.spellings)
     words = [captions.Word(w["w"], w["s"], w["e"], w["p"]) for w in kept]
     for segment in dropped:
         log.info("Set aside likely mishearing at %.1fs: %r", segment["s"], segment["text"])
@@ -455,6 +467,15 @@ def store_results(
             if 0 <= int(t) < seconds:
                 cut[int(t)] = 1.0
         signals["scene_cut"] = cut
+    picture_path = out_dir / PICTURE_FILE
+    if picture_path.exists():
+        picture = json.loads(picture_path.read_text(encoding="utf-8"))
+        for name in ("brightness", "motion", "hud"):
+            measured = picture.get(name, [])
+            if measured:
+                # Pad a missing last second with its neighbour, never with black or still.
+                values = np.array(measured, dtype=np.float32)[:seconds]
+                signals[name] = np.pad(values, (0, seconds - len(values)), mode="edge")
 
     # Only the signals analysis produces are replaced: chat activity comes from
     # Twitch separately (analysis/chat.py) and must survive a re-analysis.

@@ -3,6 +3,75 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.7.0 — Phase 1F: Highlights and Let's Plays — 27 September 2026
+
+AI-Editor now plans whole videos: 10-minute highlight compilations from your
+streams, and Let's Play episodes trimmed and split into parts.
+
+**New**
+
+- **`ai-editor highlights`** builds a highlight video from your best unused
+  moments, with a quick preview to watch. With no options it takes every
+  stream, whatever you played (Wardogs, League, a Tarkov switch halfway
+  through); `--game Wardogs` keeps to one game. Let's Play games
+  (Dawnwalker) are never used. It fills 10 minutes from the oldest stream
+  first ("4 minutes from the previous and 6 from the next"), never pads with
+  weak clips, opens with a short teaser and ends on that moment in full.
+- **The teaser is your call.** A moment you marked with Numpad + comes first;
+  otherwise the one you reacted to most; `--teaser 5` picks clip 5 yourself.
+- **`ai-editor approve`** marks a video final, so the next one carries on
+  with the clips that are left. `ai-editor plans` lists them.
+- **`ai-editor letsplay <recording>`** trims an episode and splits it into
+  parts of about 30 minutes. It cuts loading screens, menus you don't talk
+  over, and silences over 20 seconds (keeping 3 seconds either side). It
+  never cuts anyone talking, a fight (swords included), a cutscene, or
+  mid-word, and nothing is sped up. Parts end at a loading screen or a pause,
+  preferably right after a strong moment. A cuts reel and a splits reel let
+  you check every cut and every split in minutes; `--parts` previews each
+  part in full. EP 1: 126 minutes became four parts of 29-33 minutes.
+- **Cutscenes are recognised** because your HUD disappears. AI-Editor learns
+  where the HUD is from each recording by itself.
+- **The Companion knows which game you're on** from your OBS scene, so a
+  mixed stream's clips each carry the right game.
+- **Marker keys work inside League.** League switches other programs'
+  hotkeys off while it's in front, so the keys are now caught by OBS itself:
+  run `ai-editor setup-obs --markers` once and bind them in OBS (manual 7.4a).
+
+**Better on your footage**
+
+- **Fights keep their ending.** When a moment is too long for a highlight,
+  a fight is trimmed from the front, so the kill stays in.
+- **Short black screens stay.** A crash or death blackout you talk through
+  is part of the moment; only 10 seconds or more counts as a loading screen.
+  A blinking effect no longer chops clips into 4-second pieces.
+- **No opening mid-sentence.** A clip that would start on "Chris, you ready…"
+  now starts on "Hey Chris, you ready…".
+- **Markers don't drown out everything else.** Eight markers used to leave
+  exactly eight clips from a whole stream; now they go on top and the rest
+  keep their ranking.
+- **Game names are spelled right** ("talk of" → Tarkov, "war dogs" → Wardogs)
+  by a spelling list you can add to. Hinting the names to the speech
+  recognition was tried and dropped: it made it "hear" the hint, and "Thank
+  you for watching", over game noise.
+- The picture check (black screens, menus, cutscenes) is about 20 times
+  faster: 37 seconds for a 2-hour episode.
+
+**Fixed**
+
+- **The marker click reached your stream** through your microphone on 26
+  September. It's now off by default and should stay off; nothing in OBS's
+  settings could have shown the problem.
+- Going back to an older setting could reuse a result made with a newer one.
+
+**Known limits** (later phases)
+
+- Story missions aren't protected yet: reading "quest started / completed"
+  off the screen comes with the game profiles in Phase 2.
+- Part numbers don't yet carry on across episodes, and a short leftover
+  isn't yet carried to the next session (the series manager).
+- EP 1 has one mixed audio track, so it can't tell your silence from the
+  game's. Recordings with separate tracks will trim more accurately.
+
 ## 0.6.0 — Phase 1E: Scoring and clips — 26 September 2026
 
 AI-Editor now picks your best moments and cuts them into clips you can watch.

@@ -39,7 +39,7 @@ from .ffmpeg import (
 from .companion.link import link_recording, stream_offset
 from .games import canonical_game
 from .ingest import Registration, ingest_recording
-from .logging_setup import setup_logging
+from .logging_setup import get_logger, setup_logging
 
 app = typer.Typer(
     name="ai-editor",
@@ -496,6 +496,8 @@ def _import_file(settings, conn, path: Path, *, game, tracks, source_type, vod_i
             detail += ", no markers"
         if match.stream_offset_sec is not None:
             detail += f"; this recording starts {match.stream_offset_sec:.0f}s into the stream"
+        if match.games:
+            detail += f"; games played: {', '.join(match.games)}"
         console.print(f"Stream Companion: {detail}")
 
     console.print(f"Next: [bold]ai-editor analyze {recording_id}[/bold]")
@@ -652,6 +654,7 @@ ANALYSIS_LABELS = {
     "sound_events": "Listening for laughter, shouts, gunfire",
     "loudness": "Measuring loudness",
     "scenes": "Finding scene changes (menus, loading)",
+    "picture": "Checking for black screens",
 }
 
 
@@ -871,6 +874,9 @@ def _print_moments(conn, recording_id: int, top: int = 8) -> None:
 
 @app.command("setup-obs")
 def setup_obs(
+    markers: bool = typer.Option(
+        False, "--markers", help="Add the hidden marker scene, so your marker keys can be "
+        "bound in OBS and work inside games (manual 7.4a)"),
     settings_path: Path = typer.Option(
         DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
     ),
@@ -886,6 +892,9 @@ def setup_obs(
 
     settings = _load(settings_path)
     setup_logging(settings.log_dir, settings.logging.level)
+    if markers:
+        _setup_obs_markers(settings)
+        return
     console.print(
         "In OBS: [bold]Tools → WebSocket Server Settings[/bold]. Tick [bold]Enable "
         "WebSocket server[/bold], click [bold]Show Connect Info[/bold], and copy the "
@@ -911,7 +920,52 @@ def setup_obs(
         console.print("[yellow]OBS isn't asking for a password.[/yellow] That works, but any "
                       "program on your network could control OBS. Tick Enable Authentication "
                       "in OBS and run this again.")
-    console.print("Next: [bold]ai-editor companion[/bold]")
+    console.print("Next: [bold]ai-editor setup-obs --markers[/bold], then "
+                  "[bold]ai-editor companion[/bold]")
+
+
+def _setup_obs_markers(settings) -> None:
+    """Add the "AI-Editor markers" scene to OBS and explain the key binding."""
+    from .companion import obs_markers
+    from .companion.obs import ObsClient, ObsRequestFailed
+
+    client = ObsClient(settings.obs.websocket_host, settings.obs.websocket_port,
+                       settings.obs.websocket_password)
+    try:
+        client.connect()
+        added = obs_markers.set_up(client)
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    except ObsRequestFailed as exc:
+        get_logger(__name__).warning("Setting up the marker scene failed: %s", exc)
+        console.print("[red]OBS refused to add the marker scene.[/red] Details are in the log "
+                      "file; manual 7.4a shows how to add it by hand.")
+        raise typer.Exit(code=1) from exc
+    finally:
+        client.close()
+
+    if added:
+        console.print(f"[green]Added to OBS:[/green] {', '.join(added)}.")
+    else:
+        console.print("[green]The marker scene is already in OBS.[/green] Nothing changed.")
+    for line in (
+        "",
+        f"The scene [bold]{obs_markers.MARKER_SCENE}[/bold] is never put on air: don't add it "
+        "to your other scenes, and viewers will never see or hear it.",
+        "",
+        "[bold]Now bind your keys in OBS[/bold] (once):",
+        "  1. [bold]File → Settings → Hotkeys[/bold].",
+        "  2. Type [bold]Mark[/bold] in the filter box at the top.",
+        f"  3. Under [bold]{obs_markers.MARKER_SCENE}[/bold], click the box next to "
+        "[bold]Show 'Mark moment'[/bold] and press [bold]Numpad +[/bold].",
+        "  4. Click the box next to [bold]Show 'Mark Short'[/bold] and press [bold]Numpad -[/bold].",
+        "     Leave the [bold]Hide[/bold] boxes empty: the Companion switches them back off itself.",
+        "  5. Click [bold]OK[/bold].",
+        "",
+        "Then run [bold]ai-editor companion[/bold]: the Keys line says [bold]set in OBS[/bold].",
+    ):
+        console.print(line)
 
 
 @app.command("companion")
@@ -999,6 +1053,9 @@ def _companion_panel(app_) -> Table:
         else:
             text = "[dim]Off[/dim]"
         table.add_row(label, text)
+    if app_.scene:
+        table.add_row("Game", f"{app_.game} [dim](scene \"{app_.scene}\")[/dim]" if app_.game
+                      else f"[dim]none (scene \"{app_.scene}\")[/dim]")
     table.add_row("Session", app_.log.session_id or "[dim]starts when you record or go live[/dim]")
     marked = f"{app_.markers['moment']} moment, {app_.markers['short']} Short-worthy"
     if app_.last_marker:
@@ -1081,6 +1138,7 @@ EVENT_LABELS = {
     "obs_closing": "OBS closed",
     "marker": "Marker",
     "marker_short": "Marker (Short-worthy)",
+    "obs_scene": "Scene",
 }
 
 
@@ -1103,6 +1161,8 @@ def _print_session(conn, session_id: str) -> None:
         detail = []
         if payload.get("path"):
             detail.append(Path(payload["path"]).name)
+        if row["event_type"] == "obs_scene":
+            detail.append(f"{payload.get('scene')} -> {payload.get('game') or 'not a game'}")
         if payload.get("noticed_late"):
             detail.append("[yellow]noticed after it happened[/yellow]")
         table.add_row(
@@ -1141,25 +1201,9 @@ def _refresh_score(conn, settings: Settings, recording_id: int, duration_sec: fl
 
 
 def _refresh_clips(conn, settings: Settings, row):
-    """Score the recording and cut its candidate clips. Instant: nothing is re-analysed.
+    from .analysis.clips import refresh_clips
 
-    Returns (clips, score result), or (None, None) if there is nothing to score.
-    """
-    from .analysis.clips import build_clips, explain, load_words, store_clips
-    from .analysis.hype import load_signals
-    from .analysis.pipeline import load_scene_cuts
-
-    result = _refresh_score(conn, settings, row["id"], row["duration_sec"])
-    if result is None:
-        return None, None
-    words = load_words(conn, row["id"])
-    clips = build_clips(result.score, words=words, cuts=load_scene_cuts(settings, row),
-                        duration=float(row["duration_sec"]), settings=settings.clips)
-    for clip in clips:
-        clip.reasons = explain(clip, result.parts)
-    store_clips(conn, row["id"], clips,
-                signals=load_signals(conn, row["id"], len(result.score)), words=words)
-    return clips, result
+    return refresh_clips(conn, settings, row)
 
 
 @app.command("score")
@@ -1316,6 +1360,281 @@ def clips_command(
         raise typer.Exit(code=1) from exc
     finally:
         conn.close()
+
+
+@app.command("highlights")
+def highlights_command(
+    game: str = typer.Option(None, "--game", "-g",
+                             help="Only this game, e.g. Wardogs. Leave out for stream highlights "
+                             "of every game you played."),
+    recordings: str = typer.Option(None, "--from",
+                                   help="Or only these recordings, by number, e.g. 3 or 3,6,7"),
+    minutes: float = typer.Option(None, "--minutes", "-m", help="Target length (default from Settings: 10)"),
+    preview: bool = typer.Option(True, "--preview/--no-preview",
+                                 help="Also make a quick watchable version"),
+    open_folder: bool = typer.Option(False, "--open", help="Open the preview's folder afterwards"),
+    teaser_part: int = typer.Option(None, "--teaser",
+                                    help="Open with this clip instead: its # in the last list shown, "
+                                    "e.g. --teaser 5"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Make a highlight video from your streams' best moments (spec section 7.6, Recipe B).
+
+    With no options: stream highlights from every game you played (Let's Play
+    episodes stay out). Uses the best unused clips, from one stream or
+    several, up to the target length, never padding with weak clips. Opens
+    with a teaser of a moment you marked, else the one you reacted to most
+    (--teaser picks it yourself). Makes a draft: run
+    'ai-editor approve <plan>' when you're happy, and the next highlight video
+    carries on with the clips that are left.
+    """
+    from .analysis.captions import clock
+    from .recipes.highlights import build_highlights
+    from .recipes.preview import render_preview
+
+    ids = None
+    if recordings:
+        try:
+            ids = [int(x) for x in recordings.replace(" ", "").split(",") if x]
+        except ValueError:
+            console.print("[red]--from takes recording numbers, e.g. 3 or 3,6,7[/red]")
+            raise typer.Exit(code=1)
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        wanted_game = canonical_game(game) if game else None
+        teaser_clip = None
+        if teaser_part is not None:
+            # "#5 in the last list" means the draft that list came from.
+            from .recipes.plan import latest_draft
+
+            last = latest_draft(conn, "highlights", wanted_game)
+            if last is None or not 1 <= teaser_part <= len(last.segments):
+                console.print("[red]--teaser takes a # from the list the last highlights command "
+                              "showed.[/red] Run it once without --teaser first.")
+                raise typer.Exit(code=1)
+            teaser_clip = last.segments[teaser_part - 1].clip_id
+        result = build_highlights(conn, settings, game=wanted_game,
+                                  recording_ids=ids, target_min=minutes, teaser_clip=teaser_clip)
+        plan = result.plan
+        titles = {r["id"]: r["title"] for r in conn.execute("SELECT id, title FROM recordings")}
+
+        table = Table(title=f"{plan.title}  ({plan.plan_id}, draft)", header_style="bold")
+        for column in ("#", "Part", "From", "Game", "Time", "Length", "Score", "Why"):
+            table.add_column(column)
+        position = 0.0
+        for n, s in enumerate(plan.segments, start=1):
+            table.add_row(
+                str(n), "Teaser" if s.kind == "teaser" else f"at {clock(position)}",
+                f"#{s.recording_id} {titles.get(s.recording_id, '')}"[:28], s.game or "-",
+                clock(s.src_in), f"{s.length:.0f}s",
+                f"{s.score:.2f}" if s.score is not None else "-",
+                ", ".join(SIGNAL_LABELS.get(r, r) for r in s.reasons) or "-",
+            )
+            position += s.length
+        console.print(table)
+        console.print(f"Length: [bold]{plan.total_sec / 60:.1f} min[/bold] of {plan.target_sec / 60:.0f} "
+                      f"from {result.recordings_used} of {result.recordings_searched} recording(s). "
+                      f"Good unused material left to choose from: {result.available_sec / 60:.1f} min.")
+        for note in plan.notes:
+            console.print(f"[yellow]{note}[/yellow]")
+
+        if preview and plan.segments:
+            progress = _progress_bar()
+            task = progress.add_task("Making a watchable preview", total=1.0)
+            progress.start()
+            try:
+                path = render_preview(conn, settings, plan,
+                                      lambda f: progress.update(task, completed=f))
+            finally:
+                progress.stop()
+            console.print(f"\n[green]Preview saved:[/green] {path}\n"
+                          "Low resolution and no effects: it's for judging the choices. "
+                          "Subtitles load by themselves in VLC.")
+            if open_folder:
+                import os
+
+                os.startfile(path.parent)  # noqa: S606 -- File Explorer on our own folder
+        console.print(f"Happy with it? [bold]ai-editor approve {plan.plan_id}[/bold] "
+                      "(the next highlight video then uses the clips that are left).")
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+
+@app.command("letsplay")
+def letsplay_command(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    reel: bool = typer.Option(True, "--reel/--no-reel",
+                              help="Make the cuts reel: every cut with a few seconds each side"),
+    splits: bool = typer.Option(True, "--splits/--no-splits",
+                                help="Make the splits reel: the end of each part and the start of the next"),
+    parts: bool = typer.Option(False, "--parts",
+                               help="Also make a full preview of every part (a few minutes)"),
+    open_folder: bool = typer.Option(False, "--open", help="Open the previews' folder afterwards"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Trim a Let's Play episode and split it into parts (spec section 7.6, Recipe A).
+
+    Cuts what a viewer would skip: loading screens, silent menus and long
+    silences in play. Never anyone talking, a fight, a cutscene, or mid-word,
+    and nothing is sped up. Then splits it into parts of about 30 minutes at
+    the best natural breaks. The reels show every cut and every split, so you
+    can judge them in minutes.
+    """
+    from .analysis import resolve_recording
+    from .analysis.captions import clock
+    from .recipes.letsplay import REASONS, build_letsplay, cuts_reel, splits_reel
+    from .recipes.plan import EditPlan
+    from .recipes.preview import FOLDER, render_preview
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    folder = settings.folders.output / FOLDER
+
+    def make(plan, what: str, target: Path, labels=None) -> Path:
+        progress = _progress_bar()
+        task = progress.add_task(what, total=1.0)
+        progress.start()
+        try:
+            return render_preview(conn, settings, plan, lambda f: progress.update(task, completed=f),
+                                  labels=labels, target=target)
+        finally:
+            progress.stop()
+
+    try:
+        row = resolve_recording(conn, recording)
+        if row["analysis_status"] != "complete":
+            console.print(f"Recording #{row['id']} hasn't been analysed yet. "
+                          f"Run: ai-editor analyze {row['id']}")
+            raise typer.Exit(code=1)
+        result = build_letsplay(conn, settings, row)
+        cuts, duration, plan = result.cuts, result.duration_sec, result.plan
+        removed = sum(c.length for c in cuts)
+
+        summary = Table(title=f"{plan.title}  ({plan.plan_id}, draft)", header_style="bold")
+        for column in ("What was cut", "Cuts", "Minutes"):
+            summary.add_column(column)
+        for key, label in REASONS.items():
+            mine = [c for c in cuts if c.reason == key]
+            if mine:
+                summary.add_row(label, str(len(mine)), f"{sum(c.length for c in mine) / 60:.1f}")
+        console.print(summary)
+        console.print(f"[bold]{duration / 60:.1f} min → {(duration - removed) / 60:.1f} min[/bold] "
+                      f"({len(cuts)} cuts). Nothing was sped up.")
+
+        listing = Table(title="Every cut", header_style="bold")
+        for column in ("#", "At", "Removed", "What"):
+            listing.add_column(column)
+        for n, cut in enumerate(cuts, start=1):
+            listing.add_row(str(n), clock(cut.start), f"{cut.length:.0f}s", REASONS[cut.reason])
+        console.print(listing)
+
+        ends = {**REASONS, "pause": "a pause in talking", "forced": "[red]no clean break: check it[/red]",
+                "end": "the end of the recording"}
+        table = Table(title="Parts", header_style="bold")
+        for column in ("Part", "Length", "In the recording", "Ends on"):
+            table.add_column(column)
+        for p in result.parts:
+            table.add_row(str(p.number), clock(p.length), f"{clock(p.source_start)} – {clock(p.source_end)}",
+                          ends.get(p.ends_on, p.ends_on) + (" [green](hook)[/green]" if p.hook else ""))
+        console.print(table)
+        for note in plan.notes:
+            console.print(f"[yellow]{note}[/yellow]" if "Check it" in note else note)
+
+        saved: list[Path] = []
+        if reel and cuts:
+            reel_plan, labels = cuts_reel(result, row["id"])
+            saved.append(make(reel_plan, "Making the cuts reel",
+                              folder / f"{reel_plan.plan_id}.mp4", labels))
+        if splits and len(result.parts) > 1:
+            split_plan, labels = splits_reel(result, row["id"])
+            saved.append(make(split_plan, "Making the splits reel",
+                              folder / f"{split_plan.plan_id}.mp4", labels))
+        if parts:
+            for p in result.parts:
+                one = EditPlan(f"{plan.plan_id} part {p.number}", "letsplay", f"Part {p.number}",
+                               plan.game, 0, [s for s in plan.segments if s.part == p.number])
+                saved.append(make(one, f"Making part {p.number}", folder / f"{one.plan_id}.mp4"))
+        if saved:
+            console.print("\n[green]Saved:[/green]\n" + "\n".join(f"  {path}" for path in saved))
+            console.print("Turn subtitles on in VLC: the reels say which cut or split you're watching.")
+            if open_folder:
+                import os
+
+                os.startfile(folder)  # noqa: S606 -- File Explorer on our own folder
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+
+@app.command("approve")
+def approve_command(
+    plan_id: str = typer.Argument(..., help="The plan's name, as shown by 'ai-editor plans'"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Mark a video plan final: its clips count as used from now on."""
+    from .recipes.plan import approve_plan
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        marked = approve_plan(conn, plan_id)
+    finally:
+        conn.close()
+    if marked < 0:
+        console.print(f"[red]No plan called {plan_id}.[/red] See them with: ai-editor plans")
+        raise typer.Exit(code=1)
+    console.print(f"[green]{plan_id} approved.[/green] {marked} clip(s) marked as used, so they "
+                  "won't appear in another highlight video.")
+
+
+@app.command("plans")
+def plans_command(
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """List the video plans the recipes have made."""
+    import json
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        rows = conn.execute("SELECT * FROM edit_plans ORDER BY created_at DESC").fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        console.print("No video plans yet. Make one with: ai-editor highlights --game Wardogs")
+        return
+    table = Table(title="Video plans", header_style="bold")
+    for column in ("Plan", "Kind", "Length", "Recordings", "Status", "Made"):
+        table.add_column(column)
+    for row in rows:
+        plan = json.loads(row["plan_json"])
+        length = sum(s["src_out"] - s["src_in"] for s in plan.get("segments", []))
+        table.add_row(row["plan_id"], row["recipe"], f"{length / 60:.1f} min",
+                      ", ".join(f"#{i}" for i in json.loads(row["recording_ids_json"])),
+                      "[green]approved[/green]" if row["status"] == "approved" else "draft",
+                      _local_time(row["created_at"]))
+    console.print(table)
 
 
 @app.command("library")

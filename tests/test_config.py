@@ -34,7 +34,8 @@ def test_highlights_and_shorts_defaults():
     """Manual chapters 16.2 and 17.2."""
     settings = load_settings(DEFAULT_SETTINGS_PATH)
     assert settings.highlights.target_length_min == 10
-    assert settings.highlights.min_clip_score == 0.6
+    # The spec's 0.6, lowered to 0.55 on the creator's Wardogs verdicts (Phase 1F).
+    assert settings.highlights.min_clip_score == 0.55
     assert settings.highlights.ordering == "balanced"
     assert settings.shorts.min_length_sec == 15
     assert settings.shorts.max_length_sec == 60

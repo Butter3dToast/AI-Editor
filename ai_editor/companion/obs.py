@@ -34,10 +34,14 @@ OP_REQUEST_RESPONSE = 7
 
 RPC_VERSION = 1
 
-# Only what the Companion needs: General (OBS is closing) and Outputs (stream
-# and recording state). OBS then doesn't send anything else.
+# Only what the Companion needs: General (OBS is closing), Scenes (which game
+# is on screen -- the creator has one scene per game), Outputs (stream and
+# recording state) and Scene Items (the marker keys bound in OBS switch a
+# source on: see obs_markers). OBS then doesn't send anything else.
 SUBSCRIBE_GENERAL = 1 << 0
+SUBSCRIBE_SCENES = 1 << 2
 SUBSCRIBE_OUTPUTS = 1 << 6
+SUBSCRIBE_SCENE_ITEMS = 1 << 7
 
 CLOSE_AUTHENTICATION_FAILED = 4009
 CLOSE_UNSUPPORTED_RPC_VERSION = 4010
@@ -216,7 +220,8 @@ class ObsClient:
             raise ObsTooOld()
         identify: dict[str, Any] = {
             "rpcVersion": RPC_VERSION,
-            "eventSubscriptions": SUBSCRIBE_GENERAL | SUBSCRIBE_OUTPUTS,
+            "eventSubscriptions": (SUBSCRIBE_GENERAL | SUBSCRIBE_SCENES | SUBSCRIBE_OUTPUTS
+                                   | SUBSCRIBE_SCENE_ITEMS),
         }
         challenge = hello.get("authentication")
         if challenge:
@@ -302,6 +307,11 @@ class ObsClient:
             paused=bool(data.get("outputPaused", False)),
             duration_sec=float(data.get("outputDuration") or 0) / 1000.0,
         )
+
+    def current_scene(self) -> str | None:
+        """The scene OBS is showing right now (what viewers see)."""
+        data = self.request("GetCurrentProgramScene")
+        return data.get("sceneName") or data.get("currentProgramSceneName")
 
     def close(self) -> None:
         self._closing = True

@@ -219,9 +219,14 @@ class JobQueue:
         A step whose output file has since been deleted (cache cleanup, or by
         hand) is not done: trusting the record over the disk would hand later
         steps a path to nothing.
+
+        Nor is one whose file was since overwritten by a run with different
+        settings. Found when a setting was tried and then undone: going back
+        matched the first run's key, and the transcript written by the run in
+        between was reused as if it were the first one's.
         """
         row = self.conn.execute(
-            "SELECT output_path FROM job_steps WHERE cache_key = ? AND status = ? "
+            "SELECT id, output_path FROM job_steps WHERE cache_key = ? AND status = ? "
             "ORDER BY id DESC LIMIT 1",
             (cache_key, COMPLETE),
         ).fetchone()
@@ -231,6 +236,14 @@ class JobQueue:
         output = row["output_path"] or ""
         if output and not Path(output).exists():
             log.info("Job #%d: cached output for '%s' is gone; redoing it", job_id, step_name)
+            return None
+        if output and self.conn.execute(
+            "SELECT 1 FROM job_steps WHERE output_path = ? AND status = ? AND id > ? "
+            "AND cache_key != ? LIMIT 1",
+            (output, COMPLETE, row["id"], cache_key),
+        ).fetchone():
+            log.info("Job #%d: '%s' was redone with other settings since; redoing it",
+                     job_id, step_name)
             return None
         return output
 

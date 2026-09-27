@@ -30,6 +30,24 @@ class Cue:
 SENTENCE_END = (".", "?", "!", "…")
 CLAUSE_END = SENTENCE_END + (",", ";", ":")
 
+# How long a word can really take to say: a little per letter, never more
+# than 1.5 s. Whisper sometimes stretches a word's start back over the silence
+# or music before it -- "hit" lasting 1.9 s, "can't" 2.4 s, one "don't" 12 s
+# on the creator's Wardogs streams -- which made captions appear before the
+# creator said anything. The end of a word is reliable; its start isn't.
+WORD_BASE_SEC = 0.3
+WORD_PER_CHAR_SEC = 0.1
+MAX_WORD_SEC = 1.5
+
+
+def realistic_timing(words: Sequence[Word]) -> list[Word]:
+    """Words in time order, with stretched starts pulled in to a believable length."""
+    fixed = []
+    for w in sorted(words, key=lambda w: w.start):
+        longest = min(MAX_WORD_SEC, WORD_BASE_SEC + WORD_PER_CHAR_SEC * len(w.text.strip()))
+        fixed.append(Word(w.text, max(w.start, w.end - longest), w.end, w.probability))
+    return fixed
+
 
 def _text(words: Sequence[Word]) -> str:
     return " ".join(w.text.strip() for w in words if w.text.strip())
@@ -57,7 +75,11 @@ def build_cues(
     * a pause longer than ``max_gap`` always starts a new cue;
     * every cue stays on screen at least ``min_duration`` seconds, as far as
       the next cue allows.
+
+    Words are first given believable lengths (realistic_timing), so a cue
+    never appears before the creator starts speaking.
     """
+    words = realistic_timing(words)
     cues: list[Cue] = []
     current: list[Word] = []
 

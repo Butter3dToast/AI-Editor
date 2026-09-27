@@ -237,3 +237,27 @@ def test_deleted_output_is_not_treated_as_done(queue, tmp_path):
     output.unlink()
     queue.run(queue.enqueue("ingest"), [("proxy", key, make)])
     assert calls == ["made", "made"]
+
+
+def test_going_back_to_old_settings_redoes_a_step_that_was_overwritten(queue, tmp_path):
+    """A transcript made with a hint, then the hint removed: the file on disk is
+    the hinted one, so the old no-hint run's record must not be trusted."""
+    output = tmp_path / "transcript.json"
+    made: list[str] = []
+
+    def make(version: str):
+        def run() -> str:
+            made.append(version)
+            output.write_text(version)
+            return str(output)
+        return run
+
+    plain, hinted = make_cache_key("hash", "plain"), make_cache_key("hash", "hinted")
+    queue.run(queue.enqueue("analyze"), [("transcribe", plain, make("plain"))])
+    queue.run(queue.enqueue("analyze"), [("transcribe", hinted, make("hinted"))])
+    queue.run(queue.enqueue("analyze"), [("transcribe", plain, make("plain"))])
+    assert made == ["plain", "hinted", "plain"]
+    assert output.read_text() == "plain"
+    # ...and once redone, it's reused as normal.
+    queue.run(queue.enqueue("analyze"), [("transcribe", plain, make("plain"))])
+    assert made == ["plain", "hinted", "plain"]

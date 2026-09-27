@@ -94,6 +94,62 @@ def test_edges_prefer_the_end_of_a_sentence():
     assert min(abs(end - e) for e in sentence_ends) < 0.5
 
 
+def test_a_full_stop_is_not_an_end_if_you_keep_talking():
+    """League: ended on "Keep her alive." with "I..." 0.36 s later."""
+    words = talking(290, 316, every=0.5, sentence_every=4)  # full stops, but no pauses
+    words += talking(320, 330, every=0.5, sentence_every=100)  # after a real 4 s pause
+    _, end = fit_edges((300, 305), 302, words=words, cuts=[], duration=DURATION,
+                       settings=Clips(tail_sec=4))
+    last_before_pause = max(w.end for w in words if w.end < 317)
+    assert last_before_pause <= end <= 320.0
+
+
+def test_an_end_can_run_on_to_let_a_thought_finish():
+    """Up to end_extend_sec past the planned end, if that's where the pause is."""
+    words = talking(290, 318.5, every=0.5, sentence_every=100)  # talking non-stop to 318.4
+    _, end = fit_edges((300, 305), 302, words=words, cuts=[], duration=DURATION,
+                       settings=Clips(tail_sec=4, end_extend_sec=10))
+    assert end >= 318.4
+
+
+def test_ending_at_a_scene_change_while_talking_is_not_clean():
+    from ai_editor.analysis.clips import clean_ends
+
+    words = [Word("still", 99.8, 100.3), Word("talking", 100.4, 100.9)]
+    assert not any(abs(p - 99.95) < 0.01 for p in clean_ends(words, [100.0], pause=0.5))
+    assert any(abs(p - 199.95) < 0.01 for p in clean_ends(words, [200.0], pause=0.5))
+
+
+def test_a_clip_waits_for_the_fight_to_finish():
+    """Wardogs: the clip ended with gunfire still coming -- the kills were after it."""
+    action = np.zeros(600, dtype=np.float32)
+    action[312:314] = 0.3   # bursts after the planned end (~309 s)...
+    action[322:325] = 0.4
+    action[331:333] = 0.3   # ...each within 10 s of the last
+    _, end = fit_edges((300, 305), 302, words=[], cuts=[], duration=DURATION,
+                       settings=Clips(), action=action)
+    assert end >= 333
+
+
+def test_a_quiet_moment_after_the_fight_ends_it():
+    action = np.zeros(600, dtype=np.float32)
+    action[330:333] = 0.4   # 20 s after the moment: a different fight
+    _, end = fit_edges((300, 305), 302, words=[], cuts=[], duration=DURATION,
+                       settings=Clips(), action=action)
+    assert end < 320
+
+
+def test_a_long_fight_keeps_its_end_and_starts_later():
+    """The creator: "if it started a bit later ... and went till the end"."""
+    action = np.zeros(600, dtype=np.float32)
+    action[305:340:5] = 0.4  # shooting every 5 s, the last shot at 335
+    settings = Clips(max_length_sec=50)
+    start, end = fit_edges((300, 305), 302, words=[], cuts=[], duration=DURATION,
+                           settings=settings, action=action)
+    assert end >= 336
+    assert start <= 297  # the moment itself is still in
+
+
 def test_never_runs_on_into_a_menu():
     """A scene change just after the moment: stop before it."""
     start, end = fit_edges((300, 305), 302, words=[], cuts=[308.0], duration=DURATION,
@@ -141,7 +197,16 @@ def test_a_stretched_word_is_judged_by_its_end():
 
     (word,) = realistic([Word("don't", 4999.26, 5011.34)])
     assert word.end == 5011.34
-    assert word.end - word.start == pytest.approx(1.5)
+    assert word.end - word.start == pytest.approx(0.8)  # 0.3 s + 0.1 s a letter
+
+
+def test_short_words_get_short_lengths():
+    """"hit" reported as 1.9 s made its caption appear before it was said."""
+    from ai_editor.analysis.clips import realistic
+
+    hit, long_word = realistic([Word("hit", 10.0, 11.92), Word("unbelievably", 20.0, 23.0)])
+    assert hit.end - hit.start == pytest.approx(0.6)
+    assert long_word.end - long_word.start == pytest.approx(1.5)  # never more
 
 
 def test_cutscene_camera_cuts_do_not_chop_the_build_up():
@@ -275,3 +340,52 @@ def test_rebuilding_replaces_clips_but_keeps_ones_you_rated(conn):
     store_clips(conn, 1, [Clip(400.0, 430.0, 410, 0.8, (405, 415))], signals={}, words=[])
     starts = sorted(r[0] for r in conn.execute("SELECT start_sec FROM clips"))
     assert starts == [300.0, 400.0]
+
+
+def test_a_clip_never_opens_on_or_runs_into_a_black_screen():
+    dark = np.zeros(600, dtype=bool)
+    dark[270:285] = True   # loading before the moment
+    dark[309:320] = True   # respawn screen after it
+    start, end = fit_edges((300, 305), 302, words=[], cuts=[], duration=DURATION,
+                           settings=Clips(), dark=dark)
+    assert start >= 285
+    assert end <= 309
+
+
+def test_a_fight_too_long_to_keep_whole_keeps_its_end():
+    """The same Wardogs clip, reviewed twice: "take a later version of that clip
+    ... you would hear me saying I killed someone". The moment ran 55 s, the
+    video's clips are 50 s at most, and the old trim kept the walk in."""
+    action = np.zeros(600, dtype=np.float32)
+    action[[262, 280, 296, 301, 306, 312]] = 0.5   # shooting through to the end of the moment
+    settings = Clips(max_length_sec=50, lead_in_sec=15)
+    start, end = fit_edges((260, 314), 290, words=[], cuts=[], duration=DURATION,
+                           settings=settings, action=action)
+    assert end >= 314          # the payoff at the end is in
+    assert end - start <= 50
+    assert start <= 290        # and the moment itself
+
+
+def test_a_long_moment_without_a_fight_keeps_its_build_up():
+    """A joke then a laugh: the cause comes first, so trimming takes from the end."""
+    settings = Clips(max_length_sec=50, lead_in_sec=15)
+    start, end = fit_edges((260, 314), 290, words=[], cuts=[], duration=DURATION, settings=settings)
+    assert start < 260
+
+
+def test_a_clip_does_not_open_mid_sentence():
+    """The helicopter clip opened on "Chris, you ready for some fun" -- the
+    start fell in the short pause after "Hey"."""
+    words = [Word("Hey", 283.1, 283.7), Word("Chris,", 285.0, 285.6), Word("you", 285.7, 285.8),
+             Word("ready", 285.8, 285.9), Word("for", 285.9, 286.2), Word("some", 286.2, 286.9),
+             Word("fun.", 286.9, 287.2)]
+    start, _ = fit_edges((300, 305), 302, words=words, cuts=[], duration=DURATION,
+                         settings=Clips(lead_in_sec=15))
+    assert start <= 283.1
+
+
+def test_stepping_back_stops_at_a_full_stop():
+    from ai_editor.analysis.clips import phrase_start
+
+    words = [Word("Done.", 10.0, 10.4), Word("Hey", 10.8, 11.1), Word("Chris", 11.9, 12.3)]
+    assert 10.4 <= phrase_start(11.5, words, low=0, reach=6) <= 10.8

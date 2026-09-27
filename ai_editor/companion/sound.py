@@ -9,6 +9,12 @@ the stream.
 So before playing anything, the Companion asks OBS what it is capturing. If
 any Desktop Audio source is live and not muted, the click stays off and the
 Companion says why.
+
+That check is not enough on its own, which is why the click is now off by
+default (companion.confirmation_sound). On the creator's 26 Sep League stream
+the click was on the mic track at all 8 markers: a stand-up microphone hears
+the headphones, and a compressor on the mic lifts it. OBS's settings can't
+show that.
 """
 
 from __future__ import annotations

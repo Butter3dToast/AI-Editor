@@ -36,10 +36,17 @@ SOUND_GROUPS: dict[str, tuple[str, ...]] = {
     "gunfire": ("Gunshot, gunfire", "Machine gun", "Fusillade", "Artillery fire", "Cap gun"),
     "explosion": ("Explosion", "Boom"),
     "music": ("Music",),
+    # Heard on the game track: the characters talking. The Let's Play
+    # recipe never cuts it, even when the creator is quiet.
+    "dialogue": ("Speech", "Conversation", "Narration, monologue"),
+    # Sword fights: Dawnwalker's make no gunfire, so a silent fight on EP 1
+    # (94:44) looked like nothing happening to the Let's Play trimmer.
+    "melee": ("Clang", "Chink, clink", "Whack, thwack", "Slap, smack", "Smash, crash",
+              "Whoosh, swoosh, swish", "Thump, thud", "Grunt"),
 }
 
 VOICE_GROUPS = ("laughter", "shout", "scream")
-GAME_GROUPS = ("gunfire", "explosion", "music")
+GAME_GROUPS = ("gunfire", "explosion", "music", "dialogue", "melee")
 
 _BATCH = 32
 

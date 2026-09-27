@@ -76,6 +76,8 @@ def transcribe(
                 # previous text forward lets one mistake snowball into a
                 # repeated phrase for minutes on a two-hour recording.
                 condition_on_previous_text=False,
+                # No prompt or hot words: every hint tried made Whisper write
+                # the hint itself over game noise (see fix_spellings).
             )
             # `segments` is lazy: the real work happens while iterating, which
             # is also what lets progress be reported as it goes.
@@ -195,6 +197,7 @@ def tidy_word(text: str, language: str | None) -> str:
 
 def accepted_words(
     transcript: dict[str, Any],
+    spellings: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split a saved transcript into (words to keep, phrases set aside)."""
     kept: list[dict[str, Any]] = []
@@ -207,4 +210,57 @@ def accepted_words(
             kept.extend(
                 {**w, "w": tidy_word(w["w"], language)} for w in segment.get("words") or []
             )
-    return kept, dropped
+    return fix_spellings(kept, spellings or {}), dropped
+
+
+# --- Spelling fixes -----------------------------------------------------------
+#
+# Names Whisper doesn't know come out as ordinary words that sound the same:
+# "Tarkov" as "talk of". Telling Whisper the names up front (as "hot words")
+# was tried three ways on the creator's streams, and each one leaked into the
+# transcript as words nobody said:
+#
+# * a sentence ("A gaming stream with Wardogs, Escape from Tarkov...") -- "Thank
+#   you for watching, and I'll see you in the next one" 133 times in one VOD,
+#   85 convincing enough to pass the filter above, replacing real lines like
+#   "They literally drove a fucking car to kill me";
+# * just the names ("Tarkov, Wardogs.") -- "Wardogs, Wardogs, Wardogs.";
+# * something the creator might say ("Yeah, let's go play Tarkov.") -- "Let's
+#   go play Tarkov." nine times over the Wardogs VOD's game noise.
+#
+# Fixing the spelling afterwards can only change words that were really said.
+
+_EDGE_PUNCTUATION = ".,!?;:\"'"
+
+
+def _bare(text: str) -> str:
+    return text.strip(_EDGE_PUNCTUATION).lower()
+
+
+def fix_spellings(words: list[dict[str, Any]], spellings: dict[str, str]) -> list[dict[str, Any]]:
+    """Replace misheard phrases ("talk of") with what was said ("Tarkov").
+
+    Matches whole words, ignoring case and punctuation; a phrase of several
+    words becomes one word spanning their time, keeping the last word's
+    punctuation ("talk of?" -> "Tarkov?").
+    """
+    if not spellings:
+        return words
+    rules = sorted(((key.lower().split(), value) for key, value in spellings.items() if key.split()),
+                   key=lambda rule: -len(rule[0]))  # longest first
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(words):
+        for heard, meant in rules:
+            n = len(heard)
+            if [_bare(w["w"]) for w in words[i:i + n]] == heard:
+                first, last = words[i], words[i + n - 1]
+                trailing = last["w"][len(last["w"].rstrip(_EDGE_PUNCTUATION)):]
+                out.append({**first, "w": meant + trailing, "e": last["e"],
+                            "p": min(w["p"] for w in words[i:i + n])})
+                i += n
+                break
+        else:
+            out.append(words[i])
+            i += 1
+    return out

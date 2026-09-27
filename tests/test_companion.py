@@ -52,10 +52,12 @@ def pump(companion: Companion, events: int = 1) -> None:
         companion.handle(event_type, data)
 
 
-def rows(settings):
+def rows(settings, *, scenes: bool = False):
+    """The session log, leaving out scene entries unless asked for."""
     conn = init_db(settings.db_path)
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM companion_events ORDER BY id")]
+        return [dict(r) for r in conn.execute("SELECT * FROM companion_events ORDER BY id")
+                if scenes or r["event_type"] != "obs_scene"]
     finally:
         conn.close()
 
@@ -333,3 +335,122 @@ def test_a_refused_password_is_shown_and_retried_later(settings):
     assert companion.status.obs == "password"
     assert "E051" in companion.status.message
     assert time.monotonic() - started < 1.0
+
+
+# --- Scenes: which game is on screen -------------------------------------------------
+
+
+def scene_rows(settings):
+    return [(r["recording_time_sec"], json.loads(r["payload_json"])["game"])
+            for r in rows(settings, scenes=True) if r["event_type"] == "obs_scene"]
+
+
+def test_a_recording_notes_the_game_it_starts_on(rig, settings):
+    obs, _, companion = rig
+    connect(companion)
+    assert companion.game == "Wardogs"
+    obs.set_output("record", True)
+    obs.output_event("record", "STARTED")
+    pump(companion)
+    assert scene_rows(settings) == [(0.0, "Wardogs")]
+
+
+def test_switching_scene_mid_stream_switches_game(rig, settings):
+    """The creator's 21st: Wardogs, then Tarkov, in one recording."""
+    obs, clock, companion = rig
+    settings.companion.scene_games = {"Scene 2": "Escape from Tarkov"}
+    connect(companion)
+    obs.set_output("record", True)
+    obs.output_event("record", "STARTED")
+    pump(companion)
+    clock.advance(3600)
+    obs.set_output("record", True, seconds=3600)
+    obs.switch_scene("Scene 2")
+    pump(companion)
+    assert scene_rows(settings) == [(0.0, "Wardogs"), (3600.0, "Escape from Tarkov")]
+
+
+def test_a_scene_that_isnt_a_game(rig, settings):
+    obs, _, companion = rig
+    connect(companion)
+    obs.set_output("record", True)
+    obs.output_event("record", "STARTED")
+    pump(companion)
+    obs.switch_scene("Brb")
+    pump(companion)
+    assert scene_rows(settings)[-1][1] is None
+    assert companion.game is None
+
+
+def test_scene_changes_outside_a_session_are_not_logged(rig, settings):
+    obs, _, companion = rig
+    connect(companion)
+    obs.switch_scene("League of legends")
+    pump(companion)
+    assert scene_rows(settings) == []
+    assert companion.game == "League of Legends"
+
+
+# --- Marker keys caught by OBS (manual 7.4a) --------------------------------------
+
+
+def test_setting_up_adds_a_hidden_marker_scene_once(rig):
+    from ai_editor.companion import obs_markers
+
+    obs, _, companion = rig
+    connect(companion)
+    added = obs_markers.set_up(companion.client)
+    assert added == ['scene "AI-Editor markers"', 'source "Mark moment"', 'source "Mark Short"']
+    for source in ("Mark moment", "Mark Short"):
+        item = obs.item("AI-Editor markers", source)
+        assert item is not None and item["sceneItemEnabled"] is False  # never visible
+    assert obs.scene == "Wardogs"                    # what's on air is untouched
+    assert obs_markers.set_up(companion.client) == []  # running it again changes nothing
+
+
+def test_a_key_pressed_in_obs_is_a_marker(rig, settings):
+    """League switches off other programs' hotkeys while it's in front; OBS's still work."""
+    from ai_editor.companion import obs_markers
+
+    obs, clock, companion = rig
+    connect(companion)
+    obs_markers.set_up(companion.client)
+    companion._find_obs_markers()
+    while not companion.inbox.empty():   # the set-up's own messages
+        pump(companion)
+    obs.set_output("record", True, seconds=90)
+    obs.output_event("record", "STARTED", path="F:/raw/a.mkv")
+    pump(companion)
+
+    obs.press("Mark moment")
+    pump(companion)                       # the press: logged, then switched back off
+    pump(companion)                       # OBS reporting it switched off: ignored
+    obs.press("Mark moment")              # so the next press works too
+    pump(companion, 2)
+    obs.press("Mark Short")
+    pump(companion, 2)
+
+    kinds = [r["event_type"] for r in rows(settings) if r["event_type"].startswith("marker")]
+    assert kinds == ["marker", "marker", "marker_short"]
+    assert companion.markers == {"moment": 2, "short": 1}
+    assert obs.item("AI-Editor markers", "Mark moment")["sceneItemEnabled"] is False
+
+
+def test_the_companion_leaves_the_keys_alone_when_obs_has_them(rig):
+    obs, _, companion = rig
+    companion.start_hotkeys()
+    assert companion.listener is None and companion.hotkey_problems == []
+    connect(companion)
+    assert "setup-obs --markers" in companion.hotkey_summary()
+
+
+def test_other_scene_items_switching_on_are_not_markers(rig, settings):
+    from ai_editor.companion import obs_markers
+
+    obs, _, companion = rig
+    connect(companion)
+    obs_markers.set_up(companion.client)
+    companion._find_obs_markers()
+    companion.handle("SceneItemEnableStateChanged",
+                     {"sceneName": "Wardogs", "sceneItemId": 1, "sceneItemEnabled": True})
+    assert companion.markers == {"moment": 0, "short": 0}

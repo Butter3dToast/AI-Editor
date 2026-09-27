@@ -23,30 +23,27 @@ import json
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
 from ..config import Clips as ClipSettings
-from .captions import SENTENCE_END, Word
+from .captions import SENTENCE_END, Word, realistic_timing
 
 # Breathing room either side of a word when an edge is moved off it.
 WORD_PAD_BEFORE = 0.12
 WORD_PAD_AFTER = 0.2
 # Edges placed next to a scene change sit this far to its safe side.
 CUT_PAD = 0.05
-# No spoken word takes longer than this. Whisper sometimes stretches a word's
-# start back over the music before it: on the creator's Wardogs stream it
-# reported one "don't" as lasting 12 seconds. The word itself is at the end.
-MAX_WORD_SEC = 1.5
 
 
 def realistic(words: Sequence[Word]) -> list[Word]:
-    """Words sorted, with stretched starts pulled in to at most MAX_WORD_SEC."""
-    return [
-        Word(w.text, max(w.start, w.end - MAX_WORD_SEC), w.end, w.probability)
-        for w in sorted(words, key=lambda w: w.start)
-    ]
+    """Words sorted, with stretched starts pulled in (see captions.realistic_timing).
+
+    Clip edges and captions use the same timing, so an edge judged to be
+    "between words" is between the words the viewer actually hears.
+    """
+    return realistic_timing(words)
 
 
 def word_boundaries(words: Sequence[Word]) -> list[float]:
@@ -130,15 +127,68 @@ def clean_starts(words: Sequence[Word], cuts: Sequence[float], pause: float) -> 
 
 
 def clean_ends(words: Sequence[Word], cuts: Sequence[float], pause: float) -> list[float]:
-    """Moments a clip can end at without cutting someone off."""
+    """Moments a clip can end without cutting anyone off: after they stop talking.
+
+    A full stop alone isn't enough. On the creator's League stream a clip
+    ended on "Keep her alive." with the next sentence starting 0.36 seconds
+    later, and they heard it as "cuts off where I am talking". What a viewer
+    notices is whether the speaker actually paused. Full stops are only a
+    fallback (see sentence_ends).
+    """
     points: list[float] = []
+    starts = [w.start for w in words]
     for i, word in enumerate(words):
         after = words[i + 1] if i + 1 < len(words) else None
         gap = (after.start - word.end) if after else float("inf")
-        if gap >= pause or word.text.rstrip().endswith(SENTENCE_END):
+        if gap >= pause:
             points.append(word.end + min(WORD_PAD_AFTER, gap / 2))
-    points += [cut - CUT_PAD for cut in cuts]
+    for cut in cuts:
+        # Ending at a scene change is only clean if nobody is mid-sentence there.
+        first = bisect.bisect_left(starts, cut - 2.0)
+        talking = any(w.start < cut + pause and w.end > cut - CUT_PAD
+                      for w in words[first:first + 20])
+        if not talking:
+            points.append(cut - CUT_PAD)
     return sorted(points)
+
+
+def sentence_ends(words: Sequence[Word]) -> list[float]:
+    """Just after each full stop: the fallback when there's no pause nearby."""
+    points: list[float] = []
+    for i, word in enumerate(words):
+        if word.text.rstrip().endswith(SENTENCE_END):
+            after = words[i + 1] if i + 1 < len(words) else None
+            gap = (after.start - word.end) if after else float("inf")
+            points.append(word.end + min(WORD_PAD_AFTER, gap / 2))
+    return points
+
+
+# Words closer together than this, with no full stop between, are one phrase.
+SAME_PHRASE_GAP_SEC = 2.0
+
+
+def phrase_start(t: float, words: Sequence[Word], *, low: float, reach: float) -> float:
+    """Move a start back to the beginning of the phrase it would cut into.
+
+    Found on the creator's helicopter clip: the start fell in the short pause
+    after "Hey", so it opened on "Chris, you ready for some fun". Not mid-word,
+    but mid-sentence. Steps back word by word while the previous word is part
+    of the same phrase, at most ``reach`` seconds and never before ``low``.
+    """
+    index = bisect.bisect_left([w.start for w in words], t)
+    if index == 0 or index >= len(words):
+        return t
+    moved = t
+    while index > 0:
+        before, first = words[index - 1], words[index]
+        if before.text.rstrip().endswith(SENTENCE_END) or                 first.start - before.end >= SAME_PHRASE_GAP_SEC:
+            break
+        new_start = before.start - min(WORD_PAD_BEFORE, (before.start - words[index - 2].end) / 2
+                                       if index >= 2 else WORD_PAD_BEFORE)
+        if new_start < low or t - new_start > reach:
+            break
+        moved, index = new_start, index - 1
+    return moved
 
 
 def word_at(t: float, words: Sequence[Word], starts: Sequence[float]) -> Word | None:
@@ -149,15 +199,27 @@ def word_at(t: float, words: Sequence[Word], starts: Sequence[float]) -> Word | 
     return None
 
 
-def _snap(target: float, points: Sequence[float], window: float, *, earlier: bool,
-          low: float, high: float) -> float:
-    """The clean point nearest ``target``, preferring earlier (starts) or later (ends)."""
-    nearby = [p for p in points if abs(p - target) <= window and low <= p <= high]
+def _pick(target: float, points: Sequence[float], window: float, *, earlier: bool,
+          low: float, high: float, ahead: float | None = None) -> float | None:
+    """The clean point nearest ``target``, preferring earlier (starts) or later (ends).
+
+    ``ahead`` lets an end reach further forward than back, so a thought can
+    finish rather than be cut short. None if there's no clean point in reach.
+    """
+    reach_after = window if ahead is None else ahead
+    nearby = [p for p in points
+              if target - window <= p <= target + reach_after and low <= p <= high]
     if not nearby:
-        return target
+        return None
     preferred = [p for p in nearby if (p <= target if earlier else p >= target)]
     pool = preferred or nearby
     return min(pool, key=lambda p: abs(p - target))
+
+
+def _snap(target: float, points: Sequence[float], window: float, *, earlier: bool,
+          low: float, high: float) -> float:
+    found = _pick(target, points, window, earlier=earlier, low=low, high=high)
+    return target if found is None else found
 
 
 def walls(cuts: Sequence[float], *, busy_count: int, window: float) -> list[float]:
@@ -190,7 +252,7 @@ def _eventful_before(score: np.ndarray, cut: float, settings: ClipSettings) -> b
     return bool(window.size) and float(window.mean()) >= settings.min_score
 
 
-def _nearest_bound(bounds: Sequence[float], t: float, low: float, high: float,
+def nearest_bound(bounds: Sequence[float], t: float, low: float, high: float,
                    *, outward: int) -> float:
     """The closest word boundary to ``t`` within [low, high], trying outward first."""
     index = bisect.bisect_left(bounds, t)
@@ -204,6 +266,29 @@ def _nearest_bound(bounds: Sequence[float], t: float, low: float, high: float,
     return t
 
 
+def fight_continues(action: np.ndarray, end: float, settings: ClipSettings) -> float | None:
+    """Where the fight around ``end`` really finishes, or None if it already had.
+
+    Shooting that comes back within fight_gap_sec is the same fight, so the
+    end follows it burst by burst, up to fight_extend_sec later.
+    """
+    if action is None or not action.size:
+        return None
+    limit = min(float(len(action)), end + settings.fight_extend_sec)
+    t = end
+    extended = False
+    while t < limit:
+        lo, hi = int(t), int(min(limit, t + settings.fight_gap_sec))
+        hits = np.nonzero(action[lo:hi] >= settings.fight_level)[0]
+        if not hits.size:
+            break
+        last = float(lo + int(hits[-1]) + 1)
+        if last <= t:
+            break
+        t, extended = min(limit, last), True
+    return t + 1.0 if extended else None
+
+
 def fit_edges(
     core: tuple[int, int],
     peak: int,
@@ -213,11 +298,21 @@ def fit_edges(
     duration: float,
     settings: ClipSettings,
     score: np.ndarray | None = None,
+    action: np.ndarray | None = None,
+    dark: np.ndarray | None = None,
 ) -> tuple[float, float]:
-    """Where a clip around this core should start and end."""
+    """Where a clip around this core should start and end.
+
+    ``action`` is gunfire/explosions per second; with it, a clip doesn't end
+    while the fight is still going. ``dark`` marks black-screen seconds; a
+    clip doesn't open on one or run on into one.
+    """
     core_start, core_end = float(core[0]), float(core[1] + 1)
     start = core_start - settings.lead_in_sec
     end = core_end + settings.tail_sec
+    fight_end = fight_continues(action, end, settings) if action is not None else None
+    if fight_end is not None:
+        end = fight_end
 
     # Never open on, or run on into, another scene: menus, loading, scoreboard.
     # Camera cuts inside a cutscene don't count (see walls()); every cut is
@@ -237,23 +332,55 @@ def fit_edges(
     after = [c for c in hard if core_end <= c < end]
     if after:
         ceiling = after[0] - CUT_PAD
+    if dark is not None and dark.size:
+        # Black screens (loading, respawning, a scene being set up) work like
+        # a menu: start after the last one in the lead-in, stop at the first
+        # one after the moment.
+        lo, hi = max(0, int(start)), min(len(dark), int(core_start))
+        black_before = np.nonzero(dark[lo:hi])[0]
+        if black_before.size:
+            floor = max(floor, float(lo + black_before[-1] + 1))
+        lo, hi = max(0, int(np.ceil(core_end))), min(len(dark), int(np.ceil(end)))
+        black_after = np.nonzero(dark[lo:hi])[0]
+        if black_after.size:
+            ceiling = min(ceiling, float(lo + black_after[0]))
     start, end = max(start, floor), min(end, ceiling)
 
     # Length limits. Too long: keep the part around the peak, with more
-    # before it than after (the build-up matters more than the aftermath).
+    # before it than after (the build-up matters more than the aftermath) --
+    # unless it's a fight still going at the end of the moment. Then the
+    # payoff (the kill) is at the end, so keep the end and start later, as
+    # long as the peak stays in. The creator asked for this twice on the same
+    # Wardogs clip: "take a later version of that clip ... you would hear me
+    # saying I killed someone".
+    fighting_at_end = action is not None and action.size > 0 and float(
+        action[max(0, int(core_end) - int(settings.fight_gap_sec)):int(core_end)].max(initial=0.0)
+    ) >= settings.fight_level
     if end - start > settings.max_length_sec:
-        start = max(start, min(float(peak) - settings.max_length_sec * 0.65,
-                               end - settings.max_length_sec))
-        end = start + settings.max_length_sec
+        if fighting_at_end or (fight_end is not None and end == fight_end):
+            start = max(start, min(end - settings.max_length_sec, float(peak) - 5.0))
+        else:
+            start = max(start, min(float(peak) - settings.max_length_sec * 0.65,
+                                   end - settings.max_length_sec))
+        end = min(end, start + settings.max_length_sec)
     if end - start < settings.min_length_sec:
         missing = settings.min_length_sec - (end - start)
         end = min(ceiling, end + missing)
         start = max(floor, end - settings.min_length_sec)
 
     starts = clean_starts(words, cuts, settings.pause_sec)
-    ends = clean_ends(words, cuts, settings.pause_sec)
+    ends = clean_ends(words, cuts, settings.end_pause_sec)
     start = _snap(start, starts, settings.snap_sec, earlier=True, low=floor, high=core_start)
-    end = _snap(end, ends, settings.snap_sec, earlier=False, low=core_end, high=ceiling)
+    start = phrase_start(start, words, low=floor, reach=settings.snap_sec)
+    # Ends, best first: where the speaker stops talking (reaching further
+    # forward, so they can finish), then just after a full stop, then (by the
+    # guard below) simply between two words.
+    chosen_end = _pick(end, ends, settings.snap_sec, earlier=False, low=core_end, high=ceiling,
+                       ahead=settings.end_extend_sec)
+    if chosen_end is None:
+        chosen_end = _pick(end, sentence_ends(words), settings.snap_sec, earlier=False,
+                           low=core_end, high=ceiling)
+    end = end if chosen_end is None else chosen_end
 
     # Last guard: whatever happened above, never inside a word. Move to the
     # nearest word boundary, outward if the scene limits allow it, inward if
@@ -266,15 +393,15 @@ def fit_edges(
     word_starts = [w.start for w in words]
     bounds = word_boundaries(words)
     if word_at(start, words, word_starts):
-        start = _nearest_bound(bounds, start, floor - CUT_PAD, core_start, outward=-1)
+        start = nearest_bound(bounds, start, floor - CUT_PAD, core_start, outward=-1)
     if word_at(end, words, word_starts):
-        end = _nearest_bound(bounds, end, core_end, ceiling + CUT_PAD, outward=+1)
+        end = nearest_bound(bounds, end, core_end, ceiling + CUT_PAD, outward=+1)
     # Last resort, when no clean point exists outside the core: trim into it.
     # A slightly shorter clip is better than one that cuts someone off.
     if word_at(start, words, word_starts):
-        start = _nearest_bound(bounds, start, floor - CUT_PAD, end, outward=+1)
+        start = nearest_bound(bounds, start, floor - CUT_PAD, end, outward=+1)
     if word_at(end, words, word_starts):
-        end = _nearest_bound(bounds, end, start, ceiling + CUT_PAD, outward=-1)
+        end = nearest_bound(bounds, end, start, ceiling + CUT_PAD, outward=-1)
 
     return max(0.0, round(start, 3)), min(duration, round(end, 3))
 
@@ -289,6 +416,8 @@ def build_clips(
     cuts: Sequence[float],
     duration: float,
     settings: ClipSettings,
+    action: np.ndarray | None = None,
+    dark: np.ndarray | None = None,
 ) -> list[Clip]:
     """All candidate clips in a recording, in time order."""
     words = realistic(words)
@@ -297,7 +426,8 @@ def build_clips(
         score, min_score=settings.min_score, core_fraction=settings.core_fraction
     ):
         start, end = fit_edges((left, right), peak, words=words, cuts=cuts,
-                               duration=duration, settings=settings, score=score)
+                               duration=duration, settings=settings, score=score, action=action,
+                               dark=dark)
         if end - start < 1.0:
             continue
         clip = Clip(start, end, peak, round(value, 3), (left, right))
@@ -345,8 +475,13 @@ def store_clips(
     *,
     signals: dict[str, np.ndarray],
     words: Sequence[Word],
+    game_of: Callable[[float], str | None] | None = None,
 ) -> int:
-    """Replace a recording's automatic clips. Clips you rated, pinned or used are kept."""
+    """Replace a recording's automatic clips. Clips you rated, pinned or used are kept.
+
+    ``game_of`` says which game was on screen at a given second, when the
+    Stream Companion logged it; each clip records the game at its moment.
+    """
     conn.execute(
         "DELETE FROM clips WHERE recording_id = ? AND user_rating IS NULL AND pinned = 0 "
         "AND used_in_json IS NULL",
@@ -358,6 +493,11 @@ def store_clips(
         summary = {name: round(float(values[a:b].max()), 3)
                    for name, values in signals.items() if values[a:b].size and values[a:b].max() > 0}
         summary["reasons"] = [name for name, _ in clip.reasons]
+        # Where the moment itself is, so a video can trim the clip down to it.
+        summary["peak"] = clip.peak_sec
+        summary["core"] = list(clip.core)
+        if game_of is not None:
+            summary["game"] = game_of(clip.peak_sec)
         text = " ".join(w.text for w in words if w.start >= clip.start and w.end <= clip.end)
         conn.execute(
             "INSERT OR IGNORE INTO clips (clip_id, recording_id, start_sec, end_sec, score, "
@@ -367,6 +507,41 @@ def store_clips(
         )
     conn.commit()
     return len(clips)
+
+
+def refresh_clips(conn: sqlite3.Connection, settings, row: sqlite3.Row):
+    """Score a recording and cut its candidate clips. Instant: nothing is re-analysed.
+
+    Returns (clips, score result), or (None, None) if there is nothing to score.
+    """
+    from .hype import build, dark_seconds, load_signals
+    from .pipeline import load_scene_cuts
+
+    seconds = int(row["duration_sec"] or 0)
+    if seconds <= 0:
+        return None, None
+    result = build(conn, settings, row["id"], seconds)
+    words = load_words(conn, row["id"])
+    signals = load_signals(conn, row["id"], len(result.score))
+    clips = build_clips(result.score, words=words, cuts=load_scene_cuts(settings, row),
+                        duration=float(row["duration_sec"]), settings=settings.clips,
+                        action=action_signal(signals),
+                        dark=dark_seconds(signals, seconds, settings.scoring.dark_level,
+                                          settings.scoring.dark_min_sec))
+    for clip in clips:
+        clip.reasons = explain(clip, result.parts)
+    from ..companion.link import game_at, game_timeline
+
+    timeline = game_timeline(conn, row["id"])
+    game_of = (lambda t: game_at(timeline, t)) if timeline else None
+    store_clips(conn, row["id"], clips, signals=signals, words=words, game_of=game_of)
+    return clips, result
+
+
+def action_signal(signals: dict[str, np.ndarray]) -> np.ndarray | None:
+    """Gunfire or explosions, whichever is louder, second by second."""
+    found = [signals[name] for name in ("gunfire", "explosion") if name in signals]
+    return np.maximum.reduce(found) if found else None
 
 
 def load_words(conn: sqlite3.Connection, recording_id: int) -> list[Word]:

@@ -132,12 +132,14 @@ def test_the_same_kind_twice_is_not_a_combination(settings, conn):
 # --- The score -------------------------------------------------------------
 
 
-def test_a_marked_moment_beats_a_noisy_one(settings, conn):
+def test_a_marked_moment_is_at_the_top_even_beside_a_noisy_one(settings, conn):
+    """Both reach the top; marked clips always go into a video and lead for the teaser."""
     put(conn, "marker", {300: 1.0})
     put(conn, "gunfire", {t: 0.9 for t in range(100, 140)})
     put(conn, "energy_z", {t: 3.0 for t in range(100, 140)})
     result = build(conn, settings, 1, SECONDS)
-    assert result.score[295] > result.score[120]
+    assert result.score[295] >= 0.99
+    assert result.score[295] >= result.score[120]
 
 
 def test_the_best_moment_scores_one(settings, conn):
@@ -214,3 +216,54 @@ def test_why_explains_a_moment(settings, conn):
 def test_an_empty_recording_scores_nothing(settings, conn):
     result = hype_score({}, settings, SECONDS)
     assert result.score.sum() == 0.0
+
+
+def test_a_black_screen_is_never_a_moment(settings, conn):
+    """Wardogs: 48 s of black while setting up an OBS scene, with talking over it."""
+    put(conn, "laughter", {t: 0.9 for t in range(100, 150)})
+    put(conn, "brightness", {t: (16.0 if t < 130 else 90.0) for t in range(SECONDS)})
+    result = build(conn, settings, 1, SECONDS)
+    assert result.score[110] == 0.0
+    assert result.score[140] > 0.5
+
+
+def test_without_a_brightness_measurement_nothing_counts_as_black(settings, conn):
+    put(conn, "laughter", {t: 0.9 for t in range(100, 150)})
+    assert build(conn, settings, 1, SECONDS).score[120] > 0.5
+
+
+def test_a_flicker_is_not_a_black_screen():
+    """Wardogs: one dark frame every 6 s chopped a conversation into 4-second clips."""
+    from ai_editor.analysis.hype import dark_seconds
+
+    brightness = np.full(60, 54.0, dtype=np.float32)
+    brightness[[6, 12, 18]] = 21.0          # single-second flickers
+    brightness[30:35] = 16.0                # a real 5-second loading screen
+    dark = dark_seconds({"brightness": brightness}, 60, 24.0, min_run=3)
+    assert np.nonzero(dark)[0].tolist() == [30, 31, 32, 33, 34]
+
+
+def test_a_crash_blackout_is_part_of_the_moment():
+    """Wardogs: 5 s of black when the helicopter crashed, the creator talking
+    through it. Only a long black screen (loading, setting up) counts."""
+    from ai_editor.analysis.hype import dark_seconds
+    from ai_editor.config import Scoring
+
+    brightness = np.full(120, 50.0, dtype=np.float32)
+    brightness[20:25] = 17.0     # the crash
+    brightness[60:108] = 16.0    # 48 s setting up an OBS scene
+    dark = dark_seconds({"brightness": brightness}, 120, 24.0, Scoring().dark_min_sec)
+    assert not dark[20:25].any()
+    assert dark[60:108].all()
+
+
+def test_markers_go_on_top_without_flattening_everything_else(settings, conn):
+    """League, first stream with the Companion: 8 markers pushed every other
+    moment under the quality bar -- 8 clips from 2h15m, all of them marked."""
+    put(conn, "laughter", {t: 0.9 for t in range(100, 120)})   # a big unmarked laugh
+    put(conn, "laughter", {t: 0.45 for t in range(300, 320)})  # a smaller one
+    put(conn, "marker", {400: 1.0})
+    score = build(conn, settings, 1, SECONDS).score
+    assert score[110] > 0.9                    # the best unmarked moment still scores as the best
+    assert 0.3 < score[310] < score[110]       # the rest keep their order
+    assert score[395] >= 0.99                  # your marker is at the top

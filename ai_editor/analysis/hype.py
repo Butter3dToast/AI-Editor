@@ -145,6 +145,28 @@ def combination_bonus(
     return (bonus * np.maximum(count - 1, 0)).astype(np.float32), count
 
 
+def dark_seconds(signals: dict[str, np.ndarray], seconds: int, level: float,
+                 min_run: int = 1) -> np.ndarray | None:
+    """True for each second the picture is black, or None if brightness wasn't measured.
+
+    Only stretches at least ``min_run`` seconds long count: a loading screen
+    lasts a while; a flicker, or the screen going black for a moment when you
+    crash, doesn't. On the creator's Wardogs stream one dark frame every 6
+    seconds (a blinking effect) chopped a conversation into three 4-second
+    clips, and a 5-second crash blackout cut the crash off its own clip.
+    """
+    brightness = signals.get("brightness")
+    if brightness is None or not brightness.size:
+        return None
+    dark = np.resize(brightness, seconds) <= level
+    if min_run > 1 and dark.any():
+        edges = np.diff(np.concatenate(([0], dark.astype(np.int8), [0])))
+        for begin, finish in zip(np.nonzero(edges == 1)[0], np.nonzero(edges == -1)[0]):
+            if finish - begin < min_run:
+                dark[begin:finish] = False
+    return dark
+
+
 def smooth(values: np.ndarray, window_sec: float) -> np.ndarray:
     """Average over a few seconds, so one odd second can't make a peak."""
     window = max(1, int(round(window_sec)))
@@ -196,17 +218,36 @@ def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int)
         parts[COMBINATION_PART] = bonus
         total += bonus
 
-    total = smooth(total, scoring.smooth_sec)
-    # Nothing worth keeping scores below zero; the silence weight is a penalty,
-    # not a reason for a moment to rank below "nothing happened at all".
-    total = np.maximum(total, 0.0)
+    marked = sum((parts[name] for name in MARKER_SIGNALS if name in parts),
+                 np.zeros(seconds, dtype=np.float32))
+    dark = dark_seconds(signals, seconds, scoring.dark_level, scoring.dark_min_sec)
+
+    def settle(values: np.ndarray) -> np.ndarray:
+        values = smooth(values, scoring.smooth_sec)
+        # Nothing worth keeping scores below zero; the silence weight is a
+        # penalty, not a reason to rank below "nothing happened at all".
+        values = np.maximum(values, 0.0)
+        # A black screen is never a moment, whatever is said over it (a
+        # Wardogs clip was 48 s of black while the creator set up a scene).
+        if dark is not None:
+            values[dark] = 0.0
+        return values
+
+    total, unmarked = settle(total), settle(total - marked)
     # Scored against this recording's own best moment, so a quiet Let's Play
     # and a loud stream are both usable, and 1.0 always means "its best".
     # Measured on the creator's 1h52m Wardogs stream: scaling to a percentile
     # instead (even 99.5) flattened the top of the list -- eleven moments all
     # scored exactly 1.00 and the ranking said nothing. The single best second
     # is the honest ceiling. Smoothing has already removed lone odd seconds.
-    ceiling = float(total.max()) if total.size else 0.0
+    #
+    # The best *unmarked* moment sets that ceiling; your markers then go on
+    # top. On the creator's first League stream with the Companion, 8 markers
+    # set the ceiling instead and pushed every other moment under the quality
+    # bar: 8 clips from 2h15m, all of them marked.
+    ceiling = float(unmarked.max()) if unmarked.size else 0.0
+    if ceiling <= 1e-6:
+        ceiling = float(total.max()) if total.size else 0.0
     if ceiling > 1e-6:
         total = np.clip(total / ceiling, 0.0, 1.0)
     return HypeResult(score=total.astype(np.float32), parts=parts, missing=missing)

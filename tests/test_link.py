@@ -131,3 +131,51 @@ def test_a_recording_is_dated_from_the_file_when_nothing_else_says(tmp_path):
     started = started_at_of(path, duration_sec=600)
     finished = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     assert started == finished - timedelta(seconds=600)
+
+
+# --- Games from OBS scenes ------------------------------------------------------------
+
+
+def add_scene(conn, session, *, at, record_sec, game):
+    conn.execute(
+        "INSERT INTO companion_events (session_id, event_type, wall_clock, recording_time_sec, "
+        "payload_json) VALUES (?, 'obs_scene', ?, ?, ?)",
+        (session, at.isoformat(timespec="milliseconds"), record_sec, json.dumps({"game": game})))
+    conn.commit()
+
+
+def test_a_mixed_stream_knows_each_game_and_its_main_one(conn, settings):
+    from ai_editor.companion.link import game_at, game_timeline
+
+    a_session(conn, markers=())
+    add_scene(conn, "S1", at=T0, record_sec=0.0, game="Wardogs")
+    add_scene(conn, "S1", at=T0 + timedelta(seconds=1000), record_sec=1000.0, game="Escape from Tarkov")
+    recording_id = add_recording(conn, "F:/raw/a.mkv", duration_sec=3000)
+    conn.execute("UPDATE recordings SET game = NULL WHERE id = ?", (recording_id,))
+    match = link_recording(conn, recording_id)
+    assert match.games == ["Wardogs", "Escape from Tarkov"]
+    timeline = game_timeline(conn, recording_id)
+    assert game_at(timeline, 500) == "Wardogs" and game_at(timeline, 1500) == "Escape from Tarkov"
+    # Tarkov was played longer, so it becomes the recording's game.
+    assert conn.execute("SELECT game FROM recordings WHERE id = ?", (recording_id,)).fetchone()[0] \
+        == "Escape from Tarkov"
+
+
+def test_a_game_given_at_import_is_kept(conn, settings):
+    a_session(conn, markers=())
+    add_scene(conn, "S1", at=T0, record_sec=0.0, game="Escape from Tarkov")
+    recording_id = add_recording(conn, "F:/raw/a.mkv")
+    conn.execute("UPDATE recordings SET game = 'Wardogs' WHERE id = ?", (recording_id,))
+    conn.commit()
+    link_recording(conn, recording_id)
+    assert conn.execute("SELECT game FROM recordings WHERE id = ?", (recording_id,)).fetchone()[0] == "Wardogs"
+
+
+def test_scene_names_map_to_games():
+    from ai_editor.games import game_for_scene
+
+    assert game_for_scene("Wardogs") == "Wardogs"
+    assert game_for_scene("League of legends") == "League of Legends"
+    assert game_for_scene("The Blood Of Dawnwalker") == "The Blood of Dawnwalker"
+    assert game_for_scene("Brb") is None
+    assert game_for_scene("Scene 2", {"scene 2": "tarkov"}) == "Escape from Tarkov"

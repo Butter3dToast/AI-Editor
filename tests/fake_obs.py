@@ -47,6 +47,10 @@ class FakeObs:
             {"inputName": "Game", "inputKind": "wasapi_process_output_capture"},
         ]
         self.muted: set[str] = set()
+        self.scene = "Wardogs"  # the creator has one OBS scene per game
+        # scene name -> its items: {"sceneItemId", "sourceName", "sceneItemEnabled"}
+        self.scenes: dict[str, list[dict[str, Any]]] = {"Wardogs": [], "League of legends": []}
+        self._next_item = 1
 
     def factory(self, url: str, timeout: float) -> "FakeTransport":
         if not self.running:
@@ -74,6 +78,29 @@ class FakeObs:
             data["outputPath"] = path
         self.emit("RecordStateChanged" if output == "record" else "StreamStateChanged", data)
 
+    def switch_scene(self, name: str) -> None:
+        self.scene = name
+        self.emit("CurrentProgramSceneChanged", {"sceneName": name})
+
+    def press(self, source: str) -> None:
+        """The creator pressed the OBS hotkey "Show '<source>'"."""
+        for scene, items in self.scenes.items():
+            for item in items:
+                if item["sourceName"] == source and not item["sceneItemEnabled"]:
+                    item["sceneItemEnabled"] = True
+                    self.emit("SceneItemEnableStateChanged", {
+                        "sceneName": scene, "sceneItemId": item["sceneItemId"],
+                        "sceneItemEnabled": True})
+
+    def item(self, scene: str, source: str) -> dict[str, Any] | None:
+        return next((i for i in self.scenes.get(scene, []) if i["sourceName"] == source), None)
+
+    def _add_item(self, scene: str, source: str, enabled: bool) -> dict[str, Any]:
+        item = {"sceneItemId": self._next_item, "sourceName": source, "sceneItemEnabled": enabled}
+        self._next_item += 1
+        self.scenes[scene].append(item)
+        return item
+
     def drop(self) -> None:
         """OBS closed, or the connection broke."""
         self.transports[-1].close_from_server(1001)
@@ -93,10 +120,47 @@ class FakeObs:
             return True, dict(self.outputs["record"])
         if request_type == "GetStreamStatus":
             return True, dict(self.outputs["stream"])
+        if request_type == "GetCurrentProgramScene":
+            return True, {"sceneName": self.scene, "currentProgramSceneName": self.scene}
         if request_type == "GetInputList":
             return True, {"inputs": list(self.inputs)}
         if request_type == "GetInputMute":
             return True, {"inputMuted": data.get("inputName") in self.muted}
+        if request_type == "GetSceneList":
+            return True, {"scenes": [{"sceneName": name} for name in self.scenes]}
+        if request_type == "CreateScene":
+            if data["sceneName"] in self.scenes:
+                return False, {}
+            self.scenes[data["sceneName"]] = []
+            return True, {}
+        if request_type == "GetInputKindList":
+            return True, {"inputKinds": ["wasapi_input_capture", "color_source_v3", "image_source"]}
+        if request_type == "CreateInput":
+            if any(i["inputName"] == data["inputName"] for i in self.inputs):
+                return False, {}
+            self.inputs.append({"inputName": data["inputName"], "inputKind": data["inputKind"],
+                                "inputSettings": data.get("inputSettings")})
+            item = self._add_item(data["sceneName"], data["inputName"],
+                                  data.get("sceneItemEnabled", True))
+            return True, {"sceneItemId": item["sceneItemId"]}
+        if request_type == "CreateSceneItem":
+            item = self._add_item(data["sceneName"], data["sourceName"],
+                                  data.get("sceneItemEnabled", True))
+            return True, {"sceneItemId": item["sceneItemId"]}
+        if request_type == "GetSceneItemId":
+            item = self.item(data["sceneName"], data["sourceName"])
+            return (True, {"sceneItemId": item["sceneItemId"]}) if item else (False, {})
+        if request_type == "SetSceneItemEnabled":
+            for item in self.scenes.get(data["sceneName"], []):
+                if item["sceneItemId"] == data["sceneItemId"]:
+                    changed = item["sceneItemEnabled"] != data["sceneItemEnabled"]
+                    item["sceneItemEnabled"] = data["sceneItemEnabled"]
+                    if changed:
+                        self.emit("SceneItemEnableStateChanged", {
+                            "sceneName": data["sceneName"], "sceneItemId": item["sceneItemId"],
+                            "sceneItemEnabled": item["sceneItemEnabled"]})
+                    return True, {}
+            return False, {}
         return False, {}
 
 

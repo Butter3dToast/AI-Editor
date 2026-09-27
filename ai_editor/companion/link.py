@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,6 +41,7 @@ class SessionMatch:
     matched_by: str  # "file" or "time"
     markers: int = 0
     short_markers: int = 0
+    games: list[str] = field(default_factory=list)  # in the order they were played
 
     @property
     def marker_total(self) -> int:
@@ -170,10 +171,53 @@ def link_recording(conn: sqlite3.Connection, recording_id: int) -> SessionMatch 
             match.markers += 1
         else:
             match.short_markers += 1
+
+    # The games played, from the OBS scenes. Fill in the recording's game if
+    # none was given at import: the one played longest.
+    timeline = game_timeline(conn, recording_id)
+    match.games = list(dict.fromkeys(g for _, g in timeline if g))
+    main = main_game(timeline, float(row["duration_sec"] or 0))
+    if main:
+        conn.execute("UPDATE recordings SET game = ? WHERE id = ? AND game IS NULL",
+                     (main, recording_id))
     conn.commit()
     log.info("Recording #%s matched session %s by %s (%d markers)",
              recording_id, match.session_id, match.matched_by, match.marker_total)
     return match
+
+
+def game_timeline(conn: sqlite3.Connection, recording_id: int) -> list[tuple[float, str | None]]:
+    """(seconds into the recording, game) at each OBS scene change, in order.
+
+    The creator has one OBS scene per game, so the Companion knows when a
+    stream moves from Wardogs to Tarkov. Empty if it wasn't running.
+    """
+    rows = conn.execute(
+        "SELECT recording_time_sec, payload_json FROM companion_events WHERE recording_id = ? "
+        "AND event_type = 'obs_scene' AND recording_time_sec IS NOT NULL ORDER BY recording_time_sec, id",
+        (recording_id,),
+    ).fetchall()
+    return [(float(r["recording_time_sec"]), json.loads(r["payload_json"] or "{}").get("game"))
+            for r in rows]
+
+
+def game_at(timeline: list[tuple[float, str | None]], t: float) -> str | None:
+    """The game on screen at ``t`` seconds, per the timeline."""
+    current = timeline[0][1] if timeline else None
+    for at, game in timeline:
+        if at > t:
+            break
+        current = game
+    return current
+
+
+def main_game(timeline: list[tuple[float, str | None]], duration: float) -> str | None:
+    """The game played for longest in a recording."""
+    totals: dict[str, float] = {}
+    for (at, game), nxt in zip(timeline, timeline[1:] + [(duration, None)]):
+        if game:
+            totals[game] = totals.get(game, 0.0) + max(0.0, nxt[0] - at)
+    return max(totals, key=totals.get) if totals else None
 
 
 def stream_offset(conn: sqlite3.Connection, recording_id: int) -> float | None:

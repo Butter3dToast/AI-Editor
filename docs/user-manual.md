@@ -306,6 +306,22 @@ Our standard track setup:
 
 The password is only saved once OBS accepts it, in `config/settings.local.yaml`. That file stays on your PC: it's never uploaded to GitHub, and it isn't part of `settings.yaml`. The password itself never travels, even to OBS: AI-Editor answers a one-time question from OBS that proves it knows the password.
 
+### 7.4a Marker keys in OBS (so they work inside games)
+
+Some games, League of Legends among them, stop other programs' hotkeys from working while the game is in front: on your first League stream with the Companion, Numpad + only worked after alt-tabbing out. OBS's own hotkeys keep working in games, so OBS catches your marker keys and passes them on to the Companion.
+
+1. With OBS open, run `ai-editor setup-obs --markers`. It adds a scene called **AI-Editor markers** with two empty, invisible sources: **Mark moment** and **Mark Short**. Running it again changes nothing.
+2. In OBS: **File → Settings → Hotkeys**, and type **Mark** in the filter box at the top.
+3. Under **AI-Editor markers**, click the box next to **Show 'Mark moment'** and press **Numpad +**.
+4. Click the box next to **Show 'Mark Short'** and press **Numpad −**.
+5. Leave both **Hide** boxes empty (the Companion switches them back off itself) and click **OK**.
+
+The **AI-Editor markers** scene is never put on air, so viewers can't see or hear anything. Don't add it to your other scenes, and don't switch to it. You can delete it any time; the Companion's **Keys** line will then tell you it's missing.
+
+**Why this is safe for your accounts:** OBS catches the key exactly as it does for your other OBS hotkeys, and the Companion only hears from OBS. AI-Editor has no keyboard code involved at all.
+
+If you'd rather the Companion catch the keys itself (for games that don't block it), set `marker_keys: windows` under `companion:` in `config/settings.yaml`.
+
 ### 7.5 Record while you stream (strongly recommended)
 
 Twitch VODs only keep one mixed audio track and are lower quality. Recording locally at the same time gives AI-Editor much better material. Your RTX 4070 Ti can stream and record at the same time.
@@ -350,27 +366,47 @@ Stream Companion is a small app that runs in the background while you stream or 
 |---|---|
 | **OBS** | **Connected (OBS 32.x)**, or **Not connected**, which is normal while OBS is closed. It checks again every 5 seconds. |
 | **Recording** / **Streaming** | **On since 21:30:05**, or **Off**. |
+| **Keys** | **set in OBS: Show 'Mark moment', Show 'Mark Short'** when chapter 7.4a is done. If it says **not set up in OBS yet**, do 7.4a. |
 | **Session** | The session name, from the moment you record or go live. |
+| **Game** | The game on screen, from your OBS scene (see 8.1b). **—** on a scene that isn't a game, like "Brb". |
 | **Logged** | How many things it has noted since you started it. |
 
 4. When you've finished, click that window first so it has focus, then press **Ctrl+C**. (Ctrl+C only reaches a terminal window that has focus. The tray icon in 8.1 replaces this when the app window arrives.)
 
 It uses next to no computer power: it sleeps until OBS tells it something changed.
 
+#### 8.1b Which game you're playing
+
+If you have **one OBS scene per game**, the Companion notes every time you switch scene. So when you play Wardogs and then switch to Tarkov halfway through a stream, AI-Editor knows which part of the recording is which game. It uses that to:
+
+- label each clip with its game (a Tarkov moment in a Wardogs stream stays a Tarkov moment);
+- include that recording when you make highlights of **either** game;
+- set the recording's game to whichever was played longest, if you didn't give one at import.
+
+A scene named after its game is recognised on its own: "Wardogs", "Escape From Tarkov", "League of legends" and "The Blood Of Dawnwalker" all work, whatever the capital letters. Scenes like "Brb", "Start With Timer" or "Ending Screen" aren't a game, and nothing changes while they're showing.
+
+If a scene's name doesn't say the game (say, "Scene 2"), tell AI-Editor in `config/settings.yaml`:
+
+```yaml
+companion:
+  scene_games:
+    Scene 2: Escape from Tarkov
+```
+
 ### 8.2 Using markers
 
 - Press **Mark moment** (**Numpad +**) right after something great happens. You don't need to be precise; AI-Editor looks at the moments leading up to your press.
 - Press **Mark Short-worthy** (**Numpad −**) when a moment would make a great Short.
-- You'll hear a quiet click to confirm, and the **Marked** line in the Companion counts up.
+- The **Marked** line in the Companion counts up. There's no sound: see below.
 - Marking while OBS isn't recording still saves the marker, but there's no footage to attach it to.
 
-**Your viewers never hear the click.** Before playing it, the Companion asks OBS what it's capturing. If any **Desktop Audio** source is live and unmuted, that source records everything your PC plays, so the click stays silent and the Companion tells you why. With the per-program capture setup in chapter 7.3, the click is safe and plays normally. You can also switch it off under Companion settings.
+**No confirmation sound, on purpose.** There used to be a click when you marked. On your 26 Sep League stream it reached viewers through your **microphone**: a stand-up mic hears your headphones or speakers, and the compressor on it lifts quiet sounds. Nothing in OBS's settings can show that happening, so the click is off by default and should stay off. Marking through OBS (chapter 7.4a) is reliable without it. If you ever switch it back on (`confirmation_sound: true`), the Companion still keeps it silent while OBS captures Desktop Audio, but it can't protect you from the mic hearing it.
 
 Markers are the strongest signal AI-Editor has. Even a few per stream noticeably improves highlights.
 
 **What happens to them:** when you import the recording, AI-Editor works out which session produced it — from the file OBS was writing, or from the time if the file was renamed or converted. Your markers then appear at the top of the moments list as **"You marked these"**, with their time in that recording. If a session was never matched, the **In library** column in `ai-editor sessions` stays empty.
 
-To check the sound before a stream: `ai-editor companion --test-sound` plays both marker sounds.
+`ai-editor companion --test-sound` plays both marker sounds, only useful if you switch the sound back on.
 
 ### 8.3 League of Legends events
 
@@ -527,7 +563,7 @@ From the command line: `ai-editor attach-chat <recording number> "<VOD link>"`.
 
 ### 10.4 Games that show up in one session
 
-If you switch games during a stream, open the recording in the Library, click **Game sections**, and mark where each game starts. AI-Editor can suggest these automatically.
+If the Stream Companion was running and you have one OBS scene per game, this is automatic: see 8.1b. Otherwise, open the recording in the Library, click **Game sections**, and mark where each game starts.
 
 ---
 
@@ -570,6 +606,7 @@ For each recording AI-Editor:
    - **Listening for laughter, shouts, gunfire** — recognises those sounds second by second.
    - **Measuring loudness** — how loud each second is, to find silence and sudden spikes.
    - **Finding scene changes** — where the picture cuts to a menu, loading screen or scoreboard, so clips don't run into one. About 3 minutes per 2 hours.
+   - **Checking for black screens** — how bright the picture is each second, so a black screen never becomes a clip. About a minute per 2 hours.
 5. When it's done, AI-Editor shows **what it heard**: how much talking, how much near-silence, and a list of **moments to check** with times such as `0:41:07`.
 
 **Checking the results yourself**
@@ -631,7 +668,7 @@ The first lists the clips, best first, with start and end, length, score, why it
 2. **Context before:** 30 seconds before the core, because the cause of a reaction comes before it — the joke before the laugh, the fight before the kill.
 3. **After:** 4 seconds, so the reaction finishes.
 4. **Scene changes:** a clip never opens on, or runs on into, a menu, loading screen, respawn screen or scoreboard. Cutscenes cut between camera angles every few seconds, and those don't stop a clip. Neither does a change with action right before it — getting downed mid-fight is a scene change too, and the fight belongs in the clip.
-5. **Clean edges:** each edge moves up to 6 seconds to land on a pause or the end of a sentence, and **never inside a word**. If you're talking straight through a scene change, the half-word is dropped rather than cut in two.
+5. **Clean edges:** a clip ends where you **stop talking** — at least a second of quiet, running up to 10 seconds longer if that's what it takes, rather than stopping on a full stop while you carry on. Starts move up to 6 seconds to land on a pause or the start of a sentence. Neither edge is ever inside a word. If you're talking straight through a scene change, the half-word is dropped rather than cut in two.
 6. Clips are 15–90 seconds. The recipes trim them further to fit each video.
 
 Clips you've rated, pinned or used in a video are never replaced when clips are rebuilt.
@@ -818,6 +855,31 @@ Each rule has a switch. Turn a rule off to test a video without it, without dele
 6. The **Part Planner** shows the proposed parts. Review and adjust (chapter 15.4).
 7. Click **Continue to review**, then render.
 
+### 15.1a From the command line (until the app window arrives)
+
+```powershell
+ai-editor letsplay 1 --open
+```
+
+This trims the episode, recording **1** here, and saves it as a draft Let's Play plan. It removes only what a viewer would skip:
+
+| What goes | When |
+|---|---|
+| **Loading screens** | A black, completely still screen for 2 seconds or more. Night-time play is dark too, but the camera moves, so it stays. |
+| **Menus, the map, the inventory** | A still picture for 5 seconds or more, **unless you're talking over it**. |
+| **Long silences** | Nobody talking and nothing happening for over **20 seconds**, cut down to 3 seconds either side, and only during play (see below). |
+| **Starting / BRB / ending screens** | When the Stream Companion was running, anything shown on a non-game OBS scene. |
+
+What **never** goes: anyone talking (you, or the game's characters), a fight (swords included), a moment that scored well, and **cutscenes**. The tool knows a cutscene because the game's HUD (health bar, compass, quest list) disappears. It learns where your HUD is from each recording by itself. Nothing is ever sped up, and no cut lands mid-word.
+
+It prints how many minutes each kind of cut removed, and a list of every cut with its time in the recording. It also makes a **cuts reel** in `plan-previews`: every cut with 4 seconds either side, so you see exactly how each jump will look. Turn subtitles on in VLC to see which cut is which and why. `--open` opens the folder.
+
+Then it **splits the trimmed episode into parts** of about 30 minutes (the rules are in chapter 15.3) and prints a table: each part's length, where it starts and ends in your recording, and what it ends on. A loading screen is the best place to end; a pause in talking is fine. **(hook)** means it ends right after a strong moment. If a part had to end without a clean break, it's marked **no clean break: check it**.
+
+It also makes a **splits reel**: the last 20 seconds of each part and the first 10 of the next, so you can judge every split in a couple of minutes. To watch whole parts, add `--parts`: each part gets its own preview, which takes a few minutes. `--no-reel` and `--no-splits` skip the reels.
+
+Not yet: story missions. The tool can't yet read "quest started" and "quest complete" from the screen, so until then it protects talking, fights and cutscenes, but not whole missions. Drag split points in the Part Planner (15.4) when the app window arrives.
+
 ### 15.2 Length settings explained
 
 | Setting | Default | What it does |
@@ -828,6 +890,8 @@ Each rule has a switch. Turn a rule off to test a video without it, without dele
 | **Story extension, preferred max** | **45 min** | How long a part may run to avoid splitting a story mission. |
 | **Story extension, hard max** | **60 min** | A part will never go past this. |
 | **Trim level** | **Light** | *Light* keeps more exploration and chat. *Standard* is balanced. *Tight* removes more. |
+| **Silence** | **20 s** | Nobody talking and nothing happening for longer than this is cut down, leaving 3 seconds either side. |
+| **Menus** | **5 s** | A still picture (menu, map, inventory) for this long is cut, unless you're talking over it. |
 | **Leftover handling** | **Carry to next session** | What happens to a short leftover piece at the end of a session. |
 | **Leftover minimum** | **15 min** | Pieces shorter than this are treated as leftovers. |
 | **Recap at start** | Off | Adds a "previously on" recap (max 15 seconds). |
@@ -891,13 +955,52 @@ Use Condense when you want a single video from a session.
 5. Click **Build plan**.
 6. Review and render.
 
+### 16.1a From the command line (until the app window arrives)
+
+```powershell
+ai-editor highlights --open
+```
+
+This makes **stream highlights**: the best **unused** clips from all your analysed streams, whatever games you played, so a stream where you switched from Wardogs to Tarkov gives a mixed video. Recordings of your **Let's Play games** are left out: those become Let's Play episodes instead (chapter 15). The Let's Play games are listed in `config/settings.yaml` under `lets_play: games:`, and The Blood of Dawnwalker is there already.
+
+For **one game only**, add `--game`:
+
+```powershell
+ai-editor highlights --game Wardogs --open
+```
+
+That takes clips of that game only, including the Wardogs part of a stream where you also played something else (the Stream Companion knows which part was which: 8.1b).
+
+Either way, it builds a highlight video plan. It also saves a quick, low-resolution **preview** to watch (in your Outputs folder under `plan-previews`), and `--open` opens that folder. To use only certain recordings instead: `--from 3` or `--from 3,6,7`. To change the length: `--minutes 8`.
+
+What it does:
+
+1. **Only good clips.** Anything below the quality bar (**Minimum clip score**) is left out, even if the video comes up short. Clips you pinned or marked with the Stream Companion always go in.
+2. **Several streams when needed.** If one stream doesn't have enough good moments, it carries on with the next, oldest first: for example 4 minutes from Monday's stream and 6 from Tuesday's.
+3. **Trimmed to the moment.** Each clip starts 15 seconds before its moment and is at most 50 seconds long, still never cutting anyone off mid-word or opening mid-sentence. When a moment is too long, a joke keeps its build-up, but a **fight keeps its end**, where the kill is.
+4. **In a good order.** A 5–15 second teaser first, then a strong clip, then stronger and calmer clips in turn, and the teased moment in full at the end. The teaser is, in order: a moment you **marked with Numpad +** during the stream; otherwise the moment where **you react most** (laughing, getting loud, shouting). Sound can't tell what's *funny*, only how loud you are, so to choose it yourself, add `--teaser` with the clip's **#** from the list the last run showed: `ai-editor highlights --game Wardogs --teaser 5`. The teased clip also closes the video. The teaser ends where you stop talking.
+
+If there isn't enough good material, it says so and makes the shorter video rather than padding it. Analyse another stream of the game and run it again.
+
+The plan starts as a **draft**: run it as often as you like. When you're happy:
+
+```powershell
+ai-editor approve highlights_wardogs_2026-09-26_1
+```
+
+Approving marks its clips as used, so the next highlight video carries on with the clips that are left. `ai-editor plans` lists every plan and whether it's approved.
+
+The preview is only for judging the choices. The finished video, in full quality with captions, is made in the rendering step (chapter 19).
+
 ### 16.2 Highlight settings explained
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Target length** | 10 min | Final video length (within about ±10%). |
+| **Target length** | 10 min | Final video length (up to about 15% over). Never padded: if there isn't enough good material, the video is shorter. |
 | **Games** | All in selected recordings | Mix games or keep one game only. |
-| **Minimum clip score** | 0.6 | Clips below this aren't considered. Lower it if you don't get enough clips. |
+| **Minimum clip score** | 0.55 | The quality bar: clips below it aren't used, even if the video comes up short. On your Wardogs streams every clip you liked scored 0.56 or more. Lower it for more (weaker) clips. |
+| **Fill order** | Oldest first | When one stream runs out of good clips: *Oldest first* uses up the earliest stream before moving to the next; *Best first* takes the highest-scoring clips from any stream. |
+| **Lead-in / longest clip** | 15 s / 50 s | How much of the build-up each clip keeps, and the most any one clip can run, so the video keeps its pace. |
 | **Hook** | On | Opens with a 5–15 second teaser of the best moment. |
 | **Ordering** | Balanced | *Chronological*, *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
 | **Allow reused clips** | Off | Whether clips already used in other highlight videos can appear. |
@@ -1246,7 +1349,7 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Queue | Overnight start time | Off | Starts the queue automatically. |
 | Companion | Mark moment hotkey | `numpad+` | Logs a moment. While the Companion runs, this key belongs to it and games won't see it, so pick one they don't use. Numpad keys, F13–F24 and combinations such as `ctrl+alt+m` all work; the numpad's Enter key can't (chapter 6, step 5). |
 | Companion | Mark Short-worthy hotkey | `numpad-` | Logs a Short moment. |
-| Companion | Confirmation sound | On | Quiet click when you mark. It is skipped automatically whenever OBS is capturing Desktop Audio, so viewers can never hear it (chapter 8.2). |
+| Companion | Confirmation sound | Off | A click when you mark. Off because a microphone can pick it up and send it to your stream, which happened on 26 Sep (chapter 8.2). |
 | Companion | Start with Windows | Off | Launches Companion at startup. |
 | OBS | WebSocket port / password | 4455 / from OBS | OBS connection. Set the password with `ai-editor setup-obs` (chapter 7.4), which keeps it in `config/settings.local.yaml` on this PC only. |
 | Analysis | Transcription model | `large-v3` | Which speech-recognition AI writes your transcripts. `large-v3` is the most accurate and still transcribes 2 hours in about 3 minutes on your PC. `large-v3-turbo` is several times faster but misses more unclear speech. Changing it re-transcribes recordings the next time you analyse them. |
@@ -1265,10 +1368,15 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Clips | Lead-in / tail | 30 s / 4 s | Context before the moment and after it. Generous on purpose: videos trim clips down, but can't add back what was left out. Raise the lead-in if clips start too late to understand what happened. |
 | Clips | Length | 15–90 s | Shortest and longest clip. A clip boxed in by two menus can be shorter. |
 | Clips | Snap distance / pause | 6 s / 0.5 s | How far an edge may move to land on a pause or sentence end, and how long a gap in speech counts as a pause. |
+| Clips | Fight run-on | Shooting within 10 s, up to 30 s more | A clip doesn't end while the fight is still going: if gunfire comes back within 10 seconds it's the same fight, and the clip follows it for up to 30 seconds more. In a highlight, the clip starts later instead, so the moment and the end of the fight both stay in. |
+| Scoring | Black screen level | 24 (0–255) | A picture this dark counts as a black screen (loading, setting up a scene). It is never a moment, whatever is said over it, and clips don't start or end on one. |
+| Scoring | Black screen length | 10 s | A black screen must last this long to count: a loading screen or setting up a scene. Shorter ones are part of the moment, like the screen going black when you crash or die, or a blinking effect. |
+| Clips | Ending pause / run-on | 1 s / 10 s | A clip only ends where you then stay quiet for at least this long (a breath between sentences doesn't count), and may run up to 10 s longer to get there, so it never cuts you off mid-thought. |
 | Clips | Busy scene changes | More than 3 within 30 s | Scene changes closer together than this are camera editing (cutscenes), so they don't stop a clip. Lower it if clips run into menus; raise it if cutscene clips start too late. |
+| Analysis | Spelling fixes | talk of → Tarkov, tarkoff → Tarkov, war dogs → Wardogs | Words the speech recognition mishears, and what you really said. Game and friends' names it doesn't know come out as ordinary words that sound alike. Add your own in `settings.yaml` under `spellings:` as `heard: meant`; they apply the next time you analyse, without transcribing again. (Telling the AI the names beforehand was tried and dropped: it started "hearing" the names, and "Thank you for watching", over game noise.) |
 | Analysis | Scene threshold | 5.0 | How different the picture must look to count as a scene change. Lower finds more (including fast camera turns); higher misses quick menus. Changing it re-runs only scene detection. |
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
-| Highlights | Target length / min score / ordering | 10 min / 0.6 / Balanced | See chapter 16.2. |
+| Highlights | Target length / min score / fill order / lead-in / longest clip / ordering | 10 min / 0.55 / Oldest first / 15 s / 50 s / Balanced | See chapter 16.2. |
 | Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |
@@ -1330,7 +1438,9 @@ Start it again. When it reconnects it asks OBS what's running and logs anything 
 - Restart Stream Companion and check the tray status says **League: Match detected** during a game.
 
 ### My hotkey doesn't do anything
-- Check the **Keys** line in the Companion. If it says **not available**, another program (Discord, OBS, a game launcher) reserved that key first: pick a different one in Settings (code **E053**).
+- Check the **Keys** line in the Companion. If it says **not set up in OBS yet**, do chapter 7.4a. If it says **set in OBS** but pressing does nothing, open OBS's **Settings → Hotkeys**, filter on **Mark**, and check **Show 'Mark moment'** has your key.
+- If a key works outside a game but not inside it, the game is blocking other programs' hotkeys: use OBS for the keys (chapter 7.4a). That's the default.
+- With `marker_keys: windows`: if the **Keys** line says **not available**, another program (Discord, OBS, a game launcher) reserved that key first: pick a different one in Settings (code **E053**).
 - The **Marked** line counts up on every press. If it counts up but the marker isn't where you expected, check `ai-editor sessions` — a marker pressed while OBS wasn't recording has nothing to attach to.
 - Games started **as administrator** can stop Windows passing the key on. Run the Stream Companion as administrator too (right-click the terminal → Run as administrator).
 - The Companion must be running. It only reserves the keys while its window is open, which is also why your games get those keys back the moment you close it.

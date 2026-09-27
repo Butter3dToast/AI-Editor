@@ -31,7 +31,7 @@ a hard rule, not a preference.
 | **1C** | Twitch VOD download, chat, Demucs voice separation | **Complete** |
 | **1D** | Stream Companion: OBS WebSocket, marker hotkeys | **Complete** |
 | **1E** | Scoring and clip segmentation | **Complete** |
-| 1F | Recipes: highlights, Let's Play split optimiser | Not started |
+| **1F** | Recipes: highlights, Let's Play split optimiser | **Complete** |
 | 1G | Rendering (NVENC), captions, OTIO/FCPXML export | Not started |
 | 1H | Gradio interface, storage management | Not started |
 | 2 | Shorts, League events, story protection, style profiles, rules, effects | Not started |

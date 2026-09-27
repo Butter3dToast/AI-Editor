@@ -37,6 +37,19 @@ def suggest_game(text: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def game_for_scene(scene: str | None, overrides: dict[str, str] | None = None) -> str | None:
+    """Which game an OBS scene shows: from Settings first, then from its name.
+
+    None for scenes that aren't a game, such as "Starting Soon" or "BRB".
+    """
+    if not scene:
+        return None
+    for name, game in (overrides or {}).items():
+        if name.strip().lower() == scene.strip().lower():
+            return canonical_game(game)
+    return suggest_game(scene)
+
+
 def canonical_game(name: str) -> str:
     """Map "tarkov" or "the blood of dawnwalker" to the known spelling.
 
