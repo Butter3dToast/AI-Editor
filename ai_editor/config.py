@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .errors import SettingsInvalid
 
@@ -268,6 +268,20 @@ class LetsPlay(BaseModel):
     hook_endings: bool = True
     speedup_indicator: bool = True
     tolerance_pct: float = Field(15.0, ge=0, le=50)
+    # Shown over the start of every part, e.g. "Ep {episode} – Part {part}"
+    # ({episode} and {part} are filled in). Empty = none: the creator found it
+    # repeats the YouTube title.
+    title_card: str = ""
+    title_card_sec: float = Field(4.0, ge=1.0, le=15.0)
+
+    @field_validator("title_card")
+    @classmethod
+    def _title_fields(cls, v: str) -> str:
+        try:
+            v.format(episode=1, part=1)
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ValueError(f"title_card can use {{episode}} and {{part}} only: {exc}") from exc
+        return v
 
     @field_validator("normal_range_min")
     @classmethod
@@ -351,11 +365,46 @@ class RenderPreset(BaseModel):
     bitrate: str
 
 
+class CaptionPlace(BaseModel):
+    highlights: float = Field(0.12, ge=0.0, le=0.8)
+    lets_play: float = Field(0.22, ge=0.0, le=0.8)
+
+
+class Captions(BaseModel):
+    # Burned into finished videos. Off unless turned on here or per video
+    # with --captions (the creator's choice: captions are an option).
+    highlights: bool = False
+    lets_play: bool = False
+    font: str = "Arial"
+    size: int = Field(64, ge=20, le=160)    # pixels on a 1080-high picture
+    bold: bool = True
+    outline: float = Field(4.0, ge=0, le=12)
+    # How far up from the bottom the captions sit, as a share of the picture's
+    # height. Higher in Let's Plays, above the game's own subtitles.
+    position: CaptionPlace = CaptionPlace()
+
+
 class Render(BaseModel):
     encoder: Literal["h264_nvenc", "hevc_nvenc"] = "h264_nvenc"
     nvenc_preset: str = "p5"
     loudness_target_lufs: float = -14.0
-    presets: dict[str, RenderPreset] = Field(default_factory=dict)
+    presets: dict[str, RenderPreset] = Field(default_factory=lambda: {
+        "youtube_1080p60": RenderPreset(width=1920, height=1080, fps=60, bitrate="16M"),
+        "youtube_1080p30": RenderPreset(width=1920, height=1080, fps=30, bitrate="12M"),
+        "vertical_1080x1920_60": RenderPreset(width=1080, height=1920, fps=60, bitrate="12M"),
+        "vertical_1080x1920_30": RenderPreset(width=1080, height=1920, fps=30, bitrate="10M"),
+    })
+    # Which preset a finished 16:9 video uses.
+    preset: str = "youtube_1080p60"
+    # Friends on Discord in finished videos (only possible with a separate Discord track).
+    include_voice_chat: bool = True
+
+    @model_validator(mode="after")
+    def _known_preset(self) -> "Render":
+        if self.preset not in self.presets:
+            raise ValueError(f"render.preset '{self.preset}' isn't one of the presets listed: "
+                             f"{', '.join(self.presets)}")
+        return self
 
 
 class Storage(BaseModel):
@@ -395,6 +444,7 @@ class Settings(BaseModel):
     highlights: Highlights = Highlights()
     shorts: Shorts = Shorts()
     render: Render = Render()
+    captions: Captions = Captions()
     storage: Storage = Storage()
     twitch: Twitch = Twitch()
     llm: Llm = Llm()

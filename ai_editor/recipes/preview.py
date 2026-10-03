@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
-from ..analysis.captions import Cue, Word, build_cues, write_srt
+from ..analysis.captions import Cue, Word, segment_cues, write_srt
 from ..analysis.clips import load_words
 from ..config import Settings
 from ..errors import MediaProcessingFailed, NotImported
@@ -96,15 +96,8 @@ def render_preview(
             elif segment.captions:
                 if segment.recording_id not in words:
                     words[segment.recording_id] = load_words(conn, segment.recording_id)
-                inside = [Word(w.text, w.start - segment.src_in, w.end - segment.src_in,
-                               w.probability)
-                          for w in words[segment.recording_id]
-                          if w.start >= segment.src_in and w.end <= segment.src_out]
-                # A caption never runs on into the next clip. The one-second
-                # minimum on screen made the last word of one clip (4:03 in
-                # the creator's Wardogs highlight) appear over the next.
-                cues += [Cue(c.start + offset, min(c.end, segment.length) + offset, c.text)
-                         for c in build_cues(inside) if c.start < segment.length]
+                cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
+                         segment_cues(words[segment.recording_id], segment.src_in, segment.src_out)]
             offset += segment.length
             if on_progress:
                 on_progress(min(0.95, offset / total))

@@ -50,7 +50,20 @@ def realistic_timing(words: Sequence[Word]) -> list[Word]:
 
 
 def _text(words: Sequence[Word]) -> str:
-    return " ".join(w.text.strip() for w in words if w.text.strip())
+    """The words as a line of text.
+
+    Whisper hands over the second half of a hyphenated word on its own
+    ("anti", "-air"), and a lone "-" where the creator cut a word off ("I'm
+    revi", "-", "I'm healing"): both join the word before, as "anti-air" and
+    "revi-". Joined with spaces they read "pussy -ass" on screen.
+    """
+    text = ""
+    for w in words:
+        part = w.text.strip()
+        if not part:
+            continue
+        text += part if (part.startswith("-") and text) else (" " + part if text else part)
+    return text
 
 
 def build_cues(
@@ -129,6 +142,19 @@ def build_cues(
             limit = cues[i + 1].start if i + 1 < len(cues) else cue.start + min_duration
             cues[i] = Cue(cue.start, max(cue.end, min(cue.start + min_duration, limit)), cue.text)
     return cues
+
+
+def segment_cues(words: Sequence[Word], src_in: float, src_out: float) -> list[Cue]:
+    """Cues for one stretch of a recording, timed from where it starts.
+
+    A caption never runs on into the next clip: the one-second minimum on
+    screen made the last word of one clip (4:03 in the creator's Wardogs
+    highlight) appear over the next.
+    """
+    length = src_out - src_in
+    inside = [Word(w.text, w.start - src_in, w.end - src_in, w.probability)
+              for w in words if w.start >= src_in and w.end <= src_out]
+    return [Cue(c.start, min(c.end, length), c.text) for c in build_cues(inside) if c.start < length]
 
 
 def srt_time(seconds: float) -> str:

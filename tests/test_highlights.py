@@ -223,3 +223,33 @@ def test_the_teaser_and_the_ending_are_the_same_moment_even_in_a_tie():
     best = best_of(chosen)
     assert best_of(list(reversed(chosen))) is best
     assert order(chosen, "balanced", best.clip_id)[-1] is best
+
+
+# --- A teaser moment you pick --------------------------------------------------------
+
+
+def test_the_teaser_is_the_moment_you_named_with_a_second_either_side():
+    """3 Oct: "the best clip is the clip from 06:36 - 06:42" -- no talking in it."""
+    from ai_editor.recipes.highlights import teaser_from
+
+    best = cand("league", 1.0, 52, peak=126)  # 100 to 152 in the recording
+    assert teaser_from((120.0, 126.0), best, []) == (119.0, 127.0)
+
+
+def test_the_extra_second_never_cuts_a_word():
+    from ai_editor.recipes.highlights import teaser_from
+
+    best = cand("league", 1.0, 52, peak=126)
+    words = [Word("let's", 118.6, 119.4), Word("go!", 126.6, 127.5)]
+    start, end = teaser_from((120.0, 126.0), best, words)
+    assert start <= 118.6 and end >= 127.5
+
+
+def test_naming_only_where_it_starts_ends_it_at_a_pause():
+    from ai_editor.recipes.highlights import teaser_from
+
+    best = cand("league", 1.0, 52, peak=126)
+    words = [Word("look", 121.0, 121.4), Word("at", 121.5, 121.7), Word("this.", 121.8, 122.3),
+             Word("again", 130.0, 130.4)]
+    start, end = teaser_from((120.0, 120.0), best, words)
+    assert start == 119.0 and 124.0 <= end <= 134.0

@@ -175,6 +175,11 @@ lets_play: # Spec section 7.6 Recipe A
   hook_endings: true
   speedup_indicator: true
   tolerance_pct: 15 # A part counts as "on target" within +/- this percentage
+  # Text over the first seconds of every part, e.g. "Ep {episode} – Part {part}"
+  # ({episode} and {part} are filled in). Empty = no title card: the YouTube
+  # title already says it.
+  title_card: ""
+  title_card_sec: 4
 
 highlights: # Spec section 7.6 Recipe B
   target_length_min: 10
@@ -217,6 +222,25 @@ render:
     youtube_1080p30: { width: 1920, height: 1080, fps: 30, bitrate: "12M" }
     vertical_1080x1920_60: { width: 1080, height: 1920, fps: 60, bitrate: "12M" }
     vertical_1080x1920_30: { width: 1080, height: 1920, fps: 30, bitrate: "10M" }
+  preset: youtube_1080p60 # Which of the presets above a finished video uses
+  # Friends on Discord in finished videos. Needs Discord on its own track in OBS
+  # (manual 7.3); recordings with only a mixed track always have everything in.
+  include_voice_chat: true
+
+captions:
+  # Your words burned into finished videos (manual 19.2c). Off unless you turn
+  # them on here, or for one video with: ai-editor render <plan> --captions
+  highlights: false
+  lets_play: false
+  font: Arial
+  size: 64 # Letter height in pixels on a 1080p picture
+  bold: true
+  outline: 4 # Black edge around the letters, in pixels
+  # How far up from the bottom, as a share of the picture's height. Let's Plays
+  # sit higher, above the game's own subtitles (Dawnwalker's are 9-15% up).
+  position:
+    highlights: 0.12
+    lets_play: 0.22
 
 storage:
   low_space_warning_gb: 100

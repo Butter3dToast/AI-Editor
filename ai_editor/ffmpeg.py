@@ -153,6 +153,7 @@ def run_ffmpeg(
     duration_sec: float | None = None,
     on_progress: Callable[[float], None] | None = None,
     what: str = "processing",
+    cwd: Path | None = None,
 ) -> None:
     """Run FFmpeg to completion, reporting progress as it goes.
 
@@ -178,6 +179,7 @@ def run_ffmpeg(
         encoding="utf-8",
         errors="replace",
         creationflags=_NO_WINDOW,
+        cwd=cwd,
     )
 
     # stderr is drained on its own thread: if FFmpeg filled that pipe while we
@@ -211,6 +213,35 @@ def run_ffmpeg(
 
     if on_progress:
         on_progress(1.0)
+
+
+def measure_loudness(inputs: list[str], *, target_lufs: float, true_peak: float) -> dict[str, str] | None:
+    """How loud some sound is (EBU R128), for loudnorm's second, exact pass.
+
+    ``inputs`` are FFmpeg input arguments. None if it's silent throughout:
+    there's no loudness to match then.
+    """
+    command = [
+        str(find_binary("ffmpeg")), "-hide_banner", "-nostdin", "-nostats", "-loglevel", "info",
+        *inputs, "-vn",
+        "-af", f"loudnorm=I={target_lufs}:TP={true_peak}:LRA=11:print_format=json",
+        "-f", "null", "-",
+    ]
+    log.debug("FFmpeg (measuring loudness): %s", subprocess.list2cmdline(command))
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace", creationflags=_NO_WINDOW)
+    if result.returncode != 0:
+        log.error("FFmpeg failed while measuring loudness (exit %s):\n%s", result.returncode,
+                  result.stderr[-4000:], extra=FILE_ONLY)
+        raise MediaProcessingFailed("This happened while measuring how loud the video is")
+    text = result.stderr
+    start, end = text.rfind("{"), text.rfind("}")
+    if start < 0 or end < start:
+        return None
+    stats = json.loads(text[start:end + 1])
+    if stats.get("input_i") in (None, "-inf") or not stats["input_i"].replace(".", "").lstrip("-").isdigit():
+        return None
+    return stats
 
 
 # --- Probing ---------------------------------------------------------------

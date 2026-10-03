@@ -92,3 +92,12 @@ def test_srt_file_is_marked_as_utf8(tmp_path):
     raw = path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")
     assert "Café" in raw.decode("utf-8-sig")
+
+
+def test_hyphenated_and_cut_off_words_join_the_word_before():
+    """3 Oct: a caption read "pussy -ass" -- Whisper splits hyphenated words."""
+    from ai_editor.analysis.captions import _text
+
+    words = [Word(w, 0, 0) for w in ("getting", "anti", "-air", "up.", "I'm", "revi", "-", "I'm",
+                                     "healing")]
+    assert _text(words) == "getting anti-air up. I'm revi- I'm healing"

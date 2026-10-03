@@ -293,6 +293,8 @@ Our standard track setup:
 
 **Tip:** Using **Application Audio Capture** for the game and for Discord (instead of Desktop Audio) keeps them properly separated. Notification sounds and music players then won't leak into the game track.
 
+**Music (Spotify) goes on track 1 only.** Viewers still hear it on stream, but finished videos are built from tracks 2–4, so the music stays out of them and your YouTube uploads don't get claimed. Each source ticks only its own track besides 1: if the microphone were also on track 3, say, the finished video would have your voice in it twice.
+
 ### 7.4 Enable the OBS WebSocket (for Stream Companion)
 
 1. In OBS, click **Tools → WebSocket Server Settings**.
@@ -878,6 +880,8 @@ Then it **splits the trimmed episode into parts** of about 30 minutes (the rules
 
 It also makes a **splits reel**: the last 20 seconds of each part and the first 10 of the next, so you can judge every split in a couple of minutes. To watch whole parts, add `--parts`: each part gets its own preview, which takes a few minutes. `--no-reel` and `--no-splits` skip the reels.
 
+Happy with the parts? Render them as finished videos with `ai-editor render <plan>` (chapter 19.2a).
+
 Not yet: story missions. The tool can't yet read "quest started" and "quest complete" from the screen, so until then it protects talking, fights and cutscenes, but not whole missions. Drag split points in the Part Planner (15.4) when the app window arrives.
 
 ### 15.2 Length settings explained
@@ -979,6 +983,8 @@ What it does:
 2. **Several streams when needed.** If one stream doesn't have enough good moments, it carries on with the next, oldest first: for example 4 minutes from Monday's stream and 6 from Tuesday's.
 3. **Trimmed to the moment.** Each clip starts 15 seconds before its moment and is at most 50 seconds long, still never cutting anyone off mid-word or opening mid-sentence. When a moment is too long, a joke keeps its build-up, but a **fight keeps its end**, where the kill is.
 4. **In a good order.** A 5–15 second teaser first, then a strong clip, then stronger and calmer clips in turn, and the teased moment in full at the end. The teaser is, in order: a moment you **marked with Numpad +** during the stream; otherwise the moment where **you react most** (laughing, getting loud, shouting). Sound can't tell what's *funny*, only how loud you are, so to choose it yourself, add `--teaser` with the clip's **#** from the list the last run showed: `ai-editor highlights --game Wardogs --teaser 5`. The teased clip also closes the video. The teaser ends where you stop talking.
+
+   **Picking the exact moment.** After watching a video, name the moment you want as the teaser by its time in that video: `ai-editor highlights --game "League of Legends" --teaser-at 6:36-6:42`. The teaser is exactly that, with a second either side so it doesn't start or stop abruptly (never mid-word), and the whole clip it's from closes the video. Giving only where it starts (`--teaser-at 6:36`) ends it the usual way, at a pause. Use the same `--game` as the video you watched. The times must be inside one clip.
 
 If there isn't enough good material, it says so and makes the shorter video rather than padding it. Analyse another stream of the game and run it again.
 
@@ -1141,6 +1147,46 @@ For Let's Plays, **Render all parts** queues every part at once.
 
 Expected times: a 30-minute part around 10 minutes, a 10-minute highlight under 10 minutes, a Short under 2 minutes. Audio is automatically balanced to suit YouTube.
 
+### 19.2a From the command line (until the app window arrives)
+
+1. See your plans, numbered newest first:
+
+   ```
+   ai-editor plans
+   ```
+
+2. Render one by its number (or its full name):
+
+   ```
+   ai-editor render 2
+   ```
+
+   With no number, it renders your newest highlight video. Add `--open` to open the folder when it's done.
+
+3. The video is saved in your Output folder, under `videos`, named after the plan (for example `highlights_league-of-legends_2026-09-27_1.mp4`). It only appears there once it's complete. A render you stop part-way leaves nothing half-made behind.
+
+What the render does:
+
+- **Full quality from your original recording**, not the preview copy: 1920×1080 at 60 fps, encoded on your graphics card. The picture and sound are exact to the frame at every join.
+- **Clean joins.** The sound fades over a few thousandths of a second at every cut, too short to hear as a dip but enough to stop a click.
+- **YouTube loudness, without squashing.** The whole video is turned up or down in one go toward about −14 LUFS (YouTube's level), so a quiet moment stays quieter than a loud one, the way it was. Only the loudest peaks are held down, by 3 dB at most, which you can't hear. A recording made very quiet (EP 1 was −25 LUFS) is raised only as far as that allows, so it ends up a little under YouTube's level, but never distorted. Turn it up in your player if it's too quiet.
+- **Music on stream is left out** when the recording has separate tracks (chapter 7.3). The finished sound is rebuilt from your mic, game and Discord tracks. Spotify is only on track 1, so it isn't included, and music in a YouTube video gets it claimed. A recording without real separate tracks (a Twitch VOD, or an OBS recording from before your tracks were set up) uses the mixed track, exactly as the stream sounded. The render says which it used.
+- **Marker beeps are taken out.** On the 26 Sep stream the Companion's click reached your microphone. Each click is found by its sound, only near a marker you pressed, and that one pitch is filtered out for half a second, leaving your voice and the game around it untouched. The click is off now (chapter 24), so new recordings don't have any.
+
+A 10-minute highlight takes about 3 minutes.
+
+**Let's Play episodes** render every part as its own video, in one go:
+
+```
+ai-editor render 1
+```
+
+- Each part is named ready to upload: `The Blood of Dawnwalker - EP 1 - Part 1.mp4`, `... - Part 2.mp4`, and so on.
+- `--part 2` renders just that part, for example after a change.
+- The episode number comes from the recording's name ("... EP 1"). If the name doesn't have one, add `--episode 2`.
+- **Title card (off).** A part can open with its name, e.g. "Ep 1 – Part 2", in large bold letters in the middle of the picture, fading in and out over the first 4 seconds. It's off because the YouTube title already says it. To turn it on, set `title_card: "Ep {episode} – Part {part}"` under `lets_play` in Settings (`title_card_sec` sets how long).
+- A two-hour episode takes about half an hour to render, all parts together.
+
 ### 19.2b Vertical clips: render here, not in Resolve
 
 Vertical clips are composed inside AI-Editor: the crop, the stacked facecam, and the captions are all part of the plan. Those layout effects don't transfer reliably into other editors, so:
@@ -1148,26 +1194,64 @@ Vertical clips are composed inside AI-Editor: the crop, the stacked facecam, and
 - **Recommended:** render Shorts and TikToks directly in AI-Editor. They come out as finished files, ready to upload.
 - If you do export a vertical project, AI-Editor automatically pre-renders the vertical segments onto a 1080×1920 timeline, so Resolve or Kdenlive shows them exactly as designed. You can add extra polish there, but the layout is already baked in.
 
+### 19.2c Captions (your words on screen)
+
+Captions are **off** unless you ask for them. For one video:
+
+```
+ai-editor render 2 --captions
+```
+
+To have them on every time, set `captions: highlights: true` (or `lets_play: true`) in Settings (chapter 24). `--no-captions` turns them off for one video.
+
+A captioned video is saved as `<plan> captions.mp4`, next to the plain one. Making one never replaces the other, so you can keep both and choose.
+
+How they look: bold white letters with a black edge, a sentence or two at a time, centred near the bottom. The height is set per kind of video, to clear what the game draws there:
+
+- **Highlights:** 12% up from the bottom, above League's ability bar.
+- **Let's Plays:** 22% up, above the game's own subtitles (Dawnwalker's sit 9–15% up), which captions never cover.
+
+What's captioned:
+
+- **Only your words**, from your mic track. The words are exactly as transcribed, including the spelling fixes (chapter 24). Nothing is added or reworded, and swearing is shown as you said it.
+- **Let's Plays need your mic on its own track.** In a recording with only a mixed track, the game characters' lines are in the transcript too: EP 1 would have captioned Anca's "How about Petronius?" under the game's own subtitle. So a Let's Play recording without a separate mic track gets no captions, and the render says so. Your OBS is set up for separate tracks now (chapter 7.3), so new recordings are fine.
+- **Highlights from older streams** (before 27 Sep, one mixed track) can include a friend's words from Discord, and the odd game voice. Telling voices apart comes in a later phase.
+
 ### 19.3 Exporting to DaVinci Resolve (free)
 
-Use this when you want to polish further.
+The backup route, for the odd video you'd rather fine-tune by hand. Your finished videos come from `ai-editor render`; you never need Resolve for them.
 
-1. On the Review screen click **Export → DaVinci Resolve (FCPXML)**.
-2. Tick **Pre-render effects** if you want zooms, captions, and effects to come across exactly (recommended). Without it, only cuts and markers transfer.
-3. Choose where to save.
-4. In DaVinci Resolve, create or open a project.
-5. Go to **File → Import → Timeline** and choose the exported file.
-6. When asked, point Resolve to your media (your Raw footage folder and the export's media folder).
-7. Your timeline appears with all cuts and markers.
+1. Save the plan as a Resolve timeline:
+
+   ```
+   ai-editor export 2
+   ```
+
+   Use the plan's number from `ai-editor plans`, or leave it out for your newest highlight video. A Let's Play saves one timeline per part (`--part 2` for one). Add `--open` to open the folder.
+
+2. The files are saved in your Output folder, under `timelines`:
+   - `<name>.fcpxml`: the timeline.
+   - `<name>.srt`: your words as subtitles, if you want them.
+3. In DaVinci Resolve, create or open a project.
+4. Go to **File → Import → Timeline** and pick the `.fcpxml`.
+5. If Resolve asks where the media is, point it at your recordings folder (`F:/AI-Editor/raw`).
+6. For captions: **File → Import → Subtitle**, pick the `.srt`, and drag it onto the timeline's subtitle track.
+
+What comes across:
+
+- **Every clip in its place, frame-exact,** cut from your original recordings, not copies.
+- **A marker on each highlight clip** saying why it's there ("Clip 3: laughter, loud").
+
+What doesn't come across, because it happens while AI-Editor renders:
+
+- The sound clean-up: music left out, marker beeps filtered, loudness. Resolve plays the recording's own tracks.
+- Burned-in captions. The `.srt` stands in for them.
+
+If Resolve can't open an `.mkv` recording, use a newer Resolve, or remux the recording to `.mp4` in OBS (**File → Remux Recordings**), which takes seconds and loses nothing.
 
 ### 19.4 Exporting to Kdenlive
 
-1. Click **Export → Kdenlive (OpenTimelineIO)**.
-2. Tick **Pre-render effects** if wanted.
-3. In Kdenlive, use the **OpenTimelineIO import** option in the File menu (exact menu name can vary between Kdenlive versions).
-4. Relink media if asked.
-
-> **[Engineer: confirm and update these menu paths against current Resolve and Kdenlive versions.]**
+Not built yet. Resolve's timeline format (19.3) was enough as a backup. Ask for it if you ever switch to Kdenlive.
 
 ---
 
@@ -1376,10 +1460,16 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Analysis | Spelling fixes | talk of → Tarkov, tarkoff → Tarkov, war dogs → Wardogs | Words the speech recognition mishears, and what you really said. Game and friends' names it doesn't know come out as ordinary words that sound alike. Add your own in `settings.yaml` under `spellings:` as `heard: meant`; they apply the next time you analyse, without transcribing again. (Telling the AI the names beforehand was tried and dropped: it started "hearing" the names, and "Thank you for watching", over game noise.) |
 | Analysis | Scene threshold | 5.0 | How different the picture must look to count as a scene change. Lower finds more (including fast camera turns); higher misses quick menus. Changing it re-runs only scene detection. |
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
+| Let's Play | Title card | Empty (none), 4 s | Text shown over the start of every part, e.g. `Ep {episode} – Part {part}`; `{episode}` and `{part}` are filled in. Off because the YouTube title says it. |
 | Highlights | Target length / min score / fill order / lead-in / longest clip / ordering | 10 min / 0.55 / Oldest first / 15 s / 50 s / Balanced | See chapter 16.2. |
 | Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |
+| Captions | Highlights / Let's Plays | Off / Off | Burn your words into finished videos of that kind, every time. Off: add `--captions` to one render instead (chapter 19.2c). |
+| Captions | Font / size / bold / outline | Arial / 64 / On / 4 | The look: letter height in pixels on a 1080p picture, and the black edge around the letters. |
+| Captions | Position | 0.12 highlights, 0.22 Let's Plays | How far up from the bottom, as a share of the picture's height. Raise it if captions cover something a game draws at the bottom. |
+| Render | Preset | `youtube_1080p60` | Which size and frame rate a finished video uses (the table in chapter 19.2). |
+| Render | Include Discord | On | Your friends on Discord in finished videos. Only possible when Discord has its own track (chapter 7.3). Recordings with just a mixed track always have everything in. |
 | Storage | Low space warning | 100 GB | When to warn. |
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |

@@ -3,6 +3,47 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.8.0 — Phase 1G: Finished videos — 3 October 2026
+
+AI-Editor now makes finished videos, start to end: full quality from your
+original recordings, ready to upload.
+
+**New**
+
+- **`ai-editor render <plan>`** renders a plan at your recording's own size
+  and frame rate (1080p60), on the graphics card: a 10-minute highlight in
+  about 3 minutes, a half-hour Let's Play part in about 7. `ai-editor plans`
+  numbers your plans, so `ai-editor render 2` is enough.
+- **Clean joins.** Picture and sound are exact to the frame at every cut, and
+  the sound fades over a few thousandths of a second so nothing clicks.
+- **Sound for YouTube.** Each video is turned up or down in one go toward
+  YouTube's level (-14 LUFS), keeping your stream's balance between loud and
+  quiet. Only the loudest peaks are held down, by 3 dB at most, so nothing
+  distorts; a very quiet recording ends up a little under YouTube's level.
+- **Music on stream stays out.** Recordings with separate mic, game and
+  Discord tracks are rebuilt from those, leaving Spotify (track 1 only) out
+  of your uploads. Older recordings use the mixed track, as streamed.
+- **Marker beeps removed.** The Companion's click that reached your mic on
+  26 Sep is found near each marker and filtered out, leaving your voice
+  untouched.
+- **Captions, as an option** (`--captions`, off by default): bold white with a
+  black edge, placed clear of each game's own on-screen text. Only your
+  words: a Let's Play from a recording without a separate mic track gets
+  none, so the characters' lines are never captioned. A captioned video is
+  saved beside the plain one.
+- **Let's Play parts** render in one go, named ready to upload ("The Blood of
+  Dawnwalker - EP 1 - Part 2"); `--part 2` for one. A title card ("Ep 1 –
+  Part 2") is available in Settings, off because the YouTube title says it.
+- **`--teaser-at 6:36-6:42`** picks the teaser by its time in a video you
+  watched: that moment opens the video, and its clip closes it.
+- **`ai-editor export <plan>`** saves a DaVinci Resolve timeline and a
+  subtitle file, for the odd video you'd rather fine-tune by hand.
+
+**Fixed**
+
+- Captions and preview subtitles join split words: "anti-air", not
+  "anti -air".
+
 ## 0.7.0 — Phase 1F: Highlights and Let's Plays — 27 September 2026
 
 AI-Editor now plans whole videos: 10-minute highlight compilations from your

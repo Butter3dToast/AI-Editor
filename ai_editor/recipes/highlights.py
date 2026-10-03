@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,6 +48,9 @@ from .plan import EditPlan, Segment, discard_drafts, new_plan_id, save_plan
 TOLERANCE = 0.15
 # How much of the teaser comes before the peak of the moment.
 TEASER_BEFORE_PEAK = 0.6
+# A moment the creator picked for the teaser gets this much either side, so
+# it doesn't start or stop abruptly.
+TEASER_PAD_SEC = 1.0
 
 
 @dataclass
@@ -311,6 +314,29 @@ def teaser(best: Candidate, words: list[Word], seconds: float, *,
     return start, end
 
 
+def teaser_from(moment: tuple[float, float], best: Candidate, words: list[Word], *,
+                shortest: float = 5.0, longest: float = 15.0, end_pause: float = 1.0) -> tuple[float, float]:
+    """The teaser the creator asked for: their moment, a second either side.
+
+    ``moment`` is in recording time. Given only where it starts (both ends
+    the same), it ends the usual way, at a pause 5-15 s in. The second
+    either side never starts or stops mid-word.
+    """
+    a, b = moment
+    bounds = word_boundaries(words)
+    starts = [w.start for w in words]
+    start = max(best.src_in, a - TEASER_PAD_SEC)
+    if word_at(start, words, starts):
+        start = nearest_bound(bounds, start, best.src_in, a, outward=-1)
+    if b <= a:
+        return teaser(replace(best, src_in=start, peak=start), words, longest, shortest=shortest,
+                      longest=longest, end_pause=end_pause)
+    end = min(best.src_out, b + TEASER_PAD_SEC)
+    if word_at(end, words, starts):
+        end = nearest_bound(bounds, end, b, best.src_out, outward=+1)
+    return start, end
+
+
 def build_highlights(
     conn: sqlite3.Connection,
     settings: Settings,
@@ -319,8 +345,10 @@ def build_highlights(
     recording_ids: list[int] | None = None,
     target_min: float | None = None,
     teaser_clip: str | None = None,
+    teaser_moment: tuple[float, float] | None = None,
 ) -> HighlightResult:
-    """``teaser_clip``: a clip id to open with (and end on), instead of the automatic pick."""
+    """``teaser_clip``: a clip id to open with (and end on), instead of the automatic pick.
+    ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one."""
     h = settings.highlights
     target = (target_min or h.target_length_min) * 60
     recordings = recordings_for(conn, settings, game=game, recording_ids=recording_ids)
@@ -352,8 +380,12 @@ def build_highlights(
     if best is not None and h.hook:
         words = realistic(load_words(conn, best.recording_id))
         length = sum(h.hook_seconds) / 2
-        t_in, t_out = teaser(best, words, length, shortest=h.hook_seconds[0],
-                             longest=h.hook_seconds[1], end_pause=settings.clips.end_pause_sec)
+        hook = dict(shortest=h.hook_seconds[0], longest=h.hook_seconds[1],
+                    end_pause=settings.clips.end_pause_sec)
+        if teaser_moment is not None and best.clip_id == teaser_clip:
+            t_in, t_out = teaser_from(teaser_moment, best, words, **hook)
+        else:
+            t_in, t_out = teaser(best, words, length, **hook)
         plan.segments.append(Segment(best.recording_id, round(t_in, 3), round(t_out, 3),
                                      kind="teaser", clip_id=best.clip_id, score=best.score,
                                      reasons=best.reasons, game=best.game))

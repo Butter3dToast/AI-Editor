@@ -1376,6 +1376,10 @@ def highlights_command(
     teaser_part: int = typer.Option(None, "--teaser",
                                     help="Open with this clip instead: its # in the last list shown, "
                                     "e.g. --teaser 5"),
+    teaser_at: str = typer.Option(None, "--teaser-at",
+                                  help="Open with this moment of the last video you watched, by its "
+                                  "time in that video: e.g. --teaser-at 6:36-6:42, or just where it "
+                                  "starts: --teaser-at 6:36"),
     settings_path: Path = typer.Option(
         DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
     ),
@@ -1407,7 +1411,21 @@ def highlights_command(
     conn = init_db(settings.db_path)
     try:
         wanted_game = canonical_game(game) if game else None
-        teaser_clip = None
+        teaser_clip = teaser_moment = None
+        if teaser_part is not None and teaser_at:
+            console.print("[red]Use --teaser or --teaser-at, not both.[/red]")
+            raise typer.Exit(code=1)
+        if teaser_at:
+            from .recipes.plan import latest_draft
+
+            last = latest_draft(conn, "highlights", wanted_game)
+            found = _moment_in(last, teaser_at, settings) if last else None
+            if found is None:
+                console.print("[red]--teaser-at takes a time in the last highlight video made"
+                              f"{' for ' + wanted_game if wanted_game else ''}, inside one clip: "
+                              "e.g. 6:36-6:42 or 6:36.[/red]")
+                raise typer.Exit(code=1)
+            teaser_clip, teaser_moment = found
         if teaser_part is not None:
             # "#5 in the last list" means the draft that list came from.
             from .recipes.plan import latest_draft
@@ -1418,8 +1436,9 @@ def highlights_command(
                               "showed.[/red] Run it once without --teaser first.")
                 raise typer.Exit(code=1)
             teaser_clip = last.segments[teaser_part - 1].clip_id
-        result = build_highlights(conn, settings, game=wanted_game,
-                                  recording_ids=ids, target_min=minutes, teaser_clip=teaser_clip)
+        result = build_highlights(conn, settings, game=wanted_game, recording_ids=ids,
+                                  target_min=minutes, teaser_clip=teaser_clip,
+                                  teaser_moment=teaser_moment)
         plan = result.plan
         titles = {r["id"]: r["title"] for r in conn.execute("SELECT id, title FROM recordings")}
 
@@ -1466,6 +1485,42 @@ def highlights_command(
         raise typer.Exit(code=1) from exc
     finally:
         conn.close()
+
+
+def _seconds(text: str) -> float | None:
+    """'6:36' / '1:02:03' / '396' -> seconds."""
+    try:
+        parts = [float(x) for x in text.strip().split(":")]
+    except ValueError:
+        return None
+    if not 1 <= len(parts) <= 3 or any(x < 0 for x in parts):
+        return None
+    seconds = 0.0
+    for part in parts:
+        seconds = seconds * 60 + part
+    return seconds
+
+
+def _moment_in(plan, text: str, settings: Settings):
+    """A time (or range) in a rendered plan -> (clip id, (start, end) in the recording)."""
+    from .render.final import frame_exact
+
+    a_text, _, b_text = text.partition("-")
+    a = _seconds(a_text)
+    b = _seconds(b_text) if b_text else a
+    if a is None or b is None or b < a:
+        return None
+    fps = settings.render.presets[settings.render.preset].fps
+    offset = 0.0
+    for segment in plan.segments:
+        length = frame_exact(segment.length, fps)  # as long as it is in the finished video
+        if offset <= a < offset + length:
+            if b > offset + length + 0.5 or not segment.clip_id:
+                return None  # runs on into the next clip
+            to_source = segment.src_in - offset
+            return segment.clip_id, (a + to_source, min(b, offset + length) + to_source)
+        offset += length
+    return None
 
 
 @app.command("letsplay")
@@ -1618,23 +1673,253 @@ def plans_command(
     setup_logging(settings.log_dir, settings.logging.level)
     conn = init_db(settings.db_path)
     try:
-        rows = conn.execute("SELECT * FROM edit_plans ORDER BY created_at DESC").fetchall()
+        rows = _plan_rows(conn)
     finally:
         conn.close()
     if not rows:
         console.print("No video plans yet. Make one with: ai-editor highlights --game Wardogs")
         return
     table = Table(title="Video plans", header_style="bold")
-    for column in ("Plan", "Kind", "Length", "Recordings", "Status", "Made"):
+    for column in ("#", "Plan", "Kind", "Length", "Recordings", "Status", "Made"):
         table.add_column(column)
-    for row in rows:
+    for n, row in enumerate(rows, start=1):
         plan = json.loads(row["plan_json"])
         length = sum(s["src_out"] - s["src_in"] for s in plan.get("segments", []))
-        table.add_row(row["plan_id"], row["recipe"], f"{length / 60:.1f} min",
+        table.add_row(str(n), row["plan_id"], row["recipe"], f"{length / 60:.1f} min",
                       ", ".join(f"#{i}" for i in json.loads(row["recording_ids_json"])),
                       "[green]approved[/green]" if row["status"] == "approved" else "draft",
                       _local_time(row["created_at"]))
     console.print(table)
+
+
+def _plan_rows(conn):
+    """Every plan, newest first: the order 'ai-editor plans' numbers them in."""
+    return conn.execute("SELECT * FROM edit_plans ORDER BY created_at DESC, rowid DESC").fetchall()
+
+
+def _find_plan(conn, ref: str | None, recipe: str | None = None):
+    """A plan by its # in 'ai-editor plans', or its name; the newest of ``recipe`` if none given."""
+    from .recipes.plan import EditPlan
+
+    rows = _plan_rows(conn)
+    if ref is None:
+        rows = [r for r in rows if recipe is None or r["recipe"] == recipe]
+        return EditPlan.from_json(rows[0]["plan_json"]) if rows else None
+    if ref.isdigit():
+        n = int(ref)
+        return EditPlan.from_json(rows[n - 1]["plan_json"]) if 1 <= n <= len(rows) else None
+    for row in rows:
+        if row["plan_id"] == ref:
+            return EditPlan.from_json(row["plan_json"])
+    return None
+
+
+def _episode_parts(conn, plan, part: int | None, episode: int | None):
+    """A Let's Play plan's episode number, its parts, and the ones asked for."""
+    from .render import parts as lp
+
+    numbers = lp.part_numbers(plan)
+    if part is not None and part not in numbers:
+        console.print(f"[red]This episode has parts {', '.join(map(str, numbers))}; "
+                      f"there's no part {part}.[/red]")
+        raise typer.Exit(code=1)
+    if episode is None:
+        rows = conn.execute(f"SELECT title, source_file FROM recordings WHERE id IN "
+                            f"({','.join('?' * len(plan.recording_ids))})",
+                            plan.recording_ids).fetchall()
+        episode = lp.episode_number(plan.title, *(r["title"] for r in rows),
+                                    *(Path(r["source_file"]).stem for r in rows))
+    if episode is None:
+        console.print("[red]Which episode is this?[/red] The recording's name doesn't say "
+                      "(\"... EP 2\"). Add it: --episode 2")
+        raise typer.Exit(code=1)
+    return episode, numbers, [n for n in numbers if part is None or n == part]
+
+
+@app.command("export")
+def export_command(
+    plan_ref: str = typer.Argument(
+        None, help="The plan's # or name from 'ai-editor plans'. Leave out for the newest highlight video"),
+    part: int = typer.Option(None, "--part", help="Let's Plays: only this part, e.g. --part 2"),
+    episode: int = typer.Option(None, "--episode",
+                                help="Let's Plays: the episode number, if the recording's name "
+                                "doesn't say it"),
+    open_folder: bool = typer.Option(False, "--open", help="Open the timelines' folder afterwards"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Save a plan as a DaVinci Resolve timeline, to fine-tune it there by hand (the backup route).
+
+    Every clip in its place, cut from your original recordings, with a
+    marker saying why it's there, plus a subtitle file of your words. In
+    Resolve: File > Import > Timeline. Your finished videos come from
+    'ai-editor render'; this is for the odd one you'd rather edit yourself.
+    """
+    from .analysis.captions import Cue, segment_cues, write_srt
+    from .analysis.clips import load_words
+    from .export.fcpxml import sources_for, write_fcpxml
+    from .render import parts as lp
+    from .render.audio import choose_tracks
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    folder = settings.folders.output / "timelines"
+    saved: list[Path] = []
+    try:
+        plan = _find_plan(conn, plan_ref, None if plan_ref else "highlights")
+        if plan is None:
+            console.print(f"[red]No plan {plan_ref or 'to export yet'}.[/red] "
+                          "See them, numbered, with: ai-editor plans")
+            raise typer.Exit(code=1)
+        jobs = [(plan, plan.title, plan.plan_id)]
+        if plan.recipe == "letsplay":
+            episode, _, chosen = _episode_parts(conn, plan, part, episode)
+            jobs = [(lp.part_plan(plan, n), lp.part_path(settings, plan, episode, n).stem,
+                     lp.part_path(settings, plan, episode, n).stem) for n in chosen]
+
+        preset = settings.render.presets[settings.render.preset]
+        sources = sources_for(conn, plan)
+        missing = [f"#{rid}: {s.path}" for rid, s in sources.items() if not s.path.is_file()]
+        if missing:
+            console.print("[yellow]Resolve won't find these recordings where they were: "
+                          f"{'; '.join(missing)}. Relink them in Resolve.[/yellow]")
+        # Never the game's dialogue (see render/final.py): a Let's Play's words
+        # only come from a recording with the mic on its own track.
+        speaking = {rid for rid in plan.recording_ids if plan.recipe != "letsplay"
+                    or choose_tracks(conn, settings, rid).separate}
+        words = {rid: load_words(conn, rid) for rid in speaking}
+
+        def note(n: int, segment) -> str:
+            kind = "Teaser" if segment.kind == "teaser" else f"Clip {n}"
+            reasons = ", ".join(SIGNAL_LABELS.get(r, r) for r in segment.reasons)
+            return f"{kind}: {reasons}" if reasons else kind
+
+        for job, name, stem in jobs:
+            saved.append(write_fcpxml(folder / f"{stem}.fcpxml", job, sources, name=name,
+                                      fps=preset.fps, width=preset.width, height=preset.height,
+                                      note=note if plan.recipe != "letsplay" else None))
+            cues, offset = [], 0.0
+            for segment in job.segments:
+                length = max(1, round(segment.length * preset.fps)) / preset.fps
+                if segment.recording_id in words:
+                    cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
+                             segment_cues(words[segment.recording_id], segment.src_in,
+                                          segment.src_in + length)]
+                offset += length
+            if cues:
+                saved.append(write_srt(cues, folder / f"{stem}.srt"))
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+    console.print("[green]Saved:[/green]")
+    for path in saved:
+        console.print(f"  {path}")
+    console.print("In DaVinci Resolve: File > Import > Timeline, and pick the .fcpxml. The .srt "
+                  "holds your words, for a subtitle track (manual 19.3). The sound is the "
+                  "recording's own, before AI-Editor's clean-up.")
+    if open_folder:
+        import os
+
+        os.startfile(folder)  # noqa: S606 -- File Explorer on our own folder
+
+
+@app.command("render")
+def render_command(
+    plan_ref: str = typer.Argument(
+        None, help="The plan's # or name from 'ai-editor plans'. Leave out for the newest highlight video"),
+    captions: bool = typer.Option(None, "--captions/--no-captions",
+                                  help="Burn your words into the video, or not. Leave out to do as "
+                                  "Settings say (off unless you've turned them on)"),
+    part: int = typer.Option(None, "--part", help="Let's Plays: only this part, e.g. --part 2"),
+    episode: int = typer.Option(None, "--episode",
+                                help="Let's Plays: the episode number, if the recording's name "
+                                "doesn't say it (\"... EP 2\")"),
+    open_folder: bool = typer.Option(False, "--open", help="Open the video's folder afterwards"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Make the finished video from a plan, full quality, from your original recordings.
+
+    Your recordings' own size and frame rate, encoded on the graphics card.
+    The sound comes from your separate mic, game and Discord tracks where
+    the recording has them (so music playing on stream is left out), is set
+    to YouTube's loudness, and any marker beeps are taken out. Captions are
+    an option: --captions burns your words in. A Let's Play renders every
+    part as its own video, each opening with a title card ("Ep 1 – Part 2").
+    """
+    from .analysis.captions import clock
+    from .render import parts as lp
+    from .render.final import render_plan
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    results = []
+    try:
+        plan = _find_plan(conn, plan_ref, None if plan_ref else "highlights")
+        if plan is None:
+            console.print(f"[red]No plan {plan_ref or 'to render yet'}.[/red] "
+                          "See them, numbered, with: ai-editor plans")
+            raise typer.Exit(code=1)
+
+        jobs = [(plan, "Rendering", {})]
+        if plan.recipe == "letsplay":
+            episode, numbers, chosen = _episode_parts(conn, plan, part, episode)
+            captioned = settings.captions.lets_play if captions is None else captions
+            jobs = [(lp.part_plan(plan, n), f"Part {n} of {len(numbers)}",
+                     dict(target=lp.part_path(settings, plan, episode, n, captions=captioned),
+                          title=lp.title_card(settings, episode, n)))
+                    for n in chosen]
+            console.print(f"Rendering [bold]{plan.game} EP {episode}[/bold] ({plan.plan_id}): "
+                          f"{len(jobs)} part(s), {clock(sum(j[0].total_sec for j in jobs))} in all.")
+        else:
+            console.print(f"Rendering [bold]{plan.title}[/bold] ({plan.plan_id}): "
+                          f"{clock(plan.total_sec)} from {len(plan.segments)} piece(s).")
+
+        for job, what, extra in jobs:
+            progress = _progress_bar()
+            task = progress.add_task(what, total=1.0)
+            progress.start()
+            try:
+                results.append(render_plan(conn, settings, job,
+                                           lambda f: progress.update(task, completed=f),
+                                           captions=captions, **extra))
+            finally:
+                progress.stop()
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+    console.print()
+    for result in results:
+        encoder = "the graphics card" if result.encoder.endswith("_nvenc") else "the processor (slower)"
+        console.print(f"[green]Saved:[/green] {result.path}  ({_size(result.path)})")
+        console.print(f"  {clock(result.length_sec)} long, rendered in {_elapsed(result.seconds_taken)} "
+                      f"on {encoder}.")
+    last = results[-1]
+    if last.captions is None:
+        console.print("Captions: off (add --captions to burn them in).")
+    else:
+        console.print(f"Captions: {sum(r.captions or 0 for r in results)} burned in.")
+    for note in dict.fromkeys(n for r in results for n in r.notes):
+        console.print(f"[yellow]{note}[/yellow]")
+    for rid, choice in last.audio.items():
+        line = f"Sound for #{rid}: {choice.describe()}."
+        if choice.beeps:
+            line += f" {len(choice.beeps)} marker beep(s) taken out."
+        console.print(line)
+    if open_folder:
+        import os
+
+        os.startfile(last.path.parent)  # noqa: S606 -- File Explorer on our own folder
 
 
 @app.command("library")
