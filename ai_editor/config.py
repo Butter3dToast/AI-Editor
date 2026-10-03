@@ -31,7 +31,7 @@ class Folders(BaseModel):
     models: Path
 
     def all(self) -> dict[str, Path]:
-        return {name: getattr(self, name) for name in self.model_fields}
+        return {name: getattr(self, name) for name in type(self).model_fields}
 
 
 class Tools(BaseModel):
@@ -327,7 +327,10 @@ class Highlights(BaseModel):
     # the punchline").
     lead_in_sec: float = Field(15.0, ge=0.0, le=120.0)
     max_clip_sec: float = Field(50.0, ge=10.0, le=300.0)
-    ordering: Literal["chronological", "balanced", "best_last"] = "balanced"
+    # timeline: in the order it happened, the teaser's moment saved for last (the
+    # creator's own layout, 2026-10-03). balanced: strong opener, alternating
+    # intensity, best last. chronological: strictly in order. best_last: rising.
+    ordering: Literal["timeline", "chronological", "balanced", "best_last"] = "timeline"
     hook: bool = True
     hook_seconds: tuple[float, float] = (5.0, 15.0)
     allow_reused_clips: bool = False
@@ -513,6 +516,35 @@ def save_local_setting(settings_path: Path, section: str, key: str, value: Any) 
         encoding="utf-8",
     )
     return local_path
+
+
+def save_local_settings(settings_path: Path, changes: dict[tuple[str, str], Any]) -> Settings:
+    """Save several values to the private local file, all or none.
+
+    ``changes`` maps (section, key) to the new value. The result is checked
+    exactly as at start-up before anything is written, so a bad value can't
+    leave AI-Editor unable to open. Everything else in the local file (the
+    OBS password) is kept. Returns the settings as they now are.
+    """
+    local_path = local_settings_path(settings_path)
+    local = _read_yaml(local_path) if local_path.exists() else {}
+    for (section, key), value in changes.items():
+        local.setdefault(section, {})[key] = value
+    raw = _merge(_read_yaml(settings_path), local)
+    try:
+        settings = Settings(**raw)
+        settings.check_consistency()
+    except ValidationError as exc:
+        raise SettingsInvalid(_explain(exc)) from exc
+    except ValueError as exc:
+        raise SettingsInvalid(str(exc)) from exc
+    local_path.write_text(
+        "# Private settings for this PC only. Never committed to git (see .gitignore).\n"
+        + yaml.safe_dump(local, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    settings.source_path = settings_path
+    return settings
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:

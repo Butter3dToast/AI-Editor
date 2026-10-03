@@ -151,6 +151,20 @@ Because analysis only happens once, you can make a Let's Play, a highlight video
 4. When installation finishes, open **AI-Editor** from the Start menu.
 5. The **First-time setup wizard** opens automatically (chapter 6).
 
+### 5.1 Opening AI-Editor (the app window)
+
+Double-click **AI-Editor** on your desktop (the purple play-button icon).
+
+- A black window opens first. It says **AI-Editor is running**. **Leave it open** while you use AI-Editor. **Closing it quits AI-Editor.**
+- A moment later, AI-Editor opens in your web browser. It's a page on your own PC, not a website. Nothing goes online, and nothing else on your network can see it. (The address is `http://127.0.0.1:7865`, where 127.0.0.1 means "this PC".)
+- Closed the browser tab by mistake? Double-click the desktop icon again. It reopens the page; it doesn't start a second copy.
+- After you close the black window, the browser page shows **"Connection to the server was lost"**. That's expected: AI-Editor has quit. Close the tab.
+- Quitting while a job is running is safe. The job pauses, along with any FFmpeg or Twitch download it started. Next time, press **Resume** (11.3). Finished steps aren't repeated.
+
+**Shortcut missing?** In a terminal in the AI-Editor folder, run `.\.venv\Scripts\ai-editor shortcut`. It puts the icon back on your desktop.
+
+**"Another program is using port 7865"?** Something else is using AI-Editor's address. Run `ai-editor app --port 7866` instead.
+
 ### Updating AI-Editor
 
 1. Open **Help → Check for updates**.
@@ -349,16 +363,23 @@ Stream Companion is a small app that runs in the background while you stream or 
 
 ### 8.1 Starting it
 
-1. Open **Stream Companion** from the Start menu, or tick **Settings → Start Stream Companion with Windows**.
-2. An icon appears in the system tray (bottom-right of your taskbar).
-3. Right-click the icon to see its status:
-   - **OBS: Connected** — ready.
-   - **Recording / Streaming: Active** — it is logging.
-   - **League: Match detected** — League events are being logged.
+1. Do chapter 7.4 once (connect AI-Editor to OBS).
+2. In AI-Editor, the **Stream Companion** line near the top says **Not running**. Click **Start**.
+3. It opens in a window of its own, "AI-Editor Stream Companion". Leave that window open (minimised is fine) while you play. **It keeps going if you close AI-Editor or the browser.**
+4. The line in AI-Editor turns green and shows what it's doing, every second:
+   - **OBS connected**, or **waiting for OBS to open** (normal while OBS is closed; it checks every 5 seconds).
+   - **Live since 19:55**, **Recording since 19:55**.
+   - The game on screen, from your OBS scene (8.1b).
+   - How many moments you've marked, and when the last was.
+5. When you've finished, click **Stop**. (Or close its own window.)
 
-**Always start Stream Companion before you go live or start recording.** If it wasn't running, AI-Editor still works, but without markers and League events.
+It can't run twice: **Start** while it's already running just says so.
 
-#### 8.1a Starting it from the command line (until the app window arrives)
+**Always start Stream Companion before you go live or start recording.** If it wasn't running, AI-Editor still works, but without markers, scene changes (which keep clips out of "BRB" and your ending screen) and League events.
+
+**Not built yet:** a tray icon, and starting it with Windows.
+
+#### 8.1a Starting it from the command line
 
 1. Do chapter 7.4 once (connect AI-Editor to OBS).
 2. Open a terminal in the AI-Editor folder with the venv active and run `ai-editor companion`.
@@ -373,7 +394,7 @@ Stream Companion is a small app that runs in the background while you stream or 
 | **Game** | The game on screen, from your OBS scene (see 8.1b). **—** on a scene that isn't a game, like "Brb". |
 | **Logged** | How many things it has noted since you started it. |
 
-4. When you've finished, click that window first so it has focus, then press **Ctrl+C**. (Ctrl+C only reaches a terminal window that has focus. The tray icon in 8.1 replaces this when the app window arrives.)
+4. When you've finished, click that window first so it has focus, then press **Ctrl+C**, or click **Stop** in AI-Editor. (Ctrl+C only reaches a terminal window that has focus.)
 
 It uses next to no computer power: it sleeps until OBS tells it something changed.
 
@@ -466,16 +487,24 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 
 ### 10.1 Import a local OBS recording
 
-1. Click **Import → Local recording**.
-2. Choose the file from your Raw footage folder.
-3. AI-Editor checks the file and shows the audio tracks it found. Confirm which track is which (it remembers this for next time).
-4. Choose the **game**.
-5. Choose the **layout** (facecam position).
-6. Click **Import**.
+1. Open the **Import** tab.
+2. Pick the recording from **New in your raw folder**. It lists the videos in your Raw footage folder that aren't imported yet, newest first, with their size and date. (Recording somewhere else? Click **Browse...**, or paste the file's location.)
+3. Choose the **game**, or leave it empty. AI-Editor then works it out from the file name or from the Stream Companion's session. Not listed? Type its name.
+4. Leave **Analyse straight after importing** ticked. This is usually what you want.
+5. Click **Import**. The job appears under **Jobs** at the top, with a progress bar for each step. You can use the other tabs meanwhile.
 
-### 10.1a Importing from the command line (until the app window arrives)
+**More options** (usually not needed):
+- **Sound tracks, in order:** only if AI-Editor guessed the tracks wrong, e.g. `mixed,mic,game,voice_chat`.
+- **Twitch link:** for a VOD you downloaded yourself (10.3). AI-Editor reads the game and stream date from Twitch.
 
-> **[Engineer: this section covers the command-line tool used while AI-Editor is being built. The app window arrives in Phase 1H, when chapter 10.1 above becomes the main way to import.]**
+**Good to know**
+- **Your recording is never copied, moved or changed.** AI-Editor reads it where it is.
+- **A file OBS is still recording isn't imported.** If the file changed in the last minute, AI-Editor asks you to stop recording first.
+- **Not built yet:** choosing the layout (facecam position).
+
+### 10.1a Importing from the command line
+
+> **[Engineer: the command-line version of 10.1. The app window is now the main way to import; this stays for testing.]**
 
 1. Open a terminal in the AI-Editor folder and turn on its Python environment:
 
@@ -513,11 +542,13 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 ### 10.2 Import a Twitch VOD
 
 1. On Twitch, go to your channel → **Videos**, open the VOD, and copy the link from your browser's address bar.
-2. In AI-Editor, click **Import → Twitch VOD**.
-3. Paste the link.
-4. Tick **Download chat** (recommended).
-5. Choose the **game** and **layout**.
-6. Click **Download and import**. Progress appears in the job queue.
+2. In AI-Editor's **Import** tab, scroll to **A Twitch VOD** and paste the link.
+3. Click **Check** (optional). It shows the VOD's title, game and length, and warns you if Twitch deletes it soon.
+4. Leave **Download the chat too** and **Analyse straight after importing** ticked.
+5. Set the **game** only if Twitch has it wrong.
+6. Click **Download and import**. The video goes into your Raw footage folder. Progress shows under **Jobs**.
+
+The VOD must be public. For a private one, download it from your Twitch dashboard, then import the file (10.1) with its link under **More options**.
 
 **Important:** Twitch deletes VODs after a limited time depending on your account type. AI-Editor shows a warning for VODs close to expiring. Download VODs soon after streaming.
 
@@ -568,6 +599,23 @@ From the command line: `ai-editor attach-chat <recording number> "<VOD link>"`.
 If the Stream Companion was running and you have one OBS scene per game, this is automatic: see 8.1b. Otherwise, open the recording in the Library, click **Game sections**, and mark where each game starts.
 
 ---
+
+### 10.5 The Library
+
+The **Library** tab lists every recording you've imported, newest first:
+
+| Column | Shows |
+|---|---|
+| Sound | **4 tracks** (separate mic, game, Discord) or **1 mixed track** |
+| Status | **Analysed**, **Not analysed yet**, **Analysis paused** or **Analysis failed**, **Import unfinished**, or **File missing** (moved or deleted) |
+| Clips | How many candidate clips analysis found |
+| Chat | Twitch chat messages attached. For a VOD without chat, how many days Twitch still keeps it |
+
+Use the search box above the table to filter it. Click a row, or pick it under **Recording**, to see its details. Then:
+
+- **Analyse (or resume):** analyses it, or carries on where it stopped. It finishes an unfinished import first.
+- **Watch the preview copy:** opens the small preview copy in your video player. After analysis, VLC shows its subtitles by itself.
+- **Show the file in Explorer:** opens the folder with the original recording selected.
 
 ## 11. Analysis
 
@@ -681,42 +729,51 @@ For a 2-hour recording, expect **around 45–50 minutes**, a bit longer for Twit
 
 ### 11.3 The job queue
 
-Open **Queue** to see all jobs.
+**Jobs**, at the top of the window, lists everything you've started. One job runs at a time, because they all need the graphics card. The rest wait their turn. Each job shows a progress bar per step, how long it's taken, and what it found.
 
-- **Pause / Resume** — stop a job and continue later without losing progress.
-- **Reorder** — drag jobs to change which runs first.
-- **Run overnight** — tick this to start the queue at a set time (for example 2:00 AM).
-- **Shut down PC when finished** — optional.
+- **Pause:** stops the running job at its next progress update, and holds the waiting ones. Use it before you game or stream, so AI-Editor isn't using the graphics card. The step it was in starts again from 0% on Resume. A half-made preview copy can't be continued, only redone. Every step that had already finished is kept.
+- **Resume:** carries on with paused jobs, and retries any that stopped with a problem. Finished steps are not repeated.
+- **Clear finished:** tidies finished jobs off the list.
 
-If your PC restarts or AI-Editor closes during analysis, just reopen AI-Editor and press **Resume**. Finished steps are not repeated.
+If your PC restarts or AI-Editor closes during analysis, reopen AI-Editor and press **Analyse (or resume)** on that recording in the **Library** (10.5). Finished steps are not repeated.
+
+**Not built yet:** reordering jobs, running overnight at a set time, and shutting down the PC when finished.
 
 ---
 
 ## 12. The Clip Browser
 
-The Clip Browser shows every moment AI-Editor found.
+The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 ### 12.1 What you see for each clip
 
-- **Thumbnail and preview** — click to play.
-- **Score** — 0 to 1. Higher is better.
-- **Tags** — for example *funny*, *clutch*, *fail*, *boss fight*.
-- **Summary** — a short description.
-- **Signals** — icons for what made it stand out: marker, laughter, shouting, gunfire, chat spike, game event.
-- **Used in** — which videos already use this clip.
+1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, and how many minutes of video your unused 👍 clips make.
+2. Each row is one clip:
 
-### 12.2 Filtering and sorting
+| Column | Shows |
+|---|---|
+| Time | Where it is in the recording |
+| Length | How long the clip is in the library. Generous on purpose, so nothing good is lost |
+| In a video | How long it is once a highlight video trims it to its moment: about 15 s of lead-up, never more than 50 s, never cut mid-word. "-" means it can't go in (rated down, or during "BRB") |
+| Score | 0 to 1. Higher is better. A moment you marked scores 1.00 |
+| Why | What made it stand out: you marked it, laughter, shouting, gunfire, chat busy, loud... |
+| You said | Your words in it |
+| Rated | 👍 or 👎 if you've rated it |
+| Used | **yes** once a rendered video uses it |
 
-Filter by game, recording, date, tag, minimum score, "not used yet," or "marked by me." Sort by score, date, or length.
+3. **Click a clip** to play it beside the list. It plays from the preview copy, so it starts straight away; the finished video is full quality. Underneath are all its words, its game, and the video it's used in.
 
-### 12.3 Rating clips
+**Not built yet:** thumbnails, tags and summaries (Phase 2), pinning, trimming, and filtering by game or date.
 
-- 👍 **Thumbs up** — "this is a good moment." AI-Editor learns what you like.
-- 👎 **Thumbs down** — "not a good moment."
-- 📌 **Pin** — always consider this clip for highlights and Shorts.
-- **Trim** — drag the start and end handles if the clip starts too early or ends too late.
+### 12.2 Rating clips
 
-Rating even 10–20 clips per week helps AI-Editor learn fast.
+Click a clip, then:
+
+- 👍 **Good clip:** **it goes into your next highlight video**, whatever its score, so you see it in Review for the final check. Already made the video? Add it there with **Add a clip** (18.2).
+- 👎 **Not good:** that moment never goes into a highlight video, even a moment you marked, and even if the clip is cut slightly differently later.
+- **Clear rating:** undo either.
+
+Every rating is kept, with what the clip sounded like, so AI-Editor can learn what you like (Phase 3). Rating even 10–20 clips a week helps.
 
 ---
 
@@ -849,13 +906,13 @@ Each rule has a switch. Turn a rule off to test a video without it, without dele
 
 ### 15.1 Quick start
 
-1. Go to **Create video → Let's Play**.
-2. Choose the **recording**.
-3. Choose the **Style Profile** (for example "Dawnwalker Chill Let's Play").
-4. Check the **Length settings** (defaults below are already set for Dawnwalker).
-5. Click **Build plan**.
-6. The **Part Planner** shows the proposed parts. Review and adjust (chapter 15.4).
-7. Click **Continue to review**, then render.
+1. Go to **Create video**, and choose **Let's Play**.
+2. Pick the **Episode recording**. Let's Play games are listed first.
+3. Click **Make the plan**. It takes seconds and shows under **Jobs**, then opens in **Review**.
+4. Review lists the **parts**: how long each is, and where it is in the recording. **Click a part** to watch how it starts. **Quick preview of the selected part** makes a watchable version of the whole part, cuts included, in seconds.
+5. Check the **Episode number** (read from the recording's name, e.g. "EP 1"). Choose **All parts** or one part. Then **Render the finished video** (chapter 19).
+
+**Not built yet:** Style Profiles, and the Part Planner for moving split points by hand (15.4).
 
 ### 15.1a From the command line (until the app window arrives)
 
@@ -952,12 +1009,13 @@ Use Condense when you want a single video from a session.
 
 ### 16.1 Quick start
 
-1. Go to **Create video → Highlights**.
-2. Choose one or more **recordings** (you can combine several streams).
-3. Choose the **Style Profile**.
-4. Set **Target length** (default **10 minutes**).
-5. Click **Build plan**.
-6. Review and render.
+1. Go to **Create video**, and choose **Highlights**.
+2. **Game:** leave **All my streams** for stream highlights of every game you played (Let's Plays stay out), or pick one game.
+3. **Only these streams** (optional): leave it empty and AI-Editor uses the oldest streams' unused clips first, then the next stream's. Or pick the streams yourself.
+4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video.
+
+When the Stream Companion was running, no clip runs into your "BRB", "Starting" or "Ending Screen" scenes: each one stops half a second before you switched, and a moment during "BRB" isn't used.
+5. Click **Make the plan**. It shows under **Jobs**, then opens in **Review** (chapter 18).
 
 ### 16.1a From the command line (until the app window arrives)
 
@@ -982,7 +1040,7 @@ What it does:
 1. **Only good clips.** Anything below the quality bar (**Minimum clip score**) is left out, even if the video comes up short. Clips you pinned or marked with the Stream Companion always go in.
 2. **Several streams when needed.** If one stream doesn't have enough good moments, it carries on with the next, oldest first: for example 4 minutes from Monday's stream and 6 from Tuesday's.
 3. **Trimmed to the moment.** Each clip starts 15 seconds before its moment and is at most 50 seconds long, still never cutting anyone off mid-word or opening mid-sentence. When a moment is too long, a joke keeps its build-up, but a **fight keeps its end**, where the kill is.
-4. **In a good order.** A 5–15 second teaser first, then a strong clip, then stronger and calmer clips in turn, and the teased moment in full at the end. The teaser is, in order: a moment you **marked with Numpad +** during the stream; otherwise the moment where **you react most** (laughing, getting loud, shouting). Sound can't tell what's *funny*, only how loud you are, so to choose it yourself, add `--teaser` with the clip's **#** from the list the last run showed: `ai-editor highlights --game Wardogs --teaser 5`. The teased clip also closes the video. The teaser ends where you stop talking.
+4. **In the order it happened.** A 5–15 second teaser first, then the clips as they happened on stream (oldest stream first), and the teased moment in full at the end, the way you laid out your own League video. The teaser is, in order: a moment you **marked with Numpad +** during the stream; otherwise the moment where **you react most** (laughing, getting loud, shouting). Sound can't tell what's *funny*, only how loud you are, so to choose it yourself, add `--teaser` with the clip's **#** from the list the last run showed: `ai-editor highlights --game Wardogs --teaser 5`. The teased clip also closes the video. The teaser ends where you stop talking.
 
    **Picking the exact moment.** After watching a video, name the moment you want as the teaser by its time in that video: `ai-editor highlights --game "League of Legends" --teaser-at 6:36-6:42`. The teaser is exactly that, with a second either side so it doesn't start or stop abruptly (never mid-word), and the whole clip it's from closes the video. Giving only where it starts (`--teaser-at 6:36`) ends it the usual way, at a pause. Use the same `--game` as the video you watched. The times must be inside one clip.
 
@@ -1002,21 +1060,21 @@ The preview is only for judging the choices. The finished video, in full quality
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Target length** | 10 min | Final video length (up to about 15% over). Never padded: if there isn't enough good material, the video is shorter. |
+| **Target length** | 10 min | The least the video will be: it can run over, never under while good clips are left. Never padded with weak clips: if there aren't enough, it says so. |
 | **Games** | All in selected recordings | Mix games or keep one game only. |
-| **Minimum clip score** | 0.55 | The quality bar: clips below it aren't used, even if the video comes up short. On your Wardogs streams every clip you liked scored 0.56 or more. Lower it for more (weaker) clips. |
+| **Minimum clip score** | 0.55 | The quality bar: clips below it aren't picked, even if the video comes up short. Clips you 👍 and moments you marked always go in, whatever their score. |
 | **Fill order** | Oldest first | When one stream runs out of good clips: *Oldest first* uses up the earliest stream before moving to the next; *Best first* takes the highest-scoring clips from any stream. |
 | **Lead-in / longest clip** | 15 s / 50 s | How much of the build-up each clip keeps, and the most any one clip can run, so the video keeps its pace. |
 | **Hook** | On | Opens with a 5–15 second teaser of the best moment. |
-| **Ordering** | Balanced | *Chronological*, *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
+| **Ordering** | Timeline | *Timeline* (as it happened, the teaser's clip saved for the end), *Chronological* (strictly as it happened), *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
 | **Allow reused clips** | Off | Whether clips already used in other highlight videos can appear. |
 | **Always include pinned clips** | On | Your pinned clips are always used. |
-| **Always include markers** | On | Moments you marked with the hotkey are prioritized. |
+| **Always include markers** | On | Moments you marked with the hotkey always go in. |
 
 ### 16.3 Tips
 
 - Mark moments during your stream. It's the single best way to get great highlights.
-- If the video feels repetitive, increase **Minimum clip score** or choose **Balanced** ordering.
+- If the video feels repetitive, increase **Minimum clip score** or choose **Balanced** ordering (`highlights.ordering` in `settings.yaml`).
 - Combine a week of streams for a "Best of the week" video.
 
 ---
@@ -1078,47 +1136,31 @@ On the Review screen for Shorts you can:
 
 ## 18. The Review screen
 
-Every video goes through Review before rendering. Nothing is final until you say so.
+Every video goes through Review before rendering. Nothing is final until you render it.
 
-### 18.1 Layout **[Screenshot]**
+### 18.1 Layout
 
-- **Preview player** (top) — plays the edit as planned.
-- **Length bar** — your whole source recording, colored by what happens to each section.
-- **Segment list** — every piece in the video, in order.
-- **Effects panel** — effects on the selected segment.
-- **Buttons** — Preview render, Render, Export, Save plan.
+- **Video plan:** every plan you've made, newest first. It opens on the newest one.
+- **The list** (highlights): every piece in order. The teaser first, then each clip, with where it lands in the video, which stream it's from, where it starts in that stream, its length, score, and why it's in.
+- **The parts** (Let's Plays): see 15.1.
+- **Player** (right): click a row to watch that piece, from the preview copy.
+- **Quick preview of the whole video:** a low-resolution version of the whole thing, made in seconds, that plays in the same player.
 
-### 18.2 Length bar colors
+### 18.2 Things you can do (highlights)
 
-| Color | Meaning |
-|---|---|
-| **Green** | Kept |
-| **Gray** | Trimmed (removed) |
-| **Blue** | Sped up |
-| **Purple** | Protected (story, won't be cut) |
-| **Gold** | Pinned by you (always kept) |
-| **Red line** | Split point between parts |
+Click a row first, then:
 
-Drag the **target length slider** to watch the bar update live and see exactly what would be cut.
+- **Use as teaser:** the video opens with a few seconds of this clip's best moment, and ends on the clip in full, paying the teaser off.
+- **Or the teaser from an exact moment:** type the time in the quick preview or render, e.g. `6:36-6:42`, or just where it starts, `6:36`, and click **Use this moment**. AI-Editor adds a second either side and never starts or stops mid-word.
+- **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
+- **Move up / Move down:** changes the order one place. The teaser always stays first.
+- **Move the clicked clip to #:** type a number from the list's **#** column and click **Move**: the clip jumps straight there.
+- **Sort by time:** puts everything back in the order it happened: the teaser first, the clips as they happened, the teaser's own clip saved for the end.
+- **Add a clip that isn't in the video:** lists the clips from the same streams that aren't in it, your 👍 clips first, then the best (including ones under the quality bar: you're the judge here). Pick one to watch it in the player, then **Add to video**. It goes in where it happened in the stream; move it from there. A clip that fills the gap after a **Remove** slots in by time the same way.
 
-### 18.3 Things you can do
+Changes are saved straight away. You can close AI-Editor and carry on later. Everything you change is kept, so AI-Editor can learn from it (chapter 22).
 
-- **Play** any segment by clicking it.
-- **Reorder** segments by dragging (Highlights and Shorts).
-- **Trim** a segment by dragging its edges.
-- **Remove** a segment: select it and press `Delete`.
-- **Restore** a trimmed section: click a gray area on the length bar → **Keep this**.
-- **Pin** a section: right-click → **Pin**.
-- **Unprotect** a story section: right-click → **Allow cutting** (use carefully).
-- **Toggle effects**: switch individual zooms, captions, SFX, or text on or off.
-- **Edit captions**: click caption text to fix mistakes.
-- **Undo / Redo**: `Ctrl + Z` / `Ctrl + Y`.
-
-Every change you make here teaches AI-Editor (chapter 22).
-
-### 18.4 Saving and coming back
-
-Click **Save plan** to keep your work. Find saved plans under **Projects**. You can close AI-Editor and continue later.
+**Not built yet:** the length bar, trimming a clip's start or end, effects, editing captions, and undo.
 
 ---
 
@@ -1126,26 +1168,20 @@ Click **Save plan** to keep your work. Find saved plans under **Projects**. You 
 
 ### 19.1 Preview render
 
-Click **Preview render** for a quick, low-quality version. Use it to check pacing and effects before the full render. It's much faster.
+In Review, click **Quick preview of the whole video** (or **of the selected part** for a Let's Play). It's made from the preview copies in seconds, and plays in Review's player. Use it to check the order and pacing before the full render.
 
 ### 19.2 Final render
 
-1. Click **Render**.
-2. Choose a preset:
+1. In Review, tick **Burn in captions** if you want your words on screen (chapter 19.2c). It's off by default.
+2. For a Let's Play, check the **Episode number**, and choose **All parts** or one.
+3. Click **Render the finished video**. Progress shows under **Jobs**.
+4. When it's finished, click **Open the finished video**. Finished files are in your output folder, under `videos`: a highlight video by its plan's name, a Let's Play part as "Game - EP 1 - Part 2".
 
-| Preset | Resolution | Use for |
-|---|---|---|
-| **YouTube 1080p60** | 1920×1080, 60 fps | Let's Play parts and highlights |
-| **YouTube 1080p30** | 1920×1080, 30 fps | Smaller files, slower-paced content |
-| **Vertical 1080×1920 60 fps** | Vertical | YouTube Shorts and TikTok |
-| **Vertical 1080×1920 30 fps** | Vertical | Smaller vertical files |
+Rendering marks the plan's clips as **used**, so the next highlight video carries on with fresh ones. Remove a clip and render again, and that clip is free again.
 
-3. Click **Start render**. Progress shows in the Queue.
-4. Finished files appear in your **Outputs** folder, named by project and part number.
+Expected times: about 3½ minutes for a 12-minute highlight, about 7 minutes for a 30-minute part. The sound is balanced for YouTube.
 
-For Let's Plays, **Render all parts** queues every part at once.
-
-Expected times: a 30-minute part around 10 minutes, a 10-minute highlight under 10 minutes, a Short under 2 minutes. Audio is automatically balanced to suit YouTube.
+**Not built yet in the window:** choosing another preset (1080p30, vertical). It's set in `settings.yaml` (`render.preset`).
 
 ### 19.2a From the command line (until the app window arrives)
 
@@ -1219,15 +1255,11 @@ What's captioned:
 
 ### 19.3 Exporting to DaVinci Resolve (free)
 
-The backup route, for the odd video you'd rather fine-tune by hand. Your finished videos come from `ai-editor render`; you never need Resolve for them.
+The backup route, for the odd video you'd rather fine-tune by hand. Your finished videos come from **Render the finished video**; you never need Resolve for them.
 
-1. Save the plan as a Resolve timeline:
+1. In Review, click **Export to DaVinci Resolve**. A Let's Play saves one timeline per part: all of them, or the one chosen under **Parts**. The folder opens with the timeline selected.
 
-   ```
-   ai-editor export 2
-   ```
-
-   Use the plan's number from `ai-editor plans`, or leave it out for your newest highlight video. A Let's Play saves one timeline per part (`--part 2` for one). Add `--open` to open the folder.
+   (From the command line: `ai-editor export 2`, using the plan's number from `ai-editor plans`.)
 
 2. The files are saved in your Output folder, under `timelines`:
    - `<name>.fcpxml`: the timeline.
@@ -1390,27 +1422,32 @@ Everything lives on one drive, so keeping an eye on space matters.
 
 ### 23.1 Checking space
 
-**Storage** shows:
-- Free space on your drive.
-- Space used by each project (raw, cache, outputs).
-- Total cache size.
+Open the **Storage** tab. It shows:
+- **Drives:** free space on each drive AI-Editor uses, and a warning if one drops below your level (100 GB to start with; change it in Settings).
+- **What's using it:** your recordings, AI-Editor's working copies, finished videos, and quick previews.
+- **Each recording:** the recording file itself, then what AI-Editor keeps for it:
 
-AI-Editor warns you before starting a job if free space is low (default warning below **100 GB**, adjustable in Settings).
+| Column | What it is | Needed for |
+|---|---|---|
+| Sound tracks | Your mic, game and Discord, pulled out of the recording | Clean sound in finished videos (music left out, beeps removed) |
+| Preview copy | The small 540p copy | Playing clips in the window, quick previews |
+| Working files | What analysis left behind: prepared sound, AI-separated voices | Nothing, once a recording is analysed |
+| Analysis data | Words, sounds, scenes | Everything: clips, scores, plans |
 
-### 23.2 Cleaning up a finished project
+A **Leftover** row is a folder from a recording no longer in the library.
 
-1. Go to **Storage**, select the project.
-2. Choose a cleanup option:
+AI-Editor also warns you before importing if free space is low.
 
-| Option | Deletes | Keeps | Can you still make new videos from it? |
-|---|---|---|---|
-| **Clean cache** | Preview copies, separated audio, temporary files | Raw footage, analysis, outputs | Yes, fully |
-| **Clean cache + outputs** | Cache and rendered videos | Raw footage and analysis | Yes, re-render when needed |
-| **Archive** | Everything except analysis data | Analysis data (very small) | Only if you re-add the raw file later |
+### 23.2 Freeing space
 
-3. Click **Clean up** and confirm.
+1. In **Storage**, pick the recordings under **Recordings to tidy** (or **Pick all**).
+2. Click **Free working files**. It says how much it freed (about 1–2 GB per stream).
 
-**AI-Editor never deletes your raw footage automatically.** Delete raw files yourself once you're sure you've uploaded everything you want.
+Nothing is lost: clips, ratings, plans, preview copies and sound tracks all stay. If you ever analyse that recording again, the working files are simply made again. It won't run while a job is running.
+
+**AI-Editor never deletes your raw recordings.** Delete them yourself once you're sure you've uploaded everything you want.
+
+**Not built yet:** freeing the sound tracks and preview copies too, and deleting quick previews.
 
 ### 23.3 Moving footage to another drive
 
@@ -1420,7 +1457,9 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 
 ## 24. Settings reference
 
-> **[Engineer: complete this table with every setting, its exact default, and valid range.]**
+The **Settings** tab has the ones you'll change most: your folders (each with an **Open** button), and the main options for highlights, captions, Let's Plays, the Stream Companion and Twitch. Click **Save settings**: they work straight away, and are saved on this PC only (`config/settings.local.yaml`, beside your OBS password). A value AI-Editor can't use is refused with the reason, and nothing is saved.
+
+You can change the recordings and output folders there. The cache and models folders are set in `config/settings.yaml`, because moving them means moving their files too. Every other setting is in `config/settings.yaml` as well:
 
 | Area | Setting | Default | What it does |
 |---|---|---|---|
@@ -1461,7 +1500,7 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 | Analysis | Scene threshold | 5.0 | How different the picture must look to count as a scene change. Lower finds more (including fast camera turns); higher misses quick menus. Changing it re-runs only scene detection. |
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
 | Let's Play | Title card | Empty (none), 4 s | Text shown over the start of every part, e.g. `Ep {episode} – Part {part}`; `{episode}` and `{part}` are filled in. Off because the YouTube title says it. |
-| Highlights | Target length / min score / fill order / lead-in / longest clip / ordering | 10 min / 0.55 / Oldest first / 15 s / 50 s / Balanced | See chapter 16.2. |
+| Highlights | Target length / min score / fill order / lead-in / longest clip / ordering | 10 min / 0.55 / Oldest first / 15 s / 50 s / Timeline | See chapter 16.2. |
 | Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |

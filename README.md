@@ -33,7 +33,7 @@ a hard rule, not a preference.
 | **1E** | Scoring and clip segmentation | **Complete** |
 | **1F** | Recipes: highlights, Let's Play split optimiser | **Complete** |
 | 1G | Rendering (NVENC), captions, OTIO/FCPXML export | **Complete** |
-| 1H | Gradio interface, storage management | Not started |
+| 1H | App window (Gradio), storage management | **Complete** |
 | 2 | Shorts, League events, story protection, style profiles, rules, effects | Not started |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 
@@ -56,6 +56,8 @@ pip install torch --index-url https://download.pytorch.org/whl/cu126
 .\.venv\Scripts\Activate.ps1      # or: py -3.11 -m venv .venv  (first time)
 pip install -e ".[dev]"
 
+ai-editor shortcut                # Put the AI-Editor icon on the desktop (once)
+ai-editor app                     # The app window: everything below, with buttons
 ai-editor doctor                  # Check the setup
 ai-editor probe "path\to\recording.mp4" --hash
 ai-editor import "path\to\recording.mp4"    # Proxy + audio into the library

@@ -3,6 +3,61 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.9.0 — Phase 1H: The app window — 3 October 2026
+
+AI-Editor now has a window: everything is done with buttons, from importing a
+recording to rendering the finished video. Double-click the **AI-Editor**
+icon on your desktop. It opens in your browser, on this PC only: nothing goes
+online. Closing the black window quits it.
+
+**New**
+
+- **Jobs**, at the top: importing, analysing, rendering and previews run one
+  at a time in the background, with a progress bar per step. **Pause** stops
+  them (say, before you stream), **Resume** carries on, and finished steps are
+  never repeated. Closing AI-Editor mid-job also stops FFmpeg and Twitch
+  downloads, instead of leaving them running unseen.
+- **Library**: every recording, its status, clips and chat, with Analyse (or
+  resume), Watch the preview copy and Show in Explorer.
+- **Import**: new recordings in your raw folder are listed, ready to pick, or
+  Browse. A file OBS is still writing isn't imported. Twitch VODs: paste the
+  link, Check, Download and import.
+- **Clips**: every clip, best first. Click one to watch it in the window. A
+  **👍 puts the clip in your next highlight video**, whatever its score; a 👎
+  keeps that moment out. A line counts your ratings and how many minutes of
+  video your 👍 clips make, and each clip shows its length once trimmed.
+- **Create video**: highlights (all your streams, one game, or chosen
+  streams) or a Let's Play episode, in one click.
+- **Review**: the plan, clip by clip, each playable in the window.
+  - Choose the teaser, from a clip or an exact moment.
+  - **Remove** a clip and the next best fills its place, so the video never
+    falls under its length.
+  - **Add** any clip that isn't in it, 👍 ones first.
+  - Move clips up, down or straight to a number. **Sort by time** puts them
+    back in order.
+  - **Quick preview** of the whole video in seconds; **Render** (captions on
+    or off), **Open the finished video**, and **Export to DaVinci Resolve**.
+  - Let's Plays show their parts, with the episode number filled in.
+- **Storage**: free space on each drive, what each recording uses, and **Free
+  working files** (about 1–2 GB per stream, nothing lost). Your recordings are
+  never deleted.
+- **Settings**: your folders and the main options for highlights, captions,
+  Let's Plays, the Stream Companion and Twitch. Saved on this PC only, beside
+  your OBS password, and they work straight away.
+- **Stream Companion** panel: Start, Stop, and what it's doing (OBS, live or
+  recording, game, markers), live. It runs in its own window and carries on
+  if you close AI-Editor.
+
+**Changed**
+
+- **Highlights are in the order things happened**, with the teaser's moment
+  saved for the end, like your own League layout. The length you set is now
+  the least a video will be: it can run over, never under while good clips
+  are left.
+- **No clip runs into "BRB" or your ending screen.** Each one stops half a
+  second before you switched scene (when the Stream Companion was running),
+  and a moment during "BRB" isn't used.
+
 ## 0.8.0 — Phase 1G: Finished videos — 3 October 2026
 
 AI-Editor now makes finished videos, start to end: full quality from your

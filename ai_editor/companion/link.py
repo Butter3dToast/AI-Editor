@@ -211,6 +211,41 @@ def game_at(timeline: list[tuple[float, str | None]], t: float) -> str | None:
     return current
 
 
+def scene_span(timeline: list[tuple[float, str | None]], t: float,
+               duration: float) -> tuple[float, float, str | None]:
+    """The stretch around ``t`` with the same game on screen: (start, end, game).
+
+    Several scenes in a row that aren't a game ("Starting Soon", "BRB") count
+    as one stretch, as do two scenes of the same game.
+    """
+    if not timeline:
+        return 0.0, duration, None
+    index = max((i for i, (at, _) in enumerate(timeline) if at <= t), default=0)
+    game = timeline[index][1]
+    first = index
+    while first > 0 and timeline[first - 1][1] == game:
+        first -= 1
+    last = index
+    while last + 1 < len(timeline) and timeline[last + 1][1] == game:
+        last += 1
+    start = 0.0 if first == 0 else timeline[first][0]
+    end = timeline[last + 1][0] if last + 1 < len(timeline) else duration
+    return start, end, game
+
+
+def game_spans(timeline: list[tuple[float, str | None]],
+               duration: float) -> list[tuple[float, float, str]]:
+    """Every stretch with a game on screen: (start, end, game), in order."""
+    found: list[tuple[float, float, str]] = []
+    t = 0.0
+    while timeline and t < duration:
+        start, end, game = scene_span(timeline, t, duration)
+        if game:
+            found.append((start, end, game))
+        t = end if end > t else duration
+    return found
+
+
 def main_game(timeline: list[tuple[float, str | None]], duration: float) -> str | None:
     """The game played for longest in a recording."""
     totals: dict[str, float] = {}

@@ -191,7 +191,9 @@ highlights: # Spec section 7.6 Recipe B
   fill_order: oldest_first # oldest_first | best_first
   lead_in_sec: 15 # each clip is trimmed to this much before its moment...
   max_clip_sec: 50 # ...and no longer than this, so the video keeps its pace
-  ordering: balanced # chronological | balanced | best_last
+  # timeline: clips in the order they happened, the teaser's moment saved for the
+  # end. Or balanced (strong opener, calm/strong alternating), chronological, best_last.
+  ordering: timeline
   hook: true # open with a teaser of the best moment
   hook_seconds: [5, 15]
   allow_reused_clips: false

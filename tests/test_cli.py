@@ -15,7 +15,7 @@ runner = CliRunner()
 
 COMMANDS = ["version", "doctor", "init-db", "probe", "import", "import-twitch", "attach-chat",
             "library", "analyze", "moments", "setup-obs", "companion", "sessions", "score", "clips", "highlights",
-            "letsplay", "approve", "plans", "render", "export"]
+            "letsplay", "approve", "plans", "render", "export", "app", "shortcut"]
 
 
 def test_top_level_help_lists_every_command():

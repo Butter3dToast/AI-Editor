@@ -1,0 +1,243 @@
+"""What the Clips, Create video and Review tabs show (spec section 9, items 4, 7 and 8).
+
+Plain functions over the database, kept apart from the window so they can be
+tested without it.
+"""
+
+from __future__ import annotations
+
+import html
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote
+
+from ..analysis.captions import clock
+from ..cli import SIGNAL_LABELS
+from ..config import Settings
+from ..recipes.plan import APPROVED, EditPlan, load_plan
+
+CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "You said", "Rated", "Used"]
+PLAN_COLUMNS = ["#", "In the video", "From", "Starts at", "Length", "Score", "Why"]
+PART_COLUMNS = ["Part", "Length", "In the recording", "Pieces"]
+SHOW = ["Not used yet", "All", "Rated"]
+RATINGS = {1: "👍", -1: "👎"}
+
+
+def short_clock(seconds: float) -> str:
+    """'4:05', or '1:02:03' past an hour: a time in the finished video."""
+    s = int(seconds)
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
+
+
+def why(reasons: list[str]) -> str:
+    return ", ".join(SIGNAL_LABELS.get(r, r) for r in reasons) or "-"
+
+
+def player(path: str | Path | None, start: float | None = None, end: float | None = None,
+           *, note: str = "") -> str:
+    """An in-page video player, optionally playing only start..end.
+
+    Served by the window itself (only files in AI-Editor's own cache and
+    output folders are allowed), and played from that point by the browser:
+    "#t=start,end" makes it start there and stop at the end.
+    """
+    if not path or not Path(path).is_file():
+        return ("<div class='aie-player-empty'>" + html.escape(note or "Pick something to play it here.")
+                + "</div>")
+    url = "/gradio_api/file=" + quote(Path(path).as_posix(), safe="/:")
+    if start is not None:
+        url += f"#t={start:.2f}" + (f",{end:.2f}" if end is not None else "")
+    caption = f"<div class='aie-player-note'>{html.escape(note)}</div>" if note else ""
+    return (f"<video class='aie-player' src='{url}' controls autoplay preload='metadata'>"
+            f"</video>{caption}")
+
+
+def proxy_of(conn, recording_id: int) -> Path | None:
+    row = conn.execute("SELECT proxy_path FROM recordings WHERE id = ?", (recording_id,)).fetchone()
+    return Path(row["proxy_path"]) if row and row["proxy_path"] else None
+
+
+def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None) -> list[tuple[str, int]]:
+    """(label, id) for analysed recordings, newest first.
+
+    ``lets_play``: True for Let's Play games only, False for streams only.
+    """
+    episodes = {g.lower() for g in settings.lets_play.games}
+    rows = conn.execute("SELECT id, title, source_file, game FROM recordings WHERE "
+                        "analysis_status = 'complete' ORDER BY COALESCE(recorded_at, imported_at) "
+                        "DESC").fetchall()
+    out = []
+    for r in rows:
+        is_episode = (r["game"] or "").lower() in episodes
+        if lets_play is not None and is_episode != lets_play:
+            continue
+        out.append((f"#{r['id']}  {r['title'] or Path(r['source_file']).stem}"
+                    + (f"  ({r['game']})" if r["game"] else ""), r["id"]))
+    return out
+
+
+# --- Clips ------------------------------------------------------------------------
+
+
+def video_lengths(conn, settings: Settings, recording_id: int) -> dict[str, float]:
+    """How long each clip is once a highlight video trims it to its moment.
+
+    Clips that can't go in (rated down, or during "BRB") aren't listed.
+    """
+    from ..recipes.highlights import gather
+
+    row = conn.execute("SELECT * FROM recordings WHERE id = ?", (recording_id,)).fetchone()
+    if row is None or row["analysis_status"] != "complete":
+        return {}
+    every = {r[0] for r in conn.execute("SELECT clip_id FROM clips WHERE recording_id = ?",
+                                        (recording_id,))}
+    return {c.clip_id: c.length for c in gather(conn, settings, [row], refresh=False,
+                                                allow=every, quality_bar=False)}
+
+
+def clip_summary(conn, settings: Settings, recording_id: int,
+                 lengths: dict[str, float] | None = None) -> str:
+    """'34 clips · 18 👍 · 21 👎 · your unused 👍 clips make about 14.2 min of video'."""
+    lengths = video_lengths(conn, settings, recording_id) if lengths is None else lengths
+    rows = conn.execute("SELECT clip_id, user_rating, used_in_json FROM clips "
+                        "WHERE recording_id = ?", (recording_id,)).fetchall()
+    up = [r for r in rows if (r["user_rating"] or 0) > 0]
+    down = sum((r["user_rating"] or 0) < 0 for r in rows)
+    fresh = sum(lengths.get(r["clip_id"], 0.0) for r in up if not r["used_in_json"])
+    text = f"**{len(rows)} clips** · {len(up)} 👍 · {down} 👎"
+    if up:
+        text += (f" · your unused 👍 clips make about **{fresh / 60:.1f} min** of video "
+                 "(each trimmed to its moment)")
+    return text
+
+
+def clip_table(conn, recording_id: int, show: str = "Not used yet",
+               lengths: dict[str, float] | None = None) -> tuple[list[list], list[str]]:
+    """The recording's clips, best first: the table's rows, and each row's clip id.
+
+    ``lengths``: each clip's length in a video (video_lengths), for that column.
+    """
+    rows = conn.execute("SELECT * FROM clips WHERE recording_id = ? ORDER BY score DESC",
+                        (recording_id,)).fetchall()
+    lengths = lengths or {}
+    table, ids = [], []
+    for row in rows:
+        used = json.loads(row["used_in_json"] or "[]")
+        if show == "Not used yet" and used:
+            continue
+        if show == "Rated" and row["user_rating"] is None:
+            continue
+        summary = json.loads(row["signals_json"] or "{}")
+        said = (row["transcript"] or "").strip()
+        table.append([
+            len(table) + 1,
+            f"{clock(row['start_sec'])}-{clock(row['end_sec'])}",
+            f"{row['end_sec'] - row['start_sec']:.0f}s",
+            f"{lengths[row['clip_id']]:.0f}s" if row["clip_id"] in lengths else "-",
+            f"{row['score']:.2f}",
+            why(summary.get("reasons", [])),
+            said[:90] + ("..." if len(said) > 90 else "") or "-",
+            RATINGS.get(row["user_rating"], "-"),
+            "yes" if used else "-",
+        ])
+        ids.append(row["clip_id"])
+    return table, ids
+
+
+def clip_details(conn, clip_id: str) -> str:
+    row = conn.execute("SELECT * FROM clips WHERE clip_id = ?", (clip_id,)).fetchone()
+    if row is None:
+        return ""
+    summary = json.loads(row["signals_json"] or "{}")
+    lines = [f"**{clock(row['start_sec'])}-{clock(row['end_sec'])}** in the recording, "
+             f"score {row['score']:.2f}: {why(summary.get('reasons', []))}."]
+    if summary.get("game"):
+        lines.append(f"Game: {summary['game']}.")
+    used = json.loads(row["used_in_json"] or "[]")
+    if used:
+        lines.append(f"Used in: {', '.join(used)}.")
+    lines.append(f"> {row['transcript']}" if row["transcript"] else "_No words in this clip._")
+    return "\n\n".join(lines)
+
+
+def rate(conn, clip_id: str, rating: int | None) -> str:
+    """Thumbs up (1), down (-1) or cleared (None); kept for learning later (spec 7.10)."""
+    row = conn.execute("SELECT recording_id, signals_json FROM clips WHERE clip_id = ?",
+                       (clip_id,)).fetchone()
+    if row is None:
+        return "That clip isn't in the library any more."
+    conn.execute("UPDATE clips SET user_rating = ? WHERE clip_id = ?", (rating, clip_id))
+    game = (json.loads(row["signals_json"] or "{}").get("game")
+            or (conn.execute("SELECT game FROM recordings WHERE id = ?",
+                             (row["recording_id"],)).fetchone() or [None])[0])
+    action = {1: "thumbs_up", -1: "thumbs_down", None: "rating_cleared"}[rating]
+    conn.execute("INSERT INTO feedback (ts, action, clip_id, game, features_json) "
+                 "VALUES (?, ?, ?, ?, ?)",
+                 (datetime.now(timezone.utc).isoformat(timespec="seconds"), action, clip_id, game,
+                  row["signals_json"]))
+    conn.commit()
+    return {1: "👍 Saved. Clips like this one are what AI-Editor learns to look for.",
+            -1: "👎 Saved. This moment won't go into a highlight video.",
+            None: "Rating cleared."}[rating]
+
+
+# --- Plans ------------------------------------------------------------------------
+
+
+def plan_choices(conn) -> list[tuple[str, str]]:
+    """(label, plan id) for every plan, newest first."""
+    out = []
+    for row in conn.execute("SELECT plan_id, plan_json, status FROM edit_plans "
+                            "ORDER BY created_at DESC, rowid DESC"):
+        plan = EditPlan.from_json(row["plan_json"])
+        kind = "Let's Play" if plan.recipe == "letsplay" else "Highlights"
+        state = "rendered" if row["status"] == APPROVED else "draft"
+        out.append((f"{plan.title}  ·  {kind}, {plan.total_sec / 60:.1f} min, {state}  "
+                    f"({plan.plan_id})", plan.plan_id))
+    return out
+
+
+def plan_table(conn, plan: EditPlan) -> list[list]:
+    """A highlight plan's pieces in order, PLAN_COLUMNS."""
+    def day(iso: str | None) -> str:
+        try:
+            return datetime.fromisoformat(iso).astimezone().strftime("%d %b").lstrip("0")
+        except (TypeError, ValueError):
+            return ""
+
+    days = {r["id"]: day(r["recorded_at"] or r["imported_at"])
+            for r in conn.execute("SELECT id, recorded_at, imported_at FROM recordings")}
+    rows, position = [], 0.0
+    for n, s in enumerate(plan.segments):
+        where = "Teaser" if s.kind == "teaser" else short_clock(position)
+        rows.append([n + 1, where, f"#{s.recording_id} · {days.get(s.recording_id, '')}",
+                     clock(s.src_in), f"{s.length:.0f}s",
+                     f"{s.score:.2f}" if s.score is not None else "-", why(s.reasons)])
+        position += s.length
+    return rows
+
+
+def part_table(plan: EditPlan) -> list[list]:
+    """A Let's Play's parts, PART_COLUMNS."""
+    rows = []
+    for number in sorted({s.part for s in plan.segments if s.part is not None}):
+        pieces = [s for s in plan.segments if s.part == number]
+        rows.append([number, short_clock(sum(s.length for s in pieces)),
+                     f"{clock(pieces[0].src_in)}-{clock(pieces[-1].src_out)}", len(pieces)])
+    return rows
+
+
+def plan_summary(plan: EditPlan, status: str) -> str:
+    kind = "Let's Play" if plan.recipe == "letsplay" else "Highlights"
+    lines = [f"### {plan.title}",
+             f"{kind} · **{plan.total_sec / 60:.1f} min**"
+             + (f" (target {plan.target_sec / 60:.0f})" if plan.recipe != "letsplay" else "")
+             + f" · {'rendered' if status == APPROVED else 'draft'} · `{plan.plan_id}`"]
+    lines += [f"- {note}" for note in plan.notes]
+    return "\n\n".join(lines[:2]) + ("\n\n" + "\n".join(lines[2:]) if lines[2:] else "")
+
+
+def get_plan(conn, plan_id: str | None) -> tuple[EditPlan, str] | tuple[None, None]:
+    found = load_plan(conn, plan_id) if plan_id else None
+    return found if found else (None, None)

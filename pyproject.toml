@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-editor"
-version = "0.8.0"
+version = "0.9.0"
 description = "AI-Editor - a local assistant editor that turns stream and Let's Play recordings into YouTube content"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,11 @@ dependencies = [
     "scenedetect[opencv]>=0.6.4",
     # Stream Companion's connection to OBS (spec section 7.1).
     "websocket-client>=1.8",
+    # The app window (spec section 9), served on 127.0.0.1 only.
+    "gradio>=6.0",
+    # Gradio's pandas, held below 3: Windows Smart App Control blocked the
+    # brand-new 3.0 files ("An Application Control policy has blocked this file").
+    "pandas>=2.2,<3",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +46,9 @@ ai-editor = "ai_editor.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["ai_editor*"]
+
+[tool.setuptools.package-data]
+ai_editor = ["app/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

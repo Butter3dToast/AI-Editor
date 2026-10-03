@@ -36,7 +36,8 @@ def test_highlights_and_shorts_defaults():
     assert settings.highlights.target_length_min == 10
     # The spec's 0.6, lowered to 0.55 on the creator's Wardogs verdicts (Phase 1F).
     assert settings.highlights.min_clip_score == 0.55
-    assert settings.highlights.ordering == "balanced"
+    # The creator's own layout: in the order it happened, the teaser's clip last.
+    assert settings.highlights.ordering == "timeline"
     assert settings.shorts.min_length_sec == 15
     assert settings.shorts.max_length_sec == 60
     assert settings.shorts.platform == "universal"

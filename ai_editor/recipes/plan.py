@@ -51,6 +51,9 @@ class EditPlan:
     segments: list[Segment] = field(default_factory=list)
     output: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    # What the recipe drew from (game, recording numbers), and clips the
+    # creator took out in Review, so a removed clip can be replaced the same way.
+    source: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_sec(self) -> float:
@@ -139,8 +142,16 @@ def approve_plan(conn: sqlite3.Connection, plan_id: str) -> int:
     if found is None:
         return -1
     plan, _ = found
+    in_plan = {s.clip_id for s in plan.segments if s.clip_id}
+    # Clips taken out in Review after an earlier approval are free again.
+    for row in conn.execute("SELECT clip_id, used_in_json FROM clips WHERE used_in_json LIKE ?",
+                            (f'%"{plan_id}"%',)).fetchall():
+        if row["clip_id"] not in in_plan:
+            used = [p for p in json.loads(row["used_in_json"]) if p != plan_id]
+            conn.execute("UPDATE clips SET used_in_json = ? WHERE clip_id = ?",
+                         (json.dumps(used) if used else None, row["clip_id"]))
     marked = 0
-    for clip_id in {s.clip_id for s in plan.segments if s.clip_id}:
+    for clip_id in in_plan:
         row = conn.execute("SELECT used_in_json FROM clips WHERE clip_id = ?", (clip_id,)).fetchone()
         if row is None:
             continue

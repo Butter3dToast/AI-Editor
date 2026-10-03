@@ -1,14 +1,15 @@
 """Command line interface.
 
-Phase 0 ships the setup check (`doctor`) and a couple of small helpers. The
-Gradio interface arrives in Phase 1H; until then this is how the tool is driven
-and tested.
+Every step the tool takes can be run from here. The app window (`app`,
+Phase 1H) drives the same code with buttons; this stays for testing, for
+scripts, and for anything the window doesn't have yet.
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -985,6 +986,7 @@ def companion(
     """
     from rich.live import Live
 
+    from .companion import status
     from .companion.app import Companion
 
     settings = _load(settings_path)
@@ -992,6 +994,17 @@ def companion(
     if test_sound:
         _play_marker_sounds(settings)
         return
+    where = status.folder(settings)
+    if status.read(where) is not None:
+        # Two would fight over the marker keys and log every event twice.
+        console.print("The Stream Companion is already running (see its own window, or the "
+                      "app window's Stream Companion panel).")
+        return
+    status.clear(where)  # an old stop request must not stop this one
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.kernel32.SetConsoleTitleW("AI-Editor Stream Companion")
     init_db(settings.db_path).close()
     app_ = Companion(settings)
     app_.start_hotkeys()
@@ -999,12 +1012,14 @@ def companion(
         console.print(f"[yellow]{problem}[/yellow]")
     try:
         with Live(_companion_panel(app_), console=console, refresh_per_second=1) as live:
-            while True:
+            while not status.stop_requested(where):
                 app_.step(wait=1.0)
                 live.update(_companion_panel(app_))
+                status.write(where, status.snapshot(app_))  # for the app window
     except KeyboardInterrupt:
         pass
     finally:
+        status.clear(where)
         app_.close()
     if app_.log.active:
         console.print("[yellow]Stream Companion stopped while OBS was still going.[/yellow] "
@@ -1714,6 +1729,13 @@ def _find_plan(conn, ref: str | None, recipe: str | None = None):
     return None
 
 
+def clip_note(n: int, segment) -> str:
+    """A timeline marker: which clip it is, and why it's in."""
+    kind = "Teaser" if segment.kind == "teaser" else f"Clip {n}"
+    reasons = ", ".join(SIGNAL_LABELS.get(r, r) for r in segment.reasons)
+    return f"{kind}: {reasons}" if reasons else kind
+
+
 def _episode_parts(conn, plan, part: int | None, episode: int | None):
     """A Let's Play plan's episode number, its parts, and the ones asked for."""
     from .render import parts as lp
@@ -1724,11 +1746,7 @@ def _episode_parts(conn, plan, part: int | None, episode: int | None):
                       f"there's no part {part}.[/red]")
         raise typer.Exit(code=1)
     if episode is None:
-        rows = conn.execute(f"SELECT title, source_file FROM recordings WHERE id IN "
-                            f"({','.join('?' * len(plan.recording_ids))})",
-                            plan.recording_ids).fetchall()
-        episode = lp.episode_number(plan.title, *(r["title"] for r in rows),
-                                    *(Path(r["source_file"]).stem for r in rows))
+        episode = lp.episode_of(conn, plan)
     if episode is None:
         console.print("[red]Which episode is this?[/red] The recording's name doesn't say "
                       "(\"... EP 2\"). Add it: --episode 2")
@@ -1756,60 +1774,27 @@ def export_command(
     Resolve: File > Import > Timeline. Your finished videos come from
     'ai-editor render'; this is for the odd one you'd rather edit yourself.
     """
-    from .analysis.captions import Cue, segment_cues, write_srt
-    from .analysis.clips import load_words
-    from .export.fcpxml import sources_for, write_fcpxml
-    from .render import parts as lp
-    from .render.audio import choose_tracks
+    from .export.timeline import FOLDER, export_plan
 
     settings = _load(settings_path)
     setup_logging(settings.log_dir, settings.logging.level)
     conn = init_db(settings.db_path)
-    folder = settings.folders.output / "timelines"
-    saved: list[Path] = []
+    folder = settings.folders.output / FOLDER
     try:
         plan = _find_plan(conn, plan_ref, None if plan_ref else "highlights")
         if plan is None:
             console.print(f"[red]No plan {plan_ref or 'to export yet'}.[/red] "
                           "See them, numbered, with: ai-editor plans")
             raise typer.Exit(code=1)
-        jobs = [(plan, plan.title, plan.plan_id)]
+        chosen = None
         if plan.recipe == "letsplay":
             episode, _, chosen = _episode_parts(conn, plan, part, episode)
-            jobs = [(lp.part_plan(plan, n), lp.part_path(settings, plan, episode, n).stem,
-                     lp.part_path(settings, plan, episode, n).stem) for n in chosen]
-
-        preset = settings.render.presets[settings.render.preset]
-        sources = sources_for(conn, plan)
-        missing = [f"#{rid}: {s.path}" for rid, s in sources.items() if not s.path.is_file()]
-        if missing:
+        result = export_plan(conn, settings, plan, episode=episode, parts=chosen,
+                             note=clip_note)
+        if result.missing:
             console.print("[yellow]Resolve won't find these recordings where they were: "
-                          f"{'; '.join(missing)}. Relink them in Resolve.[/yellow]")
-        # Never the game's dialogue (see render/final.py): a Let's Play's words
-        # only come from a recording with the mic on its own track.
-        speaking = {rid for rid in plan.recording_ids if plan.recipe != "letsplay"
-                    or choose_tracks(conn, settings, rid).separate}
-        words = {rid: load_words(conn, rid) for rid in speaking}
-
-        def note(n: int, segment) -> str:
-            kind = "Teaser" if segment.kind == "teaser" else f"Clip {n}"
-            reasons = ", ".join(SIGNAL_LABELS.get(r, r) for r in segment.reasons)
-            return f"{kind}: {reasons}" if reasons else kind
-
-        for job, name, stem in jobs:
-            saved.append(write_fcpxml(folder / f"{stem}.fcpxml", job, sources, name=name,
-                                      fps=preset.fps, width=preset.width, height=preset.height,
-                                      note=note if plan.recipe != "letsplay" else None))
-            cues, offset = [], 0.0
-            for segment in job.segments:
-                length = max(1, round(segment.length * preset.fps)) / preset.fps
-                if segment.recording_id in words:
-                    cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
-                             segment_cues(words[segment.recording_id], segment.src_in,
-                                          segment.src_in + length)]
-                offset += length
-            if cues:
-                saved.append(write_srt(cues, folder / f"{stem}.srt"))
+                          f"{'; '.join(result.missing)}. Relink them in Resolve.[/yellow]")
+        saved = result.saved
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
         raise typer.Exit(code=1) from exc
@@ -1920,6 +1905,41 @@ def render_command(
         import os
 
         os.startfile(last.path.parent)  # noqa: S606 -- File Explorer on our own folder
+
+
+@app.command("app")
+def app_window(
+    port: int = typer.Option(7865, "--port", help="Only if another program already uses 7865"),
+    browser: bool = typer.Option(True, "--browser/--no-browser",
+                                 help="Open the window in your browser"),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Open the app window (the desktop shortcut runs this).
+
+    A page in your browser that only this PC can open. Leave the black
+    window open while you use it; close it to quit.
+    """
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    from .app.window import serve
+
+    serve(settings, port=port, open_browser=browser)
+
+
+@app.command("shortcut")
+def shortcut_command() -> None:
+    """Put an AI-Editor shortcut on your desktop that opens the app window."""
+    from .app.window import make_shortcut
+
+    try:
+        path = make_shortcut()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        console.print(f"[red]Couldn't make the shortcut:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Made:[/green] {path}")
+    console.print("Double-click it to open AI-Editor.")
 
 
 @app.command("library")

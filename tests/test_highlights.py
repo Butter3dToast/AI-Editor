@@ -253,3 +253,13 @@ def test_naming_only_where_it_starts_ends_it_at_a_pause():
              Word("again", 130.0, 130.4)]
     start, end = teaser_from((120.0, 120.0), best, words)
     assert start == 119.0 and 124.0 <= end <= 134.0
+
+
+def test_timeline_order_is_as_it_happened_with_the_best_moment_saved_for_last():
+    """The creator's own layout of their League highlights."""
+    day2 = [cand("d2_late", 0.9, 30, day=DAY2, peak=900), cand("d2_early", 0.6, 30, day=DAY2,
+                                                                   peak=100)]
+    day1 = [cand("d1_best", 1.0, 30, peak=500), cand("d1", 0.7, 30, peak=50)]
+    day1[0].reaction = 0.9
+    ordered = order(day2 + day1, "timeline")
+    assert [c.clip_id for c in ordered] == ["d1", "d2_early", "d2_late", "d1_best"]

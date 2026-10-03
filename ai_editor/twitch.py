@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .childproc import keep_with_us
 from .config import Settings
 from .errors import InvalidVodLink, TwitchDownloadFailed, VodNotAvailable
 from .ffmpeg import find_binary
@@ -116,6 +117,7 @@ def _run(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         encoding="utf-8", errors="replace", creationflags=_NO_WINDOW,
     )
+    keep_with_us(process)
     output: list[str] = []
     tail: deque[str] = deque(maxlen=40)
     try:

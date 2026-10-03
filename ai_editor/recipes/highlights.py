@@ -51,6 +51,8 @@ TEASER_BEFORE_PEAK = 0.6
 # A moment the creator picked for the teaser gets this much either side, so
 # it doesn't start or stop abruptly.
 TEASER_PAD_SEC = 1.0
+# How far a clip stays from an OBS scene change into "BRB" or "Ending Screen".
+SCENE_MARGIN_SEC = 0.5
 
 
 @dataclass
@@ -70,6 +72,7 @@ class Candidate:
     src_out: float = 0.0
     reaction: float = 0.0  # how strongly the creator reacts (see reaction_strength)
     marked: bool = False  # marked with the Stream Companion's hotkey
+    liked: bool = False  # thumbs up in the Clips tab
 
     @property
     def length(self) -> float:
@@ -125,16 +128,29 @@ def recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str | 
 
 
 def gather(conn: sqlite3.Connection, settings: Settings,
-           recordings: list[sqlite3.Row], *, game: str | None = None) -> list[Candidate]:
+           recordings: list[sqlite3.Row], *, game: str | None = None, refresh: bool = True,
+           allow: set[str] | frozenset[str] = frozenset(),
+           quality_bar: bool = True) -> list[Candidate]:
     """Every clip that may go into the video, trimmed to its moment.
 
     With ``game``, only clips from that game: each clip knows its own game
     when the Companion logged the OBS scenes, else it takes its recording's.
+    ``refresh=False`` skips re-cutting the clips (Review, where they were cut
+    moments ago). ``allow``: clip ids to keep even though a plan uses them --
+    the plan being reviewed, once it has been approved. ``quality_bar=False``
+    keeps clips under the bar too: what the creator may add in Review.
+
+    A clip you gave a thumbs up always goes in, like one you marked: "the
+    thumbs up should mean that it should be in the video for review" (the
+    creator, 2026-10-03). A thumbs down always keeps it out.
     """
+    from ..companion.link import game_spans, game_timeline, scene_span
+
     h = settings.highlights
     found: list[Candidate] = []
     for row in recordings:
-        refresh_clips(conn, settings, row)  # a couple of seconds; always current
+        if refresh:
+            refresh_clips(conn, settings, row)  # a couple of seconds; always current
         words = realistic(load_words(conn, row["id"]))
         cuts = load_scene_cuts(settings, row)
         score = load_signal(conn, row["id"], "hype")
@@ -142,17 +158,26 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         action = action_signal(signals)
         dark = dark_seconds(signals, int(row["duration_sec"]), settings.scoring.dark_level,
                             settings.scoring.dark_min_sec)
+        timeline = game_timeline(conn, row["id"])
+        bounds = word_boundaries(words)
+        starts = [w.start for w in words]
         when = recorded_at(row)
-        for clip in conn.execute("SELECT * FROM clips WHERE recording_id = ?", (row["id"],)):
-            if clip["used_in_json"] and not h.allow_reused_clips:
+        clips = conn.execute("SELECT * FROM clips WHERE recording_id = ?", (row["id"],)).fetchall()
+        # A thumbs-down covers the moment, not just that clip: a re-cut clip
+        # starting a little earlier must not bring it back.
+        rejected = [(c["start_sec"], c["end_sec"]) for c in clips
+                    if c["user_rating"] is not None and c["user_rating"] < 0]
+        for clip in clips:
+            if clip["used_in_json"] and not h.allow_reused_clips and clip["clip_id"] not in allow:
                 continue
             summary = json.loads(clip["signals_json"] or "{}")
             marked = "marker" in summary or "marker_short" in summary
-            must = (h.always_include_pinned and bool(clip["pinned"])) or \
-                   (h.always_include_markers and marked)
-            if clip["score"] < h.min_clip_score and not must:
+            liked = (clip["user_rating"] or 0) > 0
+            must = liked or (h.always_include_pinned and bool(clip["pinned"])) or \
+                (h.always_include_markers and marked)
+            if quality_bar and clip["score"] < h.min_clip_score and not must:
                 continue
-            if clip["user_rating"] is not None and clip["user_rating"] < 0:
+            if any(a < clip["end_sec"] and clip["start_sec"] < b for a, b in rejected):
                 continue  # thumbs down
             clip_game = summary.get("game") or row["game"]
             if game and clip_game != game:
@@ -162,15 +187,53 @@ def gather(conn: sqlite3.Connection, settings: Settings,
             candidate = Candidate(
                 clip["clip_id"], row["id"], clip["start_sec"], clip["end_sec"], clip["score"],
                 peak, (int(core[0]), int(core[1])), summary.get("reasons", []), when, must,
-                game=clip_game, marked=marked,
+                game=clip_game, marked=marked, liked=liked,
             )
             candidate.src_in, candidate.src_out = trim(
                 candidate, words, cuts, float(row["duration_sec"]), score, settings,
                 action=action, dark=dark)
+            if timeline:
+                # Never into "BRB" or the ending screen: the clip stays in the
+                # scene its moment is in, ending at the last word before the switch
+                # (the first League stream's last marker ran 3 s into "Ending Screen").
+                start, end, on_screen = scene_span(timeline, peak, float(row["duration_sec"]))
+                if on_screen is None:
+                    # The moment is on a non-game screen (a marker pressed just after
+                    # switching to "Ending Screen"): keep the gameplay it overlaps.
+                    overlaps = [(min(e, candidate.src_out) - max(s, candidate.src_in), s, e)
+                                for s, e, _ in game_spans(timeline, float(row["duration_sec"]))
+                                if min(e, candidate.src_out) > max(s, candidate.src_in)]
+                    if overlaps:
+                        _, start, end = max(overlaps)
+                    elif not must:
+                        continue  # a moment during "BRB" isn't a highlight
+                # Half a second clear of the switch: it's logged a moment after it
+                # happens, and OBS may already be fading to the next scene.
+                duration = float(row["duration_sec"])
+                start = start + SCENE_MARGIN_SEC if start > 0 else start
+                end = end - SCENE_MARGIN_SEC if end < duration else end
+                candidate.src_in, candidate.src_out = inside(
+                    candidate.src_in, candidate.src_out, start, end, bounds, words, starts)
+                if candidate.length < 3:
+                    continue
             candidate.reaction = reaction_strength(signals, candidate.src_in, candidate.src_out,
                                                    settings.scoring.zscore_full_scale)
             found.append(candidate)
     return found
+
+
+def inside(src_in: float, src_out: float, start: float, end: float, bounds: list[float],
+           words: list[Word], starts: list[float]) -> tuple[float, float]:
+    """A clip pulled in to fit between ``start`` and ``end``, still never mid-word."""
+    if src_in < start:
+        src_in = start
+        if word_at(src_in, words, starts):
+            src_in = nearest_bound(bounds, src_in, src_in, src_out, outward=+1)
+    if src_out > end:
+        src_out = end
+        if word_at(src_out, words, starts):
+            src_out = nearest_bound(bounds, src_out, src_in, src_out, outward=-1)
+    return src_in, src_out
 
 
 def trim(c: Candidate, words: list[Word], cuts: list[float], duration: float,
@@ -192,22 +255,40 @@ def trim(c: Candidate, words: list[Word], cuts: list[float], duration: float,
 
 def select(candidates: list[Candidate], target_sec: float, fill_order: str) -> list[Candidate]:
     """Fill the target: your picks first, then clips in fill order."""
-    limit = target_sec * (1 + TOLERANCE)
     chosen = [c for c in candidates if c.must_include]
-    total = sum(c.length for c in chosen)
     rest = [c for c in candidates if not c.must_include]
+    return chosen + top_up(rest, sum(c.length for c in chosen), target_sec, fill_order)
+
+
+def top_up(candidates: list[Candidate], total: float, target_sec: float,
+           fill_order: str) -> list[Candidate]:
+    """Clips to add, in fill order, until ``total`` seconds reaches the target.
+
+    The target is a floor: "about 10 min, never below; above is fine" (the
+    creator, 2026-10-03). Clips that fit within the tolerance go first; if
+    that still falls short, the next ones go in anyway and it runs over.
+    Only clips over the quality bar are ever candidates, so it never pads.
+    """
     if fill_order == "oldest_first":
         # Use up one stream's good clips, best first, before moving to the next.
-        rest.sort(key=lambda c: (c.recorded, -c.score))
+        ordered = sorted(candidates, key=lambda c: (c.recorded, -c.score))
     else:
-        rest.sort(key=lambda c: -c.score)
-    for candidate in rest:
+        ordered = sorted(candidates, key=lambda c: -c.score)
+    limit = target_sec * (1 + TOLERANCE)
+    added: list[Candidate] = []
+    for candidate in ordered:
         if total >= target_sec:
             break
         if total + candidate.length <= limit:
-            chosen.append(candidate)
+            added.append(candidate)
             total += candidate.length
-    return chosen
+    for candidate in ordered:
+        if total >= target_sec:
+            break
+        if candidate not in added:
+            added.append(candidate)
+            total += candidate.length
+    return added
 
 
 REACTION_WINDOW_SEC = 10
@@ -262,10 +343,18 @@ def best_of(chosen: list[Candidate], pick: str | None = None) -> Candidate:
 
 
 def order(chosen: list[Candidate], ordering: str, pick: str | None = None) -> list[Candidate]:
-    """Strong opener, alternating intensity, best moment last (spec section 7.6)."""
+    """The order of the clips; ``ordering`` as in settings (highlights.ordering).
+
+    timeline: as it happened, oldest stream first, with the best moment (the
+    teaser's) saved for the end -- how the creator laid out their own video.
+    balanced: strong opener, alternating intensity, best moment last (spec 7.6).
+    """
     if ordering == "chronological":
         return sorted(chosen, key=lambda c: (c.recorded, c.src_in))
     finale = best_of(chosen, pick) if chosen else None
+    if ordering == "timeline":
+        return [*sorted((c for c in chosen if c is not finale),
+                        key=lambda c: (c.recorded, c.src_in)), *([finale] if finale else [])]
     ranked = [finale] + sorted((c for c in chosen if c is not finale),
                                key=lambda c: c.score, reverse=True) if finale else []
     if ordering == "best_last" or len(ranked) < 3:
@@ -337,6 +426,28 @@ def teaser_from(moment: tuple[float, float], best: Candidate, words: list[Word],
     return start, end
 
 
+def short_note(clips_sec: float, target_sec: float, recordings: int) -> str:
+    """Said whenever the clips come in under the target, which is a floor."""
+    return (f"Only {clips_sec / 60:.1f} of {target_sec / 60:.0f} minutes: that's all the good, "
+            f"unused material in {recordings} recording(s). Analyse another stream and make "
+            "the video again to fill it.")
+
+
+def teaser_segment(conn: sqlite3.Connection, settings: Settings, best: Candidate,
+                   moment: tuple[float, float] | None = None) -> Segment:
+    """The opening teaser, from ``best``: automatic, or the ``moment`` the creator named."""
+    h = settings.highlights
+    words = realistic(load_words(conn, best.recording_id))
+    hook = dict(shortest=h.hook_seconds[0], longest=h.hook_seconds[1],
+                end_pause=settings.clips.end_pause_sec)
+    if moment is not None:
+        t_in, t_out = teaser_from(moment, best, words, **hook)
+    else:
+        t_in, t_out = teaser(best, words, sum(h.hook_seconds) / 2, **hook)
+    return Segment(best.recording_id, round(t_in, 3), round(t_out, 3), kind="teaser",
+                   clip_id=best.clip_id, score=best.score, reasons=best.reasons, game=best.game)
+
+
 def build_highlights(
     conn: sqlite3.Connection,
     settings: Settings,
@@ -377,18 +488,11 @@ def build_highlights(
         output=settings.render.presets.get("youtube_1080p60").model_dump()
         if "youtube_1080p60" in settings.render.presets else {},
     )
+    plan.source = {"game": game, "recording_ids": recording_ids, "removed": []}
     if best is not None and h.hook:
-        words = realistic(load_words(conn, best.recording_id))
-        length = sum(h.hook_seconds) / 2
-        hook = dict(shortest=h.hook_seconds[0], longest=h.hook_seconds[1],
-                    end_pause=settings.clips.end_pause_sec)
-        if teaser_moment is not None and best.clip_id == teaser_clip:
-            t_in, t_out = teaser_from(teaser_moment, best, words, **hook)
-        else:
-            t_in, t_out = teaser(best, words, length, **hook)
-        plan.segments.append(Segment(best.recording_id, round(t_in, 3), round(t_out, 3),
-                                     kind="teaser", clip_id=best.clip_id, score=best.score,
-                                     reasons=best.reasons, game=best.game))
+        plan.segments.append(teaser_segment(
+            conn, settings, best,
+            teaser_moment if teaser_moment is not None and best.clip_id == teaser_clip else None))
     for c in chosen:
         plan.segments.append(Segment(c.recording_id, round(c.src_in, 3), round(c.src_out, 3),
                                      kind="clip", clip_id=c.clip_id, score=c.score,
@@ -397,10 +501,7 @@ def build_highlights(
     if not chosen:
         plan.notes.append("No clips passed the quality bar. Lower highlights.min_clip_score "
                           "in Settings, or analyse more recordings of this game.")
-    elif plan.total_sec < target * (1 - TOLERANCE):
-        plan.notes.append(
-            f"Only {plan.total_sec / 60:.1f} of {target / 60:.0f} minutes: that's all the good, "
-            f"unused material in {len(recordings)} recording(s). Analyse another stream of this "
-            "game and make the video again to fill it.")
+    elif sum(c.length for c in chosen) < target:
+        plan.notes.append(short_note(sum(c.length for c in chosen), target, len(recordings)))
     save_plan(conn, plan)
     return HighlightResult(plan, available, len({c.recording_id for c in chosen}), len(recordings))

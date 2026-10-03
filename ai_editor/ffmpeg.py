@@ -19,6 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
+from .childproc import keep_with_us
 from .errors import (
     FFmpegNotFound,
     MediaFileNotFound,
@@ -181,6 +182,7 @@ def run_ffmpeg(
         creationflags=_NO_WINDOW,
         cwd=cwd,
     )
+    keep_with_us(process)
 
     # stderr is drained on its own thread: if FFmpeg filled that pipe while we
     # were blocked reading stdout, both sides would wait on each other forever.

@@ -30,6 +30,15 @@ def episode_number(*texts: str | None) -> int | None:
     return None
 
 
+def episode_of(conn, plan: EditPlan) -> int | None:
+    """The episode number, from the plan's title or its recordings' names."""
+    rows = conn.execute(f"SELECT title, source_file FROM recordings WHERE id IN "
+                        f"({','.join('?' * len(plan.recording_ids))})",
+                        plan.recording_ids).fetchall()
+    return episode_number(plan.title, *(r["title"] for r in rows),
+                          *(Path(r["source_file"]).stem for r in rows))
+
+
 def part_numbers(plan: EditPlan) -> list[int]:
     return sorted({s.part for s in plan.segments if s.part is not None})
 
