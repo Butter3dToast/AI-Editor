@@ -81,7 +81,7 @@ def _candidates(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
                                 recording_ids=source.get("recording_ids"))
     in_plan = {s.clip_id for s in plan.segments if s.clip_id}
     return gather(conn, settings, recordings, game=source.get("game", plan.game), refresh=False,
-                  allow=in_plan, quality_bar=quality_bar)
+                  allow=in_plan, quality_bar=quality_bar, reuse=bool(source.get("reuse")))
 
 
 def _as_candidate(segment: Segment, known: dict[str, Candidate]) -> Candidate:

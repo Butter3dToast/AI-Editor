@@ -54,6 +54,8 @@ class EditPlan:
     # What the recipe drew from (game, recording numbers), and clips the
     # creator took out in Review, so a removed clip can be replaced the same way.
     source: dict[str, Any] = field(default_factory=dict)
+    # Upload text and thumbnails (publish.py), per video: "video", or "part 2".
+    publish: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_sec(self) -> float:

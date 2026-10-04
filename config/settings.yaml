@@ -228,6 +228,11 @@ render:
   # Friends on Discord in finished videos. Needs Discord on its own track in OBS
   # (manual 7.3); recordings with only a mixed track always have everything in.
   include_voice_chat: true
+  # The music you play on stream (Spotify) in finished videos. Off: videos are
+  # rebuilt from your separate tracks, without it. On: the stream's mixed track,
+  # exactly as viewers heard it. Commercial music usually gets a YouTube video
+  # claimed (muted, demonetised or blocked).
+  include_stream_music: false
 
 captions:
   # Your words burned into finished videos (manual 19.2c). Off unless you turn
@@ -256,10 +261,22 @@ twitch:
   # count as viewers reacting. Add any other bot your channel uses.
   ignore_chatters: [StreamElements, Nightbot, Moobot, Streamlabs, Fossabot, Sery_Bot, WizeBot, SoundAlerts]
 
-llm: # Not used until Phase 2
-  enabled: false
-  model: null
+llm: # The local AI, through Ollama (manual 6.3). Nothing is sent online.
+  enabled: true # false: AI-Editor works as before, without the AI's judgement
+  model: gemma4:12b # Reads text and looks at pictures; about 8 GB, downloaded once
+  host: http://127.0.0.1:11434 # Ollama on this PC (nothing else is allowed)
   keep_alive: 0 # Free VRAM immediately after each stage (spec section 3)
+  temperature: 0.2 # Low: the same clip gets the same rating each time
+  rating_weight: 0.0 # Share of a clip's score that is the AI's rating. 0: shown, not used to pick
+  frames_per_clip: 3 # Pictures from each clip the AI looks at
+
+publish: # Titles, description, chapters and thumbnails for each video (manual 20)
+  # Let's Play titles: the AI writes {subtitle}; the rest stays the same every part.
+  lets_play_title: "{game} - EP {episode} Part {part}: {subtitle}"
+  # Added under every description, e.g. "Live on Twitch: twitch.tv/yourname"
+  description_footer: ""
+  thumbnails: 6 # Frames kept, best first (output/thumbnails)
+  chapter_every_min: 5 # A Let's Play part gets a chapter about this often
 
 logging:
   # What appears on screen. The log file always records everything.

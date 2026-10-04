@@ -263,3 +263,17 @@ def test_timeline_order_is_as_it_happened_with_the_best_moment_saved_for_last():
     day1[0].reaction = 0.9
     ordered = order(day2 + day1, "timeline")
     assert [c.clip_id for c in ordered] == ["d1", "d2_early", "d2_late", "d1_best"]
+
+
+def test_when_every_good_clip_is_in_a_video_the_note_says_which_and_what_to_do(
+        conn, settings, monkeypatch):
+    """2026-10-04: remaking a rendered video only said "no clips passed the quality bar"."""
+    from ai_editor.recipes import highlights
+
+    conn.execute("UPDATE clips SET used_in_json = '[\"highlights_league_1\"]'")
+    monkeypatch.setattr(highlights, "gather",
+                        lambda *a, reuse=False, **k: [cand("a", 0.9, 30)] if reuse else [])
+    rows = conn.execute("SELECT * FROM recordings").fetchall()
+    note = highlights.nothing_left_note(conn, settings, rows, None, reuse=False)
+    assert "highlights_league_1" in note and "Use clips already in a video" in note
+    assert "quality bar" in highlights.nothing_left_note(conn, settings, rows, None, reuse=True)

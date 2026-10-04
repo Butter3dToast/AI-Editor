@@ -160,6 +160,39 @@ class OutOfGraphicsMemory(AIEditorError):
     )
 
 
+class AiNotRunning(AIEditorError):
+    code = "E032"
+    what = "AI-Editor couldn't reach its local AI (Ollama)"
+    why = "Ollama runs the AI model on this PC; AI-Editor starts it when it's needed"
+    fix = (
+        "Install Ollama from ollama.com if it isn't installed (manual 5.2), or open it from "
+        "the Start menu, then try again. Everything else in AI-Editor works without it"
+    )
+
+
+class AiModelMissing(AIEditorError):
+    code = "E033"
+    what = "The AI model isn't downloaded"
+    why = "The model is downloaded once (about 8 GB), then everything runs offline"
+    fix = "In Settings, under AI, click Download model, then try again"
+
+
+class AiTooSlow(AIEditorError):
+    code = "E035"
+    what = "The local AI was far too slow, so AI-Editor stopped it"
+    why = ("This almost always means a game or another program is using the graphics card. "
+           "Carrying on would slow your game down and take hours")
+    fix = ("Press Resume in Jobs when you've finished playing. Clips already rated are kept, "
+           "and nothing else is affected")
+
+
+class AiAnswerUnreadable(AIEditorError):
+    code = "E034"
+    what = "The local AI gave an answer AI-Editor couldn't use"
+    why = "This happens now and then with AI models"
+    fix = "Try again. If it keeps happening, the model in Settings (AI) may not suit this job"
+
+
 # --- Twitch ----------------------------------------------------------------
 
 

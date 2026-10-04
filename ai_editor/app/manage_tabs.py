@@ -1,4 +1,4 @@
-"""The Storage and Settings tabs (Phase 1H-3).
+"""The Storage and Settings tabs (Phase 1H-3; the AI section, Phase 2A).
 
 What the creator chose (2026-10-03): Storage frees only the analysis working
 files; Settings shows the folders and the main options for highlights,
@@ -15,11 +15,13 @@ from pathlib import Path
 import gradio as gr
 import pandas as pd
 
+from .. import llm
+from ..analysis.ai_rating import agreement_text
 from ..config import Settings, save_local_settings
 from ..db import init_db
 from ..errors import AIEditorError
 from . import storage
-from .worker import Worker
+from .worker import Worker, submitted
 
 ORDERS = [("As it happened, the teaser's moment saved for last", "timeline"),
           ("Balanced: strong and calmer clips in turn", "balanced"),
@@ -76,7 +78,7 @@ def build(settings: Settings, worker: Worker) -> None:
         storage_msg = gr.Markdown()
 
     # --- Settings ----------------------------------------------------------------------
-    with gr.Tab("Settings", id="options"):
+    with gr.Tab("Settings", id="options") as settings_tab:
         gr.Markdown("Changes are saved on this PC only (`config/settings.local.yaml`) and work "
                     "straight away. Everything else is in `config/settings.yaml`.")
         folder_boxes = {}
@@ -101,10 +103,15 @@ def build(settings: Settings, worker: Worker) -> None:
                                    info="Clips under it aren't picked. 👍 clips and marked "
                                         "moments always go in.")
             hl_order = gr.Radio(ORDERS, value=h.ordering, label="Order of the clips")
-        with gr.Accordion("Captions", open=True):
+        with gr.Accordion("Captions and sound", open=True):
             with gr.Row():
                 cap_hl = gr.Checkbox(value=c.highlights, label="Burn in captions on highlights")
                 cap_lp = gr.Checkbox(value=c.lets_play, label="Burn in captions on Let's Plays")
+                music = gr.Checkbox(
+                    value=settings.render.include_stream_music,
+                    label="Keep the music from your stream (Spotify)",
+                    info="Off: left out. Commercial music usually gets a YouTube video claimed "
+                         "(muted, demonetised or blocked).")
         with gr.Accordion("Let's Play", open=True):
             with gr.Row():
                 lp_minutes = gr.Number(value=lp.target_min, minimum=10, maximum=90,
@@ -128,6 +135,34 @@ def build(settings: Settings, worker: Worker) -> None:
                                        info="For the 'days left on Twitch' warnings.")
                 space_gb = gr.Number(value=settings.storage.low_space_warning_gb, minimum=0,
                                      label="Warn when free space drops below (GB)")
+        with gr.Accordion("Publish", open=True):
+            with gr.Row():
+                pub_footer = gr.Textbox(value=settings.publish.description_footer, lines=3,
+                                        label="Under every description",
+                                        info="Your Twitch link, when you stream: added below the "
+                                             "chapters.")
+                pub_lp = gr.Textbox(value=settings.publish.lets_play_title,
+                                    label="Let's Play title",
+                                    info="{subtitle} is the AI's idea; {game}, {episode} and "
+                                         "{part} are filled in.")
+        with gr.Accordion("AI (on this PC)", open=True):
+            ai_status = gr.Markdown(llm.status(settings))
+            with gr.Row():
+                ai_on = gr.Checkbox(value=settings.llm.enabled, label="Use the local AI",
+                                    info="Rates and describes each clip. Everything else works "
+                                         "without it.")
+                ai_model = gr.Textbox(value=settings.llm.model or "", label="Model",
+                                      info="An Ollama model that can look at pictures.")
+                ai_weight = gr.Slider(0.0, 0.5, value=settings.llm.rating_weight, step=0.05,
+                                      label="How much the AI's rating counts when picking clips",
+                                      info="0: shown in Clips, but it doesn't change which clips "
+                                           "are picked.")
+            with gr.Row():
+                ai_pull = gr.Button("Download model")
+                ai_check = gr.Button("Check again")
+            gr.Markdown("**How often the AI agrees with you**, per game:")
+            ai_agree = gr.Markdown()
+            ai_msg = gr.Markdown()
         save_btn = gr.Button("Save settings", variant="primary")
         settings_msg = gr.Markdown()
 
@@ -172,8 +207,30 @@ def build(settings: Settings, worker: Worker) -> None:
 
     # --- Settings: handlers ----------------------------------------------------------
 
+    def ai_look():
+        conn = init_db(settings.db_path)
+        try:
+            agree = agreement_text(conn)
+        finally:
+            conn.close()
+        return llm.status(settings), agree
+
+    settings_tab.select(ai_look, None, [ai_status, ai_agree])
+    ai_check.click(ai_look, None, [ai_status, ai_agree])
+
+    def pull():
+        if not settings.llm.model:
+            return "Fill in a model and save first."
+        from . import tasks
+
+        return submitted(worker, worker.submit(f"Downloading the AI model {settings.llm.model}",
+                                               f"pull:{settings.llm.model}",
+                                               tasks.download_model(settings)))
+
+    ai_pull.click(pull, None, ai_msg)
+
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
-             space):
+             space, use_ai, model, weight, keep_music, footer, lp_title):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -192,6 +249,12 @@ def build(settings: Settings, worker: Worker) -> None:
             ("companion", "sound_volume"): round(float(volume), 2),
             ("twitch", "vod_keep_days"): int(days),
             ("storage", "low_space_warning_gb"): float(space),
+            ("render", "include_stream_music"): bool(keep_music),
+            ("publish", "description_footer"): (footer or "").strip(),
+            ("publish", "lets_play_title"): (lp_title or "").strip(),
+            ("llm", "enabled"): bool(use_ai),
+            ("llm", "model"): str(model or "").strip() or None,
+            ("llm", "rating_weight"): round(float(weight), 2),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -211,7 +274,9 @@ def build(settings: Settings, worker: Worker) -> None:
 
     save_btn.click(save, [folder_boxes["raw"], folder_boxes["output"], hl_minutes, hl_bar,
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
-                          vod_days, space_gb], settings_msg)
+                          vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
+                          pub_lp],
+                 settings_msg)
 
 
 def current(settings: Settings, key: tuple[str, str]):

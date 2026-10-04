@@ -3,6 +3,45 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.10.0 — Phase 2A: The local AI and publish prep — 4 October 2026
+
+AI-Editor now has an AI of its own, running on your graphics card through
+Ollama: nothing is sent online. It watches every clip and helps you upload.
+
+**New**
+
+- **The AI says what each clip is.** In **Clips**, every clip gets a rating out
+  of 10 and a one-line summary ("Teamfight engagement and multi-kill"). Click a
+  clip for the AI's reasons, tags, and whether it would work as a Short. Clips
+  are rated at the end of each analysis (about 2 minutes per stream); **Rate
+  with AI** does it for recordings analysed before.
+- **The rating doesn't pick your clips yet.** On your League stream the AI
+  agreed with your 👍/👎 about half the time, against about 80% for the usual
+  score, so it's shown but not used. **Settings → AI** keeps count per game,
+  and says when there are too few ratings to tell.
+- **Publish**, at the bottom of **Review**: 3–5 plain, descriptive title ideas
+  (Let's Plays keep "The Blood of Dawnwalker - EP 2 Part 1: ..." and avoid
+  spoilers), a description with YouTube chapters that match the video exactly,
+  tags, and the 6 best thumbnail frames as full-size PNGs. Copy buttons on
+  each; **Keep my changes** saves your edits; a .txt with all of it is saved
+  beside the finished video.
+- **Your Twitch link and stream times** go under every description
+  (**Settings → Publish**).
+- **Keep the music from your stream** (Spotify), in **Settings → Captions and
+  sound**. Off by default: commercial music usually gets YouTube videos claimed.
+- **Use clips already in a video**, in **Create video**: make another video
+  from streams whose clips you've already rendered.
+- **Settings → AI**: whether it's ready, **Download model** (Gemma 4 12B,
+  about 8 GB, once), switch it off, and how much its rating counts.
+
+**Changed**
+
+- Making a highlight video from streams whose good clips are all in rendered
+  videos now says so, and what to do, instead of "no clips passed the quality
+  bar".
+- If a game is using the graphics card, the AI stops after one slow answer
+  (instead of grinding on and slowing the game) and **Resume** carries on later.
+
 ## 0.9.0 — Phase 1H: The app window — 3 October 2026
 
 AI-Editor now has a window: everything is done with buttons, from importing a

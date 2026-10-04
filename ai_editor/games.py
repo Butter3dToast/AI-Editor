@@ -21,6 +21,37 @@ KNOWN_GAMES: dict[str, tuple[str, ...]] = {
 }
 
 
+# What makes a good moment in each game, and what's downtime (spec section 8),
+# in words the local AI reads before it rates a clip (analysis/ai_rating.py).
+GAME_NOTES: dict[str, str] = {
+    "League of Legends": (
+        "Good: teamfights, kills and multikills, outplays, Baron/Dragon/Herald fights and "
+        "steals, turret dives, aces, a big swing in a fight, deaths with a big reaction. "
+        "The gameplay itself is often the highlight even when nobody talks. "
+        "Downtime: champion select, the shop, the loading screen, waiting to respawn, "
+        "laning with nothing happening, the post-game lobby and stats."),
+    "Wardogs": (
+        "A 100-player tactical shooter: three teams fight over a control zone, with "
+        "vehicles and helicopters. Good: firefights, kills, holding or taking the zone, "
+        "vehicle chaos, big explosions, funny moments with teammates. "
+        "Downtime: loadout and shop menus, waiting to redeploy, long drives or flights "
+        "with no action, the end-of-match screen."),
+    "Escape from Tarkov": (
+        "Long quiet stretches, then sudden fights. Good: firefights, tense whispering "
+        "before shooting, kills, deaths with a reaction, extracting. "
+        "Downtime: stash and inventory, flea market, hideout, raid loading, looting and "
+        "walking with no talking."),
+    "The Blood of Dawnwalker": (
+        "A story-driven dark fantasy RPG. Good: boss fights, deaths with a reaction, big "
+        "story moments and choices, funny commentary. "
+        "Downtime: menus, inventory, the map, crafting, loading, long travel."),
+}
+
+
+def game_notes(game: str | None) -> str:
+    return GAME_NOTES.get(canonical_game(game), "") if game else ""
+
+
 def _normalise(text: str) -> str:
     return " " + re.sub(r"[^a-z0-9]+", " ", text.lower()).strip() + " "
 

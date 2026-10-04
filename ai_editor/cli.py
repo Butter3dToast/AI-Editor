@@ -186,6 +186,14 @@ def doctor(
     finally:
         client.close()
 
+    # --- Local AI ---
+    # Optional: everything works without it, so it's never counted as a problem.
+    from . import llm
+
+    ai_ready = llm.ready(settings)
+    table.add_row("Local AI (Ollama)", OK if ai_ready or not settings.llm.enabled else WARN,
+                  llm.status(settings))
+
     console.print(table)
 
     if problems:
@@ -1370,6 +1378,78 @@ def clips_command(
                               f"--export {export} --open[/bold]")
         else:
             console.print(f"Watch them: [bold]ai-editor clips {row['id']} --export 10 --open[/bold]")
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+
+@app.command("rate")
+def rate_command(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Have the local AI rate and describe each clip it hasn't seen yet.
+
+    Analysis does this by itself once the model is downloaded; this is for
+    recordings analysed before. Nothing leaves this PC.
+    """
+    from . import llm
+    from .analysis import resolve_recording
+    from .analysis.ai_rating import notes_for, rate_recording
+    from .analysis.captions import clock
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+        if row["analysis_status"] != "complete":
+            console.print(f"Recording #{row['id']} hasn't been analysed yet. "
+                          f"Run: ai-editor analyze {row['id']}")
+            raise typer.Exit(code=1)
+        if not settings.llm.enabled:
+            console.print("The local AI is switched off (llm.enabled in Settings).")
+            raise typer.Exit(code=1)
+        if not llm.has_model(settings) and llm.running(settings):
+            console.print(f"Downloading {settings.llm.model} (once, about 8 GB)...")
+            progress = _progress_bar()
+            task = progress.add_task("Downloading the AI model", total=1.0)
+            progress.start()
+            try:
+                llm.pull(settings, lambda f: progress.update(task, completed=f))
+            finally:
+                progress.stop()
+        progress = _progress_bar()
+        task = progress.add_task("AI rating the clips", total=1.0)
+        progress.start()
+        try:
+            result = rate_recording(conn, settings, row["id"],
+                                    lambda f: progress.update(task, completed=f))
+        finally:
+            progress.stop()
+        console.print(f"[green]Rated {result.rated} clip(s)[/green]"
+                      + (f", {result.already} already rated" if result.already else "")
+                      + (f", {result.failed} couldn't be" if result.failed else "") + ".")
+        clips = conn.execute("SELECT * FROM clips WHERE recording_id = ?", (row["id"],)).fetchall()
+        notes = notes_for(conn, row["id"], clips)
+        table = Table(title=f"What the AI says about #{row['id']}", header_style="bold")
+        for column in ("Start", "AI", "What happens", "Short?", "You"):
+            table.add_column(column, overflow="fold" if column == "What happens" else "ellipsis")
+        for clip in sorted(clips, key=lambda c: -(notes[c["clip_id"]].rating
+                                                   if c["clip_id"] in notes else 0)):
+            note = notes.get(clip["clip_id"])
+            if note is None:
+                continue
+            table.add_row(clock(clip["start_sec"]), note.stars, note.summary,
+                          "yes" if note.stands_alone else "-",
+                          {1: "👍", -1: "👎"}.get(clip["user_rating"], ""))
+        console.print(table)
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
         raise typer.Exit(code=1) from exc

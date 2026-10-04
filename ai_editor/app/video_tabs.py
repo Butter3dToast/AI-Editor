@@ -60,6 +60,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             clip_rec = gr.Dropdown(choices=read(videos.analysed_choices, settings), value=None,
                                    label="Recording", scale=3)
             clip_show = gr.Radio(videos.SHOW, value=videos.SHOW[0], label="Show", scale=2)
+            ai_btn = gr.Button("Rate with AI", scale=1)
         clip_ids = gr.State([])
         clip_sel = gr.State(None)
         clip_counts = gr.Markdown()
@@ -67,8 +68,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             with gr.Column(scale=3):
                 clip_tbl = gr.Dataframe(headers=videos.CLIP_COLUMNS, interactive=False, wrap=True,
                                         max_height=560,
-                                        column_widths=["4%", "12%", "9%", "9%", "8%", "16%",
-                                                       "27%", "8%", "7%"])
+                                        column_widths=["4%", "10%", "7%", "7%", "6%", "13%",
+                                                       "22%", "19%", "6%", "6%"])
             with gr.Column(scale=2):
                 clip_player = gr.HTML(videos.player(None, note="Pick a recording, then click a "
                                                                "clip to watch it here."))
@@ -94,6 +95,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             hl_minutes = gr.Number(value=settings.highlights.target_length_min, minimum=1,
                                    maximum=60, label="Length in minutes",
                                    info="The least it will be. It may run a little over.")
+            hl_reuse = gr.Checkbox(value=False, label="Use clips already in a video",
+                                   info="Rendering a video uses its clips up, so the next one has "
+                                        "fresh clips. Tick this to make another video from the "
+                                        "same streams anyway.")
         with gr.Group(visible=False) as lp_group:
             lp_rec = gr.Dropdown(choices=episode_choices(), value=None, label="Episode recording",
                                  info="Trimmed (loading screens, silent menus, long pauses) and "
@@ -162,6 +167,21 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         finish_msg = gr.Markdown(
             "Rendering takes about 3 minutes per 10 minutes of video, and shows under Jobs. It "
             "marks the clips as used, so the next highlight video carries on with fresh ones.")
+        gr.Markdown("### Publish")
+        publish_btn = gr.Button("Write titles, description and chapters")
+        publish_msg = gr.Markdown()
+        title_pick = gr.Radio(choices=[], label="Title ideas",
+                              info="Pick one: it goes in the box below, ready to copy.")
+        title_box = gr.Textbox(label="Title", buttons=["copy"], max_lines=1)
+        desc_box = gr.Textbox(label="Description, with chapters", lines=10, buttons=["copy"],
+                              info="Paste it into YouTube as it is: the chapter times make "
+                                   "YouTube's chapters.")
+        tags_box = gr.Textbox(label="Tags", buttons=["copy"],
+                              info="YouTube Studio: Show more > Tags.")
+        keep_btn = gr.Button("Keep my changes")
+        thumbs = gr.Gallery(label="Thumbnail frames, best first (full size, in "
+                                  "output/thumbnails)", columns=3, height=420,
+                            buttons=["download", "fullscreen"], interactive=False)
 
     # --- Clips: handlers ----------------------------------------------------------------
 
@@ -221,12 +241,23 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         button.click(rater(rating), [clip_sel, clip_rec, clip_show],
                      [clip_tbl, clip_ids, clip_msg, clip_counts])
 
+    def rate_with_ai(recording_id):
+        if recording_id is None:
+            return "Pick a recording first."
+        if not settings.llm.enabled:
+            return "The AI is switched off in Settings (AI)."
+        return submitted(worker, worker.submit(
+            f"AI rating the clips of #{recording_id}", f"rate:{recording_id}",
+            tasks.rate_clips(settings, int(recording_id))))
+
+    ai_btn.click(rate_with_ai, clip_rec, clip_msg)
+
     # --- Create video: handlers ---------------------------------------------------------
 
     kind.change(lambda k: (gr.update(visible=k == "Highlights"), gr.update(visible=k != "Highlights")),
                 kind, [hl_group, lp_group])
 
-    def make(what, game, chosen, minutes, episode_rec):
+    def make(what, game, chosen, minutes, episode_rec, reuse=False):
         if what == "Highlights":
             game = None if not game or game == ALL_STREAMS else canonical_game(game)
             ids = [int(x) for x in chosen] if chosen else None
@@ -234,7 +265,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             return submitted(worker, worker.submit(
                 f"Making a {label} highlights plan", f"make:highlights:{game}",
                 tasks.make_highlights(settings, game=game, recording_ids=ids,
-                                      minutes=float(minutes) if minutes else None)))
+                                      minutes=float(minutes) if minutes else None,
+                                      reuse=bool(reuse))))
         if episode_rec is None:
             return "Pick the episode's recording first."
         return submitted(worker, worker.submit(
@@ -242,7 +274,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             tasks.make_letsplay(settings, int(episode_rec))))
 
     make_btn.click(lambda *a: make(*a) + " When it's finished, it opens in Review.",
-                   [kind, hl_game, hl_from, hl_minutes, lp_rec], make_msg)
+                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse], make_msg)
 
     # --- Review: handlers ---------------------------------------------------------------
 
@@ -488,17 +520,116 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     export_btn.click(export, [plan_pick, episode_box, part_pick], finish_msg)
 
+    # --- Publish -------------------------------------------------------------------------
+
+    def publish_part(plan, part) -> int | None:
+        """A Let's Play shows one part's text: the one chosen, or part 1."""
+        if plan is None or plan.recipe != "letsplay":
+            return None
+        from ..render import parts as lp
+
+        numbers = lp.part_numbers(plan)
+        chosen = chosen_parts(part)
+        return chosen[0] if chosen else (numbers[0] if numbers else None)
+
+    def show_publish(plan_id, part):
+        from .. import publish
+
+        plan, _ = read(videos.get_plan, plan_id)
+        empty = gr.update(choices=[], value=None)
+        if plan is None:
+            return "", empty, "", "", "", []
+        number = publish_part(plan, part)
+        made = publish.saved(plan, number)
+        which = f"part {number}" if number else "this video"
+        if made is None:
+            note = (f"Nothing written for {which} yet. **Write titles, description and "
+                    "chapters** asks the local AI (about a minute, with the thumbnails). Its "
+                    "summaries of the clips are what it writes from.")
+            return note, empty, "", "", "", []
+        note = f"For {which}, written {made.made_at[:16].replace('T', ' ')} (UTC)."
+        if publish.is_stale(plan, number, made):
+            note += (" **The video has changed since, so the chapter times may be off: write "
+                     "it again.**")
+        if plan.recipe == "letsplay" and len(publish_parts(plan)) > 1:
+            note += " Choose another part under **Parts** to see its text."
+        return (note, gr.update(choices=made.titles, value=None),
+                made.title or (made.titles[0] if made.titles else ""),
+                publish.description_text(settings, made), ", ".join(publish.tags_of(made)),
+                [(str(t.path), f"{t.rating}/10 {t.reason}") for t in made.thumbnails
+                 if t.path.is_file()])
+
+    def publish_parts(plan) -> list[str]:
+        return list(plan.publish)
+
+    publish_outputs = [publish_msg, title_pick, title_box, desc_box, tags_box, thumbs]
+    plan_pick.change(show_publish, [plan_pick, part_pick], publish_outputs)
+    part_pick.change(show_publish, [plan_pick, part_pick], publish_outputs)
+    review_tab.select(show_publish, [plan_pick, part_pick], publish_outputs)
+    ui.load(show_publish, [plan_pick, part_pick], publish_outputs)
+    title_pick.input(lambda t: t or gr.skip(), title_pick, title_box)
+
+    def write_publish(plan_id, episode, part):
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None:
+            return "Pick a plan first."
+        if not settings.llm.enabled:
+            return "The local AI is switched off in Settings (AI)."
+        if plan.recipe == "letsplay" and not episode:
+            return "Fill in the episode number first: it goes in the titles."
+        return submitted(worker, worker.submit(
+            f"Writing the upload text for {plan.title}", f"publish:{plan_id}:{part}",
+            tasks.write_publish(settings, plan_id, parts=chosen_parts(part),
+                                episode=int(episode) if episode else None)))
+
+    publish_btn.click(write_publish, [plan_pick, episode_box, part_pick], publish_msg)
+
+    def keep_changes(plan_id, part, episode, title, description, tags):
+        from .. import publish
+
+        conn = init_db(settings.db_path)
+        try:
+            found = videos.get_plan(conn, plan_id)
+            plan, status = found
+            if plan is None:
+                return "Pick a plan first."
+            number = publish_part(plan, part)
+            made = publish.saved(plan, number)
+            if made is None:
+                return "Write the text first, then change it."
+            made.edited = {"title": (title or "").strip(), "description": description or "",
+                           "tags": [t.strip() for t in (tags or "").split(",") if t.strip()]}
+            plan.publish[publish.key_of(number)] = made.as_dict()
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        beside = tasks.publish_videos(settings, plan, number, int(episode) if episode else None)
+        for video in beside:
+            publish.write_text_beside(settings, made, video)
+        return "Kept." + (f" Saved beside the video too: {beside[0].with_suffix('.txt').name}."
+                          if beside else " It's saved beside the video when you render it.")
+
+    keep_btn.click(keep_changes, [plan_pick, part_pick, episode_box, title_box, desc_box,
+                                  tags_box], publish_msg)
+
     # --- keeping up with finished jobs ---------------------------------------------------
 
-    def tick(seen_version, done, recording, plan_id):
+    def tick(seen_version, done, recording, plan_id, show, part):
         version = worker.version
         if version == seen_version:
-            return (gr.skip(),) * 7 + (done, seen_version)
+            return (gr.skip(),) * 16 + (done, seen_version)
         done = dict(done)
         new_plan = preview_file = None
+        rated = wrote = False
         for task in worker.snapshot():
             if task.status != DONE:
                 continue
+            if "publish" in task.result and task.id > done.get("publish", 0):
+                done["publish"] = task.id
+                wrote = wrote or task.result["publish"] == plan_id
+            if "rated" in task.result and task.id > done.get("rated", 0):
+                done["rated"] = task.id
+                rated = rated or (recording is not None and task.result["rated"] == int(recording))
             if "plan_id" in task.result and task.id > done["plan_id"]:
                 new_plan, done["plan_id"] = task.result["plan_id"], task.id
             if "preview" in task.result and task.id > done["preview"]:
@@ -509,7 +640,12 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         chosen = new_plan if new_plan in ids else plan_id if plan_id in ids else \
             (ids[0] if ids else None)
         plan, status = read(videos.get_plan, chosen)
+        # The AI's verdicts just arrived for the recording on show: fill them in.
+        clip_view = clips_view(recording, show) if rated else (gr.skip(),) * 3
+        publish_view = show_publish(plan_id, part) if wrote else (gr.skip(),) * 6
         return (
+            *clip_view,
+            *publish_view,
             gr.update(choices=recordings,
                       value=recording if recording in [r[1] for r in recordings] else None),
             gr.update(choices=plans, value=chosen),
@@ -521,7 +657,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             done, version,
         )
 
-    timer.tick(tick, [seen, handled, clip_rec, plan_pick],
-               [clip_rec, plan_pick, hl_from, lp_rec, review_player, review_msg, summary, handled,
-                seen],
+    timer.tick(tick, [seen, handled, clip_rec, plan_pick, clip_show, part_pick],
+               [clip_tbl, clip_ids, clip_counts, *publish_outputs, clip_rec, plan_pick, hl_from,
+                lp_rec,
+                review_player, review_msg, summary, handled, seen],
                show_progress="hidden")

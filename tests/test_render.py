@@ -98,6 +98,16 @@ def test_discord_can_be_left_out(conn, settings, tmp_path):
     assert choose_tracks(conn, settings, 1).streams == [2, 3]
 
 
+def test_the_stream_music_can_be_kept_by_choice(conn, settings, tmp_path):
+    """The creator asked for the switch (2026-10-04): the mix as viewers heard it."""
+    mic, game, discord, music = (noise(60, seed=n) for n in range(4))
+    add_tracks(conn, tmp_path, {"mixed": mic + game + discord + music, "mic": mic, "game": game,
+                                "voice_chat": discord})
+    settings.render.include_stream_music = True
+    choice = choose_tracks(conn, settings, 1)
+    assert not choice.separate and choice.streams == [1] and "music included" in choice.describe()
+
+
 # --- The render -------------------------------------------------------------------------
 
 

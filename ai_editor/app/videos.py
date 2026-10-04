@@ -12,12 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+from ..analysis.ai_rating import notes_for
 from ..analysis.captions import clock
 from ..cli import SIGNAL_LABELS
 from ..config import Settings
 from ..recipes.plan import APPROVED, EditPlan, load_plan
 
-CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "You said", "Rated", "Used"]
+CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "AI says", "You said",
+                "Rated", "Used"]
 PLAN_COLUMNS = ["#", "In the video", "From", "Starts at", "Length", "Score", "Why"]
 PART_COLUMNS = ["Part", "Length", "In the recording", "Pieces"]
 SHOW = ["Not used yet", "All", "Rated"]
@@ -121,6 +123,7 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
     rows = conn.execute("SELECT * FROM clips WHERE recording_id = ? ORDER BY score DESC",
                         (recording_id,)).fetchall()
     lengths = lengths or {}
+    notes = notes_for(conn, recording_id, rows)
     table, ids = [], []
     for row in rows:
         used = json.loads(row["used_in_json"] or "[]")
@@ -130,6 +133,7 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
             continue
         summary = json.loads(row["signals_json"] or "{}")
         said = (row["transcript"] or "").strip()
+        note = notes.get(row["clip_id"])
         table.append([
             len(table) + 1,
             f"{clock(row['start_sec'])}-{clock(row['end_sec'])}",
@@ -137,7 +141,8 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
             f"{lengths[row['clip_id']]:.0f}s" if row["clip_id"] in lengths else "-",
             f"{row['score']:.2f}",
             why(summary.get("reasons", [])),
-            said[:90] + ("..." if len(said) > 90 else "") or "-",
+            f"{note.stars} {note.summary}" if note else "-",
+            said[:70] + ("..." if len(said) > 70 else "") or "-",
             RATINGS.get(row["user_rating"], "-"),
             "yes" if used else "-",
         ])
@@ -154,6 +159,12 @@ def clip_details(conn, clip_id: str) -> str:
              f"score {row['score']:.2f}: {why(summary.get('reasons', []))}."]
     if summary.get("game"):
         lines.append(f"Game: {summary['game']}.")
+    note = notes_for(conn, row["recording_id"], [row]).get(clip_id)
+    if note:
+        alone = ("Makes sense on its own (a Short)" if note.stands_alone
+                 else "Needs the rest of the stream to make sense")
+        lines.append(f"**AI says {note.stars}:** {note.summary}. _{note.reason}_ "
+                     f"{alone}." + (f" Tags: {', '.join(note.tags)}." if note.tags else ""))
     used = json.loads(row["used_in_json"] or "[]")
     if used:
         lines.append(f"Used in: {', '.join(used)}.")

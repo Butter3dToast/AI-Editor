@@ -169,13 +169,153 @@ def _analyse(conn, settings: Settings, recording_id: int, report: Reporter) -> N
     row = conn.execute("SELECT * FROM recordings WHERE id = ?", (recording_id,)).fetchone()
     clips, _ = refresh_clips(conn, settings, row)
     report.say(f"Analysed #{recording_id}: {len(clips or [])} clips found.")
+    if settings.llm.enabled:
+        from .. import llm
+
+        if llm.running(settings) is None and not _try_start(settings):
+            report.say("The local AI (Ollama) isn't running, so clips weren't rated. Use Rate "
+                       "with AI in Clips once it is (manual 5.2).")
+        elif not llm.has_model(settings):
+            report.say("The AI model isn't downloaded yet, so clips weren't rated. Settings, "
+                       "AI: Download model.")
+        else:
+            try:
+                _rate(conn, settings, recording_id, report)
+            except AIEditorError as exc:  # the analysis itself is done and kept
+                report.say(f"Clips weren't rated by the AI: {exc.user_message()}")
+
+
+def _try_start(settings: Settings) -> bool:
+    from .. import llm
+
+    try:
+        llm.start(settings)
+        return True
+    except AIEditorError:
+        return False
+
+
+def _rate(conn, settings: Settings, recording_id: int, report: Reporter) -> None:
+    from ..analysis.ai_rating import rate_recording
+
+    result = rate_recording(conn, settings, recording_id,
+                            lambda f: report.progress("AI rating the clips", f))
+    text = f"AI rated {result.rated} clip(s)"
+    if result.already:
+        text += f" ({result.already} already rated)"
+    if result.failed:
+        text += f"; {result.failed} gave an answer it couldn't use (Rate with AI tries again)"
+    report.say(text + ". See the AI says column in Clips.")
+    report.keep(rated=recording_id)
+
+
+def _publish_beside(conn, settings: Settings, plan_id: str, episode: int | None) -> None:
+    """The upload text, already written, saved beside the videos just rendered."""
+    from .. import publish
+    from ..recipes.plan import load_plan
+
+    found = load_plan(conn, plan_id)
+    if found is None:
+        return
+    plan = found[0]
+    for key in plan.publish:
+        part = int(key.split()[-1]) if key.startswith("part ") else None
+        text = publish.saved(plan, part)
+        for video in publish_videos(settings, plan, part, episode):
+            publish.write_text_beside(settings, text, video)
+
+
+def rate_clips(settings: Settings, recording_id: int) -> Job:
+    """`ai-editor rate`: the local AI's verdict on each clip it hasn't judged yet."""
+
+    def run(report: Reporter) -> None:
+        conn = init_db(settings.db_path)
+        try:
+            row = conn.execute("SELECT * FROM recordings WHERE id = ?", (recording_id,)).fetchone()
+            if row is None or row["analysis_status"] != "complete":
+                raise TaskFailed(f"Recording #{recording_id} isn't analysed yet. Analyse it in "
+                                 "the Library first.")
+            _rate(conn, settings, recording_id, report)
+        finally:
+            conn.close()
+
+    return run
+
+
+def write_publish(settings: Settings, plan_id: str, *, parts: list[int] | None = None,
+                  episode: int | None = None) -> Job:
+    """Titles, description, tags, chapters and thumbnails (publish.py), for the
+    video or each chosen part. Saved with the plan, and beside any finished video."""
+
+    def run(report: Reporter) -> None:
+        from .. import publish
+        from ..recipes.plan import load_plan, save_plan
+        from ..render import parts as lp
+
+        conn = init_db(settings.db_path)
+        try:
+            found = load_plan(conn, plan_id)
+            if found is None:
+                raise TaskFailed("That plan isn't there any more.")
+            plan, status = found
+            numbers = [None]
+            if plan.recipe == "letsplay":
+                if episode is None:
+                    raise TaskFailed("Which episode is this? Fill in the episode number in "
+                                     "Review first.")
+                numbers = parts or lp.part_numbers(plan)
+            for n in numbers:
+                label = f"Part {n}: " if n else ""
+                result = publish.prepare(
+                    conn, settings, plan, part=n, episode=episode,
+                    on_progress=lambda step, f, label=label: report.progress(label + step, f))
+                plan.publish[publish.key_of(n)] = result.as_dict()
+                save_plan(conn, plan, status)
+                report.say(f"{label}{len(result.titles)} title ideas, {len(result.chapters)} "
+                           f"chapters, {len(result.thumbnails)} thumbnail frames. They're in "
+                           "Review, under Publish.")
+                for video in publish_videos(settings, plan, n, episode):
+                    publish.write_text_beside(settings, result, video)
+                    report.say(f"Saved beside the video: {video.with_suffix('.txt').name}")
+            report.keep(publish=plan_id)
+        finally:
+            conn.close()
+
+    return run
+
+
+def publish_videos(settings: Settings, plan, part: int | None, episode: int | None) -> list[Path]:
+    """The finished video(s) this text belongs with, captioned or not, that exist."""
+    from ..render import parts as lp
+    from ..render.final import video_path
+
+    if plan.recipe == "letsplay":
+        if not (part and episode):
+            return []
+        found = [lp.part_path(settings, plan, episode, part, captions=c) for c in (False, True)]
+    else:
+        found = [video_path(settings, plan, captions=c) for c in (False, True)]
+    return [p for p in found if p.is_file()]
+
+
+def download_model(settings: Settings) -> Job:
+    """Settings, AI: fetch the model once (Ollama keeps a paused download)."""
+
+    def run(report: Reporter) -> None:
+        from .. import llm
+
+        llm.pull(settings, lambda f: report.progress(f"Downloading {settings.llm.model}", f))
+        report.say(f"{settings.llm.model} is ready. Clips are rated after each analysis; use "
+                   "Rate with AI in Clips for recordings analysed before.")
+
+    return run
 
 
 # --- Phase 1H-2: making, previewing and rendering videos ------------------------------
 
 
 def make_highlights(settings: Settings, *, game: str | None, recording_ids: list[int] | None,
-                    minutes: float | None) -> Job:
+                    minutes: float | None, reuse: bool = False) -> Job:
     """`ai-editor highlights`: a draft plan for Review."""
 
     def run(report: Reporter) -> None:
@@ -185,7 +325,7 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
         try:
             report.progress("Choosing the best clips", 0.0)
             result = build_highlights(conn, settings, game=game, recording_ids=recording_ids,
-                                      target_min=minutes)
+                                      target_min=minutes, reuse=reuse)
             report.progress("Choosing the best clips", 1.0)
             plan = result.plan
             report.say(f"{plan.title}: {plan.total_sec / 60:.1f} min from "
@@ -296,6 +436,7 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
                 report.say(f"Saved {result.path.name} ({clock(result.length_sec)}).")
                 for note in result.notes:
                     report.say(note)
+            _publish_beside(conn, settings, plan_id, episode)
             marked = approve_plan(conn, plan_id)
             if plan.recipe != "letsplay":
                 report.say(f"{marked} clip(s) marked as used: the next highlight video carries "

@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..analysis.ai_rating import scores_for
 from ..analysis.captions import Word
 from ..analysis.clips import (
     action_signal,
@@ -130,7 +131,7 @@ def recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str | 
 def gather(conn: sqlite3.Connection, settings: Settings,
            recordings: list[sqlite3.Row], *, game: str | None = None, refresh: bool = True,
            allow: set[str] | frozenset[str] = frozenset(),
-           quality_bar: bool = True) -> list[Candidate]:
+           quality_bar: bool = True, reuse: bool = False) -> list[Candidate]:
     """Every clip that may go into the video, trimmed to its moment.
 
     With ``game``, only clips from that game: each clip knows its own game
@@ -139,6 +140,8 @@ def gather(conn: sqlite3.Connection, settings: Settings,
     moments ago). ``allow``: clip ids to keep even though a plan uses them --
     the plan being reviewed, once it has been approved. ``quality_bar=False``
     keeps clips under the bar too: what the creator may add in Review.
+    ``reuse``: clips already in a rendered video may come again (one video's
+    choice, like highlights.allow_reused_clips for all of them).
 
     A clip you gave a thumbs up always goes in, like one you marked: "the
     thumbs up should mean that it should be in the video for review" (the
@@ -167,15 +170,18 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         # starting a little earlier must not bring it back.
         rejected = [(c["start_sec"], c["end_sec"]) for c in clips
                     if c["user_rating"] is not None and c["user_rating"] < 0]
+        # The local AI's rating counts for llm.rating_weight of the score (0 by default).
+        scores = scores_for(conn, settings, row["id"], clips)
         for clip in clips:
-            if clip["used_in_json"] and not h.allow_reused_clips and clip["clip_id"] not in allow:
+            if clip["used_in_json"] and not (h.allow_reused_clips or reuse) \
+                    and clip["clip_id"] not in allow:
                 continue
             summary = json.loads(clip["signals_json"] or "{}")
             marked = "marker" in summary or "marker_short" in summary
             liked = (clip["user_rating"] or 0) > 0
             must = liked or (h.always_include_pinned and bool(clip["pinned"])) or \
                 (h.always_include_markers and marked)
-            if quality_bar and clip["score"] < h.min_clip_score and not must:
+            if quality_bar and scores[clip["clip_id"]] < h.min_clip_score and not must:
                 continue
             if any(a < clip["end_sec"] and clip["start_sec"] < b for a, b in rejected):
                 continue  # thumbs down
@@ -185,8 +191,8 @@ def gather(conn: sqlite3.Connection, settings: Settings,
             core = tuple(summary.get("core") or (int(clip["start_sec"]), int(clip["end_sec"])))
             peak = int(summary.get("peak", (core[0] + core[1]) // 2))
             candidate = Candidate(
-                clip["clip_id"], row["id"], clip["start_sec"], clip["end_sec"], clip["score"],
-                peak, (int(core[0]), int(core[1])), summary.get("reasons", []), when, must,
+                clip["clip_id"], row["id"], clip["start_sec"], clip["end_sec"],
+                scores[clip["clip_id"]], peak, (int(core[0]), int(core[1])), summary.get("reasons", []), when, must,
                 game=clip_game, marked=marked, liked=liked,
             )
             candidate.src_in, candidate.src_out = trim(
@@ -426,6 +432,28 @@ def teaser_from(moment: tuple[float, float], best: Candidate, words: list[Word],
     return start, end
 
 
+def nothing_left_note(conn: sqlite3.Connection, settings: Settings,
+                      recordings: list[sqlite3.Row], game: str | None, reuse: bool) -> str:
+    """Why there's nothing to put in the video, and what to do about it.
+
+    Usually every good clip is already in a rendered video: rendering uses
+    them up so the next video has fresh ones. On 2026-10-04 the creator tried
+    to remake a rendered League video with the stream's music and was told
+    only "no clips passed the quality bar".
+    """
+    if not reuse and gather(conn, settings, recordings, game=game, refresh=False, reuse=True):
+        used = sorted({p for r in recordings for (u,) in conn.execute(
+            "SELECT used_in_json FROM clips WHERE recording_id = ? AND used_in_json IS NOT NULL",
+            (r["id"],)) for p in json.loads(u)})
+        return ("Every good clip from these streams is already in a rendered video ("
+                + ", ".join(used) + "). To render that video again with new settings (like "
+                "the stream's music), open it in Review and press Render. To make another "
+                "video from the same clips, tick 'Use clips already in a video' in Create "
+                "video.")
+    return ("No clips passed the quality bar. Lower the quality bar in Settings, or analyse "
+            "more recordings of this game.")
+
+
 def short_note(clips_sec: float, target_sec: float, recordings: int) -> str:
     """Said whenever the clips come in under the target, which is a floor."""
     return (f"Only {clips_sec / 60:.1f} of {target_sec / 60:.0f} minutes: that's all the good, "
@@ -457,13 +485,14 @@ def build_highlights(
     target_min: float | None = None,
     teaser_clip: str | None = None,
     teaser_moment: tuple[float, float] | None = None,
+    reuse: bool = False,
 ) -> HighlightResult:
     """``teaser_clip``: a clip id to open with (and end on), instead of the automatic pick.
     ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one."""
     h = settings.highlights
     target = (target_min or h.target_length_min) * 60
     recordings = recordings_for(conn, settings, game=game, recording_ids=recording_ids)
-    candidates = gather(conn, settings, recordings, game=game)
+    candidates = gather(conn, settings, recordings, game=game, reuse=reuse)
     for c in candidates:
         if c.clip_id == teaser_clip:
             c.must_include = True  # the clip you picked is in the video, whatever else is
@@ -488,7 +517,7 @@ def build_highlights(
         output=settings.render.presets.get("youtube_1080p60").model_dump()
         if "youtube_1080p60" in settings.render.presets else {},
     )
-    plan.source = {"game": game, "recording_ids": recording_ids, "removed": []}
+    plan.source = {"game": game, "recording_ids": recording_ids, "removed": [], "reuse": reuse}
     if best is not None and h.hook:
         plan.segments.append(teaser_segment(
             conn, settings, best,
@@ -499,8 +528,7 @@ def build_highlights(
                                      reasons=c.reasons, game=c.game))
 
     if not chosen:
-        plan.notes.append("No clips passed the quality bar. Lower highlights.min_clip_score "
-                          "in Settings, or analyse more recordings of this game.")
+        plan.notes.append(nothing_left_note(conn, settings, recordings, game, reuse))
     elif sum(c.length for c in chosen) < target:
         plan.notes.append(short_note(sum(c.length for c in chosen), target, len(recordings)))
     save_plan(conn, plan)

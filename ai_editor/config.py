@@ -401,6 +401,10 @@ class Render(BaseModel):
     preset: str = "youtube_1080p60"
     # Friends on Discord in finished videos (only possible with a separate Discord track).
     include_voice_chat: bool = True
+    # The music playing on stream (Spotify) in finished videos: the mixed track,
+    # as viewers heard it. Off by default, because commercial music gets
+    # YouTube videos claimed; the creator asked for the switch (2026-10-04).
+    include_stream_music: bool = False
 
     @model_validator(mode="after")
     def _known_preset(self) -> "Render":
@@ -424,9 +428,57 @@ class Twitch(BaseModel):
 
 
 class Llm(BaseModel):
-    enabled: bool = False
-    model: str | None = None
+    """The local AI (Ollama). Everything works without it; it adds judgement."""
+
+    enabled: bool = True
+    # One model reads text and looks at pictures (chosen 2026-10-04).
+    model: str | None = "gemma4:12b"
+    host: str = "http://127.0.0.1:11434"
     keep_alive: int = 0
+    # Low: the same clip should get the same rating each time.
+    temperature: float = Field(0.2, ge=0.0, le=2.0)
+    # How much of a clip's score is the AI's rating; the rest is what was heard
+    # and seen. 0: shown, but it doesn't change which clips are picked. On the
+    # creator's League stream the AI ranked their 👍 above their 👎 51% of the
+    # time against the signals' 81%, so it waits until it agrees with them
+    # (Settings shows how often it does, per game). 👍/👎 always decide.
+    rating_weight: float = Field(0.0, ge=0.0, le=1.0)
+    # Frames from the preview copy the AI looks at for each clip.
+    frames_per_clip: int = Field(3, ge=0, le=8)
+
+    @field_validator("host")
+    @classmethod
+    def _local_only(cls, v: str) -> str:
+        # Everything stays on this PC (spec decision 1).
+        from urllib.parse import urlparse
+
+        if urlparse(v).hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError(f"llm.host must be on this PC (127.0.0.1), got {v!r}")
+        return v
+
+
+class Publish(BaseModel):
+    """Upload text and thumbnails for each video (publish.py)."""
+
+    # Let's Play titles keep the series name; the AI writes {subtitle}.
+    lets_play_title: str = "{game} - EP {episode} Part {part}: {subtitle}"
+    # Added under every description, e.g. "Live on Twitch: twitch.tv/yourname".
+    description_footer: str = ""
+    thumbnails: int = Field(6, ge=1, le=12)
+    # A Let's Play part gets a chapter about this often.
+    chapter_every_min: float = Field(5.0, ge=1.0, le=30.0)
+
+    @field_validator("lets_play_title")
+    @classmethod
+    def _title_fields(cls, v: str) -> str:
+        try:
+            v.format(game="g", episode=1, part=1, subtitle="s")
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ValueError("lets_play_title can use {game}, {episode}, {part} and {subtitle} "
+                             f"only: {exc}") from exc
+        if "{subtitle}" not in v:
+            raise ValueError("lets_play_title needs {subtitle}: it's where the AI's idea goes")
+        return v
 
 
 class Logging(BaseModel):
@@ -451,6 +503,7 @@ class Settings(BaseModel):
     storage: Storage = Storage()
     twitch: Twitch = Twitch()
     llm: Llm = Llm()
+    publish: Publish = Publish()
     logging: Logging = Logging()
 
     # Where this instance was loaded from; not part of the YAML.

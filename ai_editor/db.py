@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 _V1 = """
@@ -267,7 +267,30 @@ ALTER TABLE transcript_words ADD COLUMN source_role TEXT;
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2}
+# Phase 2A: the local AI's verdict on each clip. Its own table, not columns
+# on clips, because unrated clips are deleted and cut again whenever a video
+# is made (refresh_clips); the verdict must outlive that. Matched to a clip
+# by its id, or failing that by the stretch of recording it covers.
+_V3 = """
+CREATE TABLE ai_clip_notes (
+    clip_id         TEXT    PRIMARY KEY,
+    recording_id    INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    start_sec       REAL    NOT NULL,
+    end_sec         REAL    NOT NULL,
+    rating          REAL    NOT NULL,          -- 1-10
+    summary         TEXT,
+    reason          TEXT,
+    tags_json       TEXT,
+    stands_alone    INTEGER,                   -- 1: makes sense without context (Shorts)
+    model           TEXT    NOT NULL,
+    prompt_version  INTEGER NOT NULL,
+    created_at      TEXT    NOT NULL
+);
+CREATE INDEX idx_ai_notes_recording ON ai_clip_notes(recording_id, start_sec);
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

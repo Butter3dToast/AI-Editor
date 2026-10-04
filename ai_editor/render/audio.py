@@ -56,9 +56,13 @@ class AudioChoice:
     separate: bool                     # rebuilt from separate tracks (stream music left out)
     beeps: list[tuple[float, float]] = field(default_factory=list)  # recording time
 
+    music_by_choice: bool = False      # the mixed track because Settings asked for the music
+
     def describe(self) -> str:
         if self.separate:
             return "your separate mic, game and Discord tracks (music on stream left out)"
+        if self.music_by_choice:
+            return "the stream's mixed track, music included (Settings: keep the stream's music)"
         return "the stream's mixed track, as viewers heard it"
 
 
@@ -96,6 +100,9 @@ def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: in
     by_role = {r["role"]: r for r in rows}
     mixed = by_role.get("mixed") or rows[0]
     fallback = AudioChoice([mixed["stream_index"]], mixed["stream_index"], False)
+    if settings.render.include_stream_music:
+        fallback.music_by_choice = True
+        return fallback
 
     wanted = [role for role in SEPARATE_ROLES
               if role in by_role and (role != "voice_chat" or settings.render.include_voice_chat)]

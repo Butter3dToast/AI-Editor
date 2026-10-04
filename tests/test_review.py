@@ -166,7 +166,7 @@ def test_the_clip_list_is_best_first_and_ratings_are_kept_for_learning(conn):
     assert videos.clip_table(conn, 1, "All")[1] == ["b", "c", "a"]
     assert "👎" in videos.rate(conn, "a", -1)
     assert videos.clip_table(conn, 1, "Rated")[1] == ["a"]
-    assert videos.clip_table(conn, 1, "Rated")[0][0][7] == "👎"
+    assert videos.clip_table(conn, 1, "Rated")[0][0][8] == "👎"
     assert videos.clip_table(conn, 1, lengths={"b": 48.4})[0][0][3] == "48s"
     action, features = conn.execute("SELECT action, features_json FROM feedback").fetchone()
     assert action == "thumbs_down" and "laughter" in features

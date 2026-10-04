@@ -34,14 +34,17 @@ a hard rule, not a preference.
 | **1F** | Recipes: highlights, Let's Play split optimiser | **Complete** |
 | 1G | Rendering (NVENC), captions, OTIO/FCPXML export | **Complete** |
 | 1H | App window (Gradio), storage management | **Complete** |
-| 2 | Shorts, League events, story protection, style profiles, rules, effects | Not started |
+| **2A** | Local AI (Ollama): clip ratings and summaries; titles, descriptions, chapters, thumbnails | **Complete** |
+| 2B-2H | Shorts, effects, full Review screen, League events, story protection, style profiles, rules | Not started |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 
 ---
 
 ## Running from source
 
-Requires Python 3.11+, FFmpeg with NVENC, and an NVIDIA GPU.
+Requires Python 3.11+, FFmpeg with NVENC, and an NVIDIA GPU. The local AI needs
+[Ollama](https://ollama.com) and its model (`ollama pull gemma4:12b`, or **Download
+model** in the app's Settings); everything else works without it.
 
 Install PyTorch from the **CUDA 12** index before anything else, or pip picks the
 CPU-only build. CUDA 12 specifically, even on newer drivers: faster-whisper's
@@ -71,6 +74,7 @@ ai-editor companion               # Stream Companion: markers and OBS session lo
 ai-editor sessions                # What the Companion logged
 ai-editor score 1                 # Rank the best moments, and why each scored
 ai-editor clips 1 --export 10 --open  # Cut them into clips and watch the best 10
+ai-editor rate 1                  # The local AI rates and describes each clip
 pytest
 ```
 

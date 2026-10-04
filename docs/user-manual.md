@@ -165,6 +165,18 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 
 **"Another program is using port 7865"?** Something else is using AI-Editor's address. Run `ai-editor app --port 7866` instead.
 
+### 5.2 The local AI (Ollama)
+
+AI-Editor uses an AI model that runs on your own graphics card, through a free program called **Ollama**. It reads what was said in each clip and looks at a few frames, then describes the clip and rates it (12.3). Nothing is sent online.
+
+1. Install Ollama from **ollama.com** (Download → Windows). It starts with Windows and sits in the tray. If it's closed, AI-Editor starts it when needed.
+2. In AI-Editor, open **Settings → AI (on this PC)** and click **Download model**. The model, **Gemma 4 12B**, is about 8 GB and downloads once. Progress shows under **Jobs**; a paused download carries on where it stopped.
+3. The line at the top of that section says **Ready: gemma4:12b**. From then on, clips are rated at the end of every analysis.
+
+Everything else in AI-Editor works without it. Untick **Use the local AI** in Settings to switch it off.
+
+**Don't run it while you play.** The AI and your game share the graphics card. If a game is running, rating crawls and can make the game stutter, so AI-Editor stops after one slow answer and tells you (E035). Press **Resume** in Jobs when you've finished playing.
+
 ### Updating AI-Editor
 
 1. Open **Help → Check for updates**.
@@ -630,7 +642,7 @@ For each recording AI-Editor:
 5. Reads chat activity (if available).
 6. Adds your markers and League events.
 7. Detects game-specific moments (see chapter 21).
-8. Uses local AI to rate moments as funny, intense, clutch, story-important, or boring, and writes a one-line summary.
+8. Asks the local AI (5.2) about each clip: a rating out of 10, a one-line summary, and whether it works as a Short (12.3). About 2 minutes per stream. Skipped, with a note, if the AI isn't set up.
 9. Saves everything into your Clip Library.
 
 ### 11.1a Analysing from the command line (until the app window arrives)
@@ -757,13 +769,14 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 | In a video | How long it is once a highlight video trims it to its moment: about 15 s of lead-up, never more than 50 s, never cut mid-word. "-" means it can't go in (rated down, or during "BRB") |
 | Score | 0 to 1. Higher is better. A moment you marked scores 1.00 |
 | Why | What made it stand out: you marked it, laughter, shouting, gunfire, chat busy, loud... |
+| AI says | The local AI's rating out of 10 and what happens, e.g. "7/10 Teamfight engagement and multi-kill" (12.3) |
 | You said | Your words in it |
 | Rated | 👍 or 👎 if you've rated it |
 | Used | **yes** once a rendered video uses it |
 
-3. **Click a clip** to play it beside the list. It plays from the preview copy, so it starts straight away; the finished video is full quality. Underneath are all its words, its game, and the video it's used in.
+3. **Click a clip** to play it beside the list. It plays from the preview copy, so it starts straight away; the finished video is full quality. Underneath are what the AI says about it, all its words, its game, and the video it's used in.
 
-**Not built yet:** thumbnails, tags and summaries (Phase 2), pinning, trimming, and filtering by game or date.
+**Not built yet:** thumbnails, pinning, trimming, and filtering by game or date.
 
 ### 12.2 Rating clips
 
@@ -774,6 +787,19 @@ Click a clip, then:
 - **Clear rating:** undo either.
 
 Every rating is kept, with what the clip sounded like, so AI-Editor can learn what you like (Phase 3). Rating even 10–20 clips a week helps.
+
+### 12.3 What the AI says
+
+For every clip, the local AI (5.2) reads what was said and what chat wrote, looks at three frames, and gives:
+
+- **A rating out of 10**, for viewers who weren't watching live.
+- **A one-line summary**, like "Streamer rages over teammate throwing a significant lead". Publish Prep names the chapters and writes the description from these (chapter 20).
+- **Why** it gave that rating, and **tags** (funny, fail, clutch, fight...).
+- Whether it **makes sense on its own**, which is what a Short needs.
+
+Clips are rated at the end of each analysis. For recordings analysed earlier, pick the recording and click **Rate with AI**. Only clips it hasn't seen are asked about, and the column fills in when the job finishes. (From the command line: `ai-editor rate 10`.)
+
+**The rating doesn't choose your clips yet.** On your League stream of 2 October, the AI put a clip you liked above one you rejected only about half the time. The usual score did that about 80% of the time. Three still frames can't show a teamfight the way the sounds and your markers do. So the AI's rating is shown but not used to pick. **Settings → AI** shows, for each game, how often it agrees with your 👍 and 👎. If it starts beating the usual score for a game, turn up **How much the AI's rating counts**.
 
 ---
 
@@ -1207,6 +1233,7 @@ What the render does:
 - **Clean joins.** The sound fades over a few thousandths of a second at every cut, too short to hear as a dip but enough to stop a click.
 - **YouTube loudness, without squashing.** The whole video is turned up or down in one go toward about −14 LUFS (YouTube's level), so a quiet moment stays quieter than a loud one, the way it was. Only the loudest peaks are held down, by 3 dB at most, which you can't hear. A recording made very quiet (EP 1 was −25 LUFS) is raised only as far as that allows, so it ends up a little under YouTube's level, but never distorted. Turn it up in your player if it's too quiet.
 - **Music on stream is left out** when the recording has separate tracks (chapter 7.3). The finished sound is rebuilt from your mic, game and Discord tracks. Spotify is only on track 1, so it isn't included, and music in a YouTube video gets it claimed. A recording without real separate tracks (a Twitch VOD, or an OBS recording from before your tracks were set up) uses the mixed track, exactly as the stream sounded. The render says which it used.
+  - **Want the music anyway?** Tick **Settings → Captions and sound → Keep the music from your stream (Spotify)**. Finished videos then use the mixed track, exactly as viewers heard it, music included. Expect a Content ID claim on YouTube for most commercial songs: the video may be muted, earn nothing for you, or be blocked in some countries. With it ticked, Discord is always in, because it's part of the mix.
 - **Marker beeps are taken out.** On the 26 Sep stream the Companion's click reached your microphone. Each click is found by its sound, only near a marker you pressed, and that one pitch is filtered out for half a second, leaving your voice and the game around it untouched. The click is off now (chapter 24), so new recordings don't have any.
 
 A 10-minute highlight takes about 3 minutes.
@@ -1289,33 +1316,47 @@ Not built yet. Resolve's timeline format (19.3) was enough as a backup. Ask for 
 
 ## 20. Publish Prep
 
-After rendering, open **Publish Prep** for each video.
+Everything to paste into YouTube when you upload: title ideas, a description with chapters, tags, and thumbnail frames. It's at the bottom of **Review**, under **Publish**. The local AI writes it (chapter 5.2), from what it said about each clip (12.3) and what you said. Nothing is uploaded for you.
+
+1. Open the video's plan in **Review**. For a Let's Play, fill in the **Episode number** (it goes in the titles), and under **Parts** choose one part, or leave **All parts** to do every part.
+2. Click **Write titles, description and chapters**. It shows under Jobs: about 20 seconds per video, thumbnails included. Not while you're gaming (5.2).
+3. The text appears below. Pick a title idea and it goes in the **Title** box. Each box has a copy button (top right).
+4. Change anything you like, then click **Keep my changes**.
+
+It's also saved as a text file beside the finished video, with the same name (`... .txt`), whenever you write it, keep changes, or render. You can do it before or after rendering.
+
+**Changed the video since?** If you remove, add or move clips after writing the text, Publish says **the chapter times may be off: write it again.**
 
 ### 20.1 Titles
 
-AI-Editor suggests 3–5 titles. Click one to copy it, or edit it. For Let's Plays, titles follow your series format, for example *"The Blood of Dawnwalker — Part 7: [episode summary]"*.
+3–5 ideas, plain and descriptive, the style you chose: *"Wardogs Highlights - Holding the Zone with Friends"*. No clickbait, capitals or emoji.
 
-Spoiler check is on for Dawnwalker, so titles avoid giving away major story moments. Always double-check anyway.
+Let's Play titles keep your series pattern, and the AI writes only the end: *"The Blood of Dawnwalker - EP 1 Part 2: Caring for Mum"*. Change the pattern with `publish.lets_play_title` in `settings.yaml`. For Dawnwalker (and any game listed in `shorts.spoiler_check_games`) it's told not to give away twists or the ending. Always double-check anyway.
 
 ### 20.2 Description and tags
 
-A ready-to-paste description with a summary, chapters, and tags. Edit freely. You can save a **description template** (for example with your Twitch link and socials) in **Settings → Publish templates**.
+2–4 sentences in your own voice about what happens, then the chapters, then the lines you put in **Settings → Publish → Under every description** (your Twitch link and when you stream). 8–15 tags, the game's name first: paste them in YouTube Studio under **Show more → Tags**.
 
 ### 20.3 Chapters
 
-AI-Editor writes chapter timestamps. YouTube requires the first chapter to start at `0:00`, at least three chapters, and each chapter at least 10 seconds long. AI-Editor follows these rules automatically.
+Paste the description as it is and YouTube makes chapters from the times in it. The times come from the video plan, to the frame, so they match the finished video exactly.
+
+- **Highlights:** one chapter per clip, named after what happens in it. The teaser is **Intro** (or, if it's under 10 seconds, part of the first chapter).
+- **Let's Plays:** a chapter about every 5 minutes (`publish.chapter_every_min`), always where one kept piece meets the next.
+
+YouTube's rules are followed automatically: the first chapter starts at `0:00`, every chapter lasts at least 10 seconds, and with fewer than three chapters none are listed (YouTube would ignore them).
 
 ### 20.4 Thumbnails
 
-AI-Editor exports several frames with your strongest reactions and most exciting moments as PNG images in your Outputs folder. Open them in a free tool such as GIMP, Photopea, or Canva's free plan to add text and design your thumbnail.
+AI-Editor takes 12 full-size frames from the video's strongest moments (at least 20 seconds apart), the AI looks at each one, and the best 6 are kept, best first (`publish.thumbnails`). Blurry frames, menus, maps, loading screens and dark frames are marked down. They show in Review, and the PNG files are in `output\thumbnails\<the plan's name>`. Open one in a free tool such as GIMP, Photopea, or Canva's free plan to add text and your face.
 
 ### 20.5 Linking Shorts to full videos
 
-After uploading a full video, paste its YouTube link into **Publish Prep → Linked video**. Every Short made from that video updates its description with the link.
+Not built yet (Shorts arrive in the next part of Phase 2).
 
 ### 20.6 Release planning
 
-For Let's Plays, **Series → Release plan** lists parts in order. Add your planned upload dates to keep a steady schedule. AI-Editor does not upload for you.
+Not built yet.
 
 ---
 
@@ -1459,6 +1500,8 @@ If you move raw files, open the project and click **Relink media** to point AI-E
 
 The **Settings** tab has the ones you'll change most: your folders (each with an **Open** button), and the main options for highlights, captions, Let's Plays, the Stream Companion and Twitch. Click **Save settings**: they work straight away, and are saved on this PC only (`config/settings.local.yaml`, beside your OBS password). A value AI-Editor can't use is refused with the reason, and nothing is saved.
 
+The **Publish** section has the lines under every description and the Let's Play title pattern (chapter 20). The **AI (on this PC)** section shows whether the local AI is ready, with **Download model**, and how often it agrees with you (12.3).
+
 You can change the recordings and output folders there. The cache and models folders are set in `config/settings.yaml`, because moving them means moving their files too. Every other setting is in `config/settings.yaml` as well:
 
 | Area | Setting | Default | What it does |
@@ -1512,6 +1555,17 @@ You can change the recordings and output folders there. The cache and models fol
 | Storage | Low space warning | 100 GB | When to warn. |
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
+| Render | Keep the music from your stream (`render.include_stream_music`) | Off | On: finished videos use the stream's mixed track, Spotify included (19.2). Usually gets a YouTube Content ID claim. |
+| Publish | Let's Play title (`publish.lets_play_title`) | `{game} - EP {episode} Part {part}: {subtitle}` | The series pattern; the AI writes `{subtitle}` (20.1). |
+| Publish | Description footer (`publish.description_footer`) | (empty) | Lines added under every description, e.g. your Twitch link. |
+| Publish | Thumbnails (`publish.thumbnails`) | 6 (1–12) | Frames kept, best first (20.4). |
+| Publish | Let's Play chapters every (`publish.chapter_every_min`) | 5 minutes (1–30) | How often a Let's Play part gets a chapter (20.3). |
+| AI | Use the local AI (`llm.enabled`) | On | Rate and describe each clip with the local AI (5.2, 12.3). Off: everything else works as before. |
+| AI | Model (`llm.model`) | `gemma4:12b` | The Ollama model. It must be able to look at pictures. About 8 GB. |
+| AI | Address (`llm.host`) | `http://127.0.0.1:11434` | Where Ollama answers. Only this PC is allowed. |
+| AI | How much the AI's rating counts (`llm.rating_weight`) | 0 (0–1) | The share of a clip's score that is the AI's rating. 0: shown, but it doesn't change which clips are picked (12.3). |
+| AI | Frames per clip (`llm.frames_per_clip`) | 3 (0–8) | Pictures from each clip the AI looks at. More is slower. |
+| AI | Temperature (`llm.temperature`) | 0.2 | How much its answers vary. Low, so the same clip gets the same rating. |
 | Twitch | Ignored chatters | StreamElements, Nightbot, Moobot, Streamlabs, Fossabot, Sery_Bot, WizeBot, SoundAlerts | Chat bots post automatically, so their messages never count as viewers reacting. Add any other bot your channel uses. |
 | Tools | Tools folder | Empty (a `tools` folder next to your Models folder) | Where helper programs, such as the Twitch downloader, are kept. |
 | Logging | Screen detail level | WARNING | How much AI-Editor prints while it works. WARNING shows only problems. INFO also shows each step as it happens. The log file always records full detail, whatever this is set to. |
@@ -1543,6 +1597,10 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 | **E016** | That recording hasn't finished importing | Analysis reads the audio tracks that importing saves, and one or more of them is missing — for example after cleaning up the cache. | Run the same `ai-editor import` command again. Anything already finished is reused, so it's quick. |
 | **E030** | AI-Editor could not download an AI model it needs | The first analysis downloads two AI models (about 4.6 GB in total), once. This needs an internet connection. | Check your connection and run the same command again. Half-finished downloads are cleaned up automatically, and the next try starts fresh. |
 | **E031** | Your graphics card ran out of memory | The AI models need several gigabytes of graphics memory. A game, OBS, or a browser with many tabs may be using it. | Close games, OBS, and other graphics-heavy programs, then run the same command again. Finished steps are kept. |
+| **E032** | AI-Editor couldn't reach its local AI (Ollama) | Ollama isn't installed, or it couldn't be started. | Install Ollama from ollama.com (5.2), or open it from the Start menu, then try again. Everything else works without it. |
+| **E033** | The AI model isn't downloaded | The model is downloaded once (about 8 GB), then everything runs offline. | **Settings → AI → Download model**, then try again. |
+| **E034** | The local AI gave an answer AI-Editor couldn't use | It happens now and then with AI models. That clip is skipped; the others are rated. | Click **Rate with AI** again: only the clips without an answer are asked about. |
+| **E035** | The local AI was far too slow, so AI-Editor stopped it | Almost always a game (or another program) using the graphics card. Carrying on would slow your game down and take hours. | Press **Resume** in Jobs when you've finished playing. Clips already rated are kept. |
 | **E040** | That doesn't look like a Twitch VOD link | AI-Editor couldn't find a VOD number in what you gave it. | Open the VOD on Twitch and copy the link from your browser (`twitch.tv/videos/...`), or copy it from **Content → Video Producer** in your Twitch dashboard. Both kinds of link work, and so does just the number. |
 | **E041** | Twitch won't share that VOD | The VOD is private, unpublished, subscriber-only, or expired. Twitch treats a VOD that isn't public as if it doesn't exist. | In your Twitch dashboard open **Content → Video Producer** and make the VOD public while you download it; you can change it back afterwards. Or download it there yourself and import the file: `ai-editor import "<file>" --source twitch`. |
 | **E042** | The download from Twitch didn't finish | The internet connection dropped, or Twitch stopped responding. | Check your connection and run the same command again. |
