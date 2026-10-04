@@ -173,3 +173,33 @@ def test_thumbnail_moments_are_the_strongest_seconds_spread_out(settings):
     moments = publish.thumbnail_moments(conn, plan, count=3)
     assert moments[:2] == [(1, 120.5), (1, 310.5)]  # 121 is too close to 120; 505 is the teaser
     conn.close()
+
+
+# --- Shorts ---------------------------------------------------------------------------------
+
+
+def test_a_shorts_description_links_the_full_video_and_has_hashtags(settings):
+    settings.publish.description_footer = ""
+    text = publish.Publish(["Baron steal"], "We stole Baron.", ["League of Legends", "baron"],
+                           [(0.0, "x")], [], "f", "now", short=True)
+    assert publish.description_text(settings, text, "https://youtu.be/abc") == (
+        "We stole Baron.\n\nFull video: https://youtu.be/abc\n\n"
+        "#Shorts #LeagueOfLegends #baron")
+    assert "Full video" not in publish.description_text(settings, text)  # not uploaded yet
+
+
+def test_a_short_finds_the_long_video_its_moment_is_in(settings):
+    conn = init_db(settings.db_path)
+    conn.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                 "duration_sec, imported_at) VALUES (1, 'h', 'local_obs', 'x.mkv', 3600, 'now')")
+    long = letsplay_plan()
+    publish.set_link(long, 2, "https://youtu.be/part2")
+    save_plan(conn, long)
+    short = EditPlan("shorts_x_1", "shorts", "Short: x", "The Blood of Dawnwalker", 30,
+                     [Segment(1, 2010, 2040)])
+    save_plan(conn, short)
+    assert publish.full_video_link(conn, short) == ("https://youtu.be/part2",
+                                                    "Dawnwalker EP 3, part 2")
+    short.segments = [Segment(1, 5000, 5030)]  # in no long video
+    assert publish.full_video_link(conn, short) == ("", "")
+    conn.close()

@@ -221,8 +221,9 @@ def _publish_beside(conn, settings: Settings, plan_id: str, episode: int | None)
     for key in plan.publish:
         part = int(key.split()[-1]) if key.startswith("part ") else None
         text = publish.saved(plan, part)
+        link = publish.full_video_link(conn, plan)[0] if plan.recipe == "shorts" else None
         for video in publish_videos(settings, plan, part, episode):
-            publish.write_text_beside(settings, text, video)
+            publish.write_text_beside(settings, text, video, full_video=link)
 
 
 def rate_clips(settings: Settings, recording_id: int) -> Job:
@@ -274,8 +275,9 @@ def write_publish(settings: Settings, plan_id: str, *, parts: list[int] | None =
                 report.say(f"{label}{len(result.titles)} title ideas, {len(result.chapters)} "
                            f"chapters, {len(result.thumbnails)} thumbnail frames. They're in "
                            "Review, under Publish.")
+                link = publish.full_video_link(conn, plan)[0] if plan.recipe == "shorts" else None
                 for video in publish_videos(settings, plan, n, episode):
-                    publish.write_text_beside(settings, result, video)
+                    publish.write_text_beside(settings, result, video, full_video=link)
                     report.say(f"Saved beside the video: {video.with_suffix('.txt').name}")
             report.keep(publish=plan_id)
         finally:
@@ -289,7 +291,9 @@ def publish_videos(settings: Settings, plan, part: int | None, episode: int | No
     from ..render import parts as lp
     from ..render.final import video_path
 
-    if plan.recipe == "letsplay":
+    if plan.recipe == "shorts":
+        found = [video_path(settings, plan)]
+    elif plan.recipe == "letsplay":
         if not (part and episode):
             return []
         found = [lp.part_path(settings, plan, episode, part, captions=c) for c in (False, True)]
@@ -368,6 +372,32 @@ def make_letsplay(settings: Settings, recording_id: int) -> Job:
     return run
 
 
+def make_shorts(settings: Settings, recording_id: int) -> Job:
+    """`ai-editor shorts`: up to five suggested Shorts, each its own plan for Review."""
+
+    def run(report: Reporter) -> None:
+        from ..recipes.shorts import WHY, build_shorts
+
+        conn = init_db(settings.db_path)
+        try:
+            report.progress("Choosing the moments", 0.0)
+            result = build_shorts(conn, settings, recording_id)
+            report.progress("Choosing the moments", 1.0)
+            for n, plan in enumerate(result.plans, 1):
+                report.say(f"{n}. {plan.title.removeprefix('Short: ')} "
+                           f"({plan.total_sec:.0f} s; {WHY[plan.source['why']]})")
+            for note in result.notes:
+                report.say(note)
+            if result.plans:
+                report.say(f"{len(result.plans)} Short(s) suggested. They're in Review: pick one "
+                           "under Video plan.")
+                report.keep(plan_id=result.plans[0].plan_id)
+        finally:
+            conn.close()
+
+    return run
+
+
 def quick_preview(settings: Settings, plan_id: str, part: int | None = None) -> Job:
     """A low-resolution version from the preview copies, to watch in the window."""
 
@@ -382,13 +412,28 @@ def quick_preview(settings: Settings, plan_id: str, part: int | None = None) -> 
             if found is None:
                 raise TaskFailed("That plan isn't there any more.")
             plan = found[0]
-            target = settings.folders.output / FOLDER / f"{plan.plan_id}.mp4"
+            from .videos import preview_file, remember_preview
+
+            target = preview_file(settings, plan, part)
+            if plan.recipe == "shorts":
+                from ..recipes.preview import render_short_preview
+
+                path = render_short_preview(conn, settings, plan,
+                                            lambda f: report.progress("Making a quick preview", f),
+                                            target=target)
+                remember_preview(path, plan)
+                report.say("Quick preview ready. The faint red areas are covered by the apps' "
+                           "buttons and text; the red line marks what stays free. They aren't in "
+                           "the finished Short.")
+                report.keep(preview=str(path))
+                return
+            whole = plan
             if part is not None:
                 plan = lp.part_plan(plan, part)
-                target = target.with_name(f"{plan_id} part {part}.mp4")
             path = render_preview(conn, settings, plan,
                                   lambda f: report.progress("Making a quick preview", f),
                                   target=target)
+            remember_preview(path, whole, part)
             report.say(f"Quick preview ready ({plan.total_sec / 60:.1f} min). It's playing in "
                        "Review.")
             report.keep(preview=str(path))
@@ -438,7 +483,10 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
                     report.say(note)
             _publish_beside(conn, settings, plan_id, episode)
             marked = approve_plan(conn, plan_id)
-            if plan.recipe != "letsplay":
+            if plan.recipe == "shorts":
+                report.say("Saved in output\\shorts. This moment won't be suggested as a Short "
+                           "again (it can still go in a highlight video).")
+            elif plan.recipe != "letsplay":
                 report.say(f"{marked} clip(s) marked as used: the next highlight video carries "
                            "on with fresh ones.")
             report.keep(videos=videos)

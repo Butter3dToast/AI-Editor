@@ -3,6 +3,44 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.11.0 — Phase 2B: Shorts — 4 October 2026
+
+AI-Editor now makes vertical Shorts (1080×1920) from your streams: one file
+that works on YouTube Shorts, TikTok and Instagram Reels.
+
+**New**
+
+- **Shorts**, in **Create video**: pick a stream and get up to five suggestions,
+  each 15–60 seconds. Your Numpad − moments always come first, then the clips
+  you liked, then the AI's picks that make sense on their own. Each one opens
+  in **Review** like any other video.
+- **Zoomed centre or whole picture**, per game and switchable per Short.
+  League, Tarkov and Wardogs zoom in (League a little less, at 65%, so the
+  fights stay in frame); Dawnwalker shows the whole picture over a blurred
+  copy of itself.
+- **Captions made for phones**: big, a short phrase at a time, with the word
+  being said lit up in yellow.
+- **Quick previews show the apps' buttons**: faint red areas mark where
+  YouTube, TikTok and Instagram put their text and buttons, so you can see
+  nothing important is hidden. They aren't in the finished Short.
+- **Previews are kept.** Each Short keeps a preview per layout, and every plan
+  shows its last preview when you open it in Review, saying if the plan has
+  changed since.
+- **Publish for Shorts**: short titles, a one-line description and hashtags.
+  Paste a long video's YouTube link in its Publish section and the Shorts from
+  it say "Full video:" with that link.
+- **Spoiler check**: Shorts from story games (Dawnwalker) are flagged so you
+  can check they don't give the story away.
+- **A spot for a facecam**, ready for when you get one: a "facecam on top"
+  layout switches on per game in the settings.
+
+**Changed**
+
+- A clip used in a Short can still go in a highlight video, and the other way
+  round: the **Used** column in **Clips** says which.
+- Shorts are mixed to -14 LUFS, YouTube's own level, so they sound as loud as
+  other Shorts.
+
 ## 0.10.0 — Phase 2A: The local AI and publish prep — 4 October 2026
 
 AI-Editor now has an AI of its own, running on your graphics card through

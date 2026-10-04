@@ -32,14 +32,16 @@ from ..errors import LowDiskSpace, MediaFileNotFound, MediaProcessingFailed
 from ..ffmpeg import measure_loudness, nvenc_encoders, run_ffmpeg
 from ..logging_setup import get_logger
 from ..recipes.plan import EditPlan
-from ..analysis.captions import Cue, segment_cues
+from ..analysis.captions import Cue, realistic_timing, segment_cues
 from ..analysis.clips import load_words
 from .audio import AudioChoice, beep_filters, plan_audio
-from .captions import write_ass
+from .captions import short_document, write_ass
+from .vertical import Vertical, picture_graph
 
 log = get_logger(__name__)
 
 FOLDER = "videos"
+SHORTS_FOLDER = "shorts"
 AUDIO_RATE = 48000
 AUDIO_BITRATE = "320k"
 FADE_SEC = 0.015      # at every join: too short to hear as a dip, long enough to stop a click
@@ -73,7 +75,21 @@ class RenderResult:
 
 def video_path(settings: Settings, plan: EditPlan, *, captions: bool = False) -> Path:
     """Captioned and plain versions are named apart, so one never replaces the other."""
+    if plan.recipe == "shorts":  # always captioned: one file, its own folder
+        return settings.folders.output / SHORTS_FOLDER / f"{plan.plan_id}.mp4"
     return settings.folders.output / FOLDER / f"{plan.plan_id}{' captions' if captions else ''}.mp4"
+
+
+def vertical_of(settings: Settings, plan: EditPlan) -> Vertical:
+    """A Short's layout: the one chosen in Review, else the game's."""
+    shorts = settings.shorts
+    game = plan.game or ""
+    layout = (plan.source or {}).get("layout") or shorts.layout_for(game)
+    facecam = shorts.facecam.get(game)
+    if layout == "facecam_top" and facecam is None:
+        layout = "crop"  # no facecam marked for this game (yet)
+    return Vertical(layout, shorts.crop_centre.get(game, 0.5), facecam, shorts.facecam_share,
+                    shorts.fill_for(game))
 
 
 def bits(rate: str) -> int:
@@ -101,20 +117,23 @@ def video_codec(settings: Settings, preset: RenderPreset, encoder: str) -> list[
 
 def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
                  preset: RenderPreset, source_size: tuple[int, int], codec: list[str],
-                 target: Path, *, gpu_decode: bool, captions: str | None = None) -> list[str]:
+                 target: Path, *, gpu_decode: bool, captions: str | None = None,
+                 vertical: Vertical | None = None) -> list[str]:
     """FFmpeg arguments for one segment: picture, rebuilt sound, beeps out, soft edges.
 
     ``captions``: an ASS file's name, in the folder FFmpeg runs in. A bare name
     because a Windows path's drive colon ("C:") clashes with how filter options are written.
+    ``vertical``: a Short's tall picture (render/vertical.py), made from the 16:9 one.
     """
-    picture = [f"fps={preset.fps}"]
-    if source_size != (preset.width, preset.height):
-        picture.append(f"scale={preset.width}:{preset.height}:flags=lanczos")
-    picture.append("setsar=1")
-    if captions:
-        picture.append(f"subtitles=filename={captions}")
-    picture.append("format=yuv420p")
-    graph = [f"[0:v:0]{','.join(picture)}[v]"]
+    finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
+    if vertical is not None:
+        graph = [picture_graph(vertical, source_size, preset, finish=finish)]
+    else:
+        picture = [f"fps={preset.fps}"]
+        if source_size != (preset.width, preset.height):
+            picture.append(f"scale={preset.width}:{preset.height}:flags=lanczos")
+        picture += ["setsar=1", *finish]
+        graph = [f"[0:v:0]{','.join(picture)}[v]"]
 
     notches = beep_filters(audio.beeps, seg_in, seg_in + length)
     for n, stream in enumerate(audio.streams):
@@ -185,9 +204,12 @@ def render_plan(
     ``title``: a title card over the first seconds ("Ep 1 – Part 2")."""
     began = time.monotonic()
     lets_play = plan.recipe == "letsplay"
+    short = plan.recipe == "shorts"
     if captions is None:
-        captions = settings.captions.lets_play if lets_play else settings.captions.highlights
-    preset = settings.render.presets[settings.render.preset]
+        captions = (settings.shorts.captions if short else settings.captions.lets_play
+                    if lets_play else settings.captions.highlights)
+    preset = settings.render.presets[settings.shorts.preset if short else settings.render.preset]
+    vertical = vertical_of(settings, plan) if short else None
     target = target or video_path(settings, plan, captions=captions)
     target.parent.mkdir(parents=True, exist_ok=True)
     lengths = [frame_exact(s.length, preset.fps) for s in plan.segments]
@@ -205,7 +227,8 @@ def render_plan(
     audio = {rid: plan_audio(conn, settings, rid) for rid in plan.recording_ids}
     notes: list[str] = []
     captioned = set(plan.recording_ids) if captions else set()
-    if captions and lets_play:
+    story = lets_play or (short and plan.game in settings.lets_play.games)
+    if captions and story:
         # A mixed track's transcript has the characters' lines in it too
         # ("How about Petronius?" -- Anca, EP 1), and captions are the
         # creator's words only, never the game's dialogue (spec 7.6).
@@ -242,7 +265,17 @@ def render_plan(
             card = (Cue(0.0, min(settings.lets_play.title_card_sec, length), title)
                     if title and index == 0 else None)
             subtitles = None
-            if cues or card:
+            if short and cues:
+                ass = work / f"{index:03d}.ass"
+                # Word by word, so each lights up when it's heard: Whisper
+                # stretches some words' starts back into the pause before them.
+                ass.write_text(short_document(
+                    realistic_timing(words[segment.recording_id]), segment.src_in,
+                    segment.src_in + length,
+                    width=preset.width, height=preset.height, style=settings.captions,
+                    zone=settings.shorts.safe_zone()), encoding="utf-8")
+                subtitles = ass.name
+            elif cues or card:
                 subtitles = write_ass(cues, work / f"{index:03d}.ass", width=preset.width,
                                       height=preset.height, style=settings.captions, title=card,
                                       place=settings.captions.position.lets_play if lets_play
@@ -251,7 +284,7 @@ def render_plan(
                 encoder, gpu_decode = attempts[0]
                 args = segment_args(source, segment.src_in, length, audio[segment.recording_id],
                                     preset, size, video_codec(settings, preset, encoder), piece,
-                                    gpu_decode=gpu_decode, captions=subtitles)
+                                    gpu_decode=gpu_decode, captions=subtitles, vertical=vertical)
                 try:
                     run_ffmpeg(args, duration_sec=length, what="rendering part of a video", cwd=work,
                                on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length) / total))

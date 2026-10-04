@@ -1107,41 +1107,50 @@ The preview is only for judging the choices. The finished video, in full quality
 
 ## 17. Creating Shorts and TikToks
 
-Vertical clips are built entirely inside AI-Editor and rendered here by default. The finished file is 1080×1920, the correct size for YouTube Shorts, TikTok, and Instagram Reels, so the same file works on all of them.
+Vertical clips are built entirely inside AI-Editor and rendered here. The finished file is 1080×1920 at 60 frames a second, the right size for YouTube Shorts, TikTok and Instagram Reels, so the same file works on all of them.
 
 ### 17.1 Quick start
 
-1. Go to **Create video → Shorts**.
-2. Choose recordings, or pick clips directly from the Clip Browser (select clips → **Make Shorts**).
-3. Choose the **Style Profile**.
-4. Choose **how many Shorts** to make.
-5. Click **Build plan**.
-6. Review each Short and render.
+1. Analyse the recording, and ideally **Rate with AI** (12.3): the AI's "makes sense on its own" check is what picks good Shorts.
+2. **Create video → Shorts**, pick the stream or recording, and click **Make the plan**. A couple of seconds later Jobs lists up to five suggestions, and why each was picked:
+   - every moment you marked as Short-worthy while live (**Numpad −**), always, even past five;
+   - then clips you gave a 👍 that make sense on their own;
+   - then the AI's best clips that make sense on their own.
 
-### 17.2 Short settings explained
+   Never a 👎 moment, a "BRB" screen, or a moment that's already a Short. Being in a highlight video doesn't count: Shorts are how viewers find your long videos.
+3. In **Review**, each suggestion is its own plan (**Video plan** → *Short: ...*). Choose **How the game fills the tall frame**, then **Quick preview** to watch it as it will look, in a few seconds. In the preview, the faint red areas are what the apps' buttons and text cover; the red line marks what stays free (17.3). The shading isn't in the finished Short. Each layout's preview is kept: switch back and the one you made is there, and it's there again next time you open the Short.
+4. **Render the finished video**: about 15 seconds. It's saved in `output\shorts`. Rendering marks the moment as used, so the next suggestions are different moments.
+5. **Publish** writes a title, a line or two and hashtags (20). Once the long video the moment is in is on YouTube, paste its link in *that* video's Publish section (**This video's YouTube link**): every Short from it then says **Full video:** with the link.
 
-| Setting | Default | What it does |
+A Short from a story game (Dawnwalker) is flagged: check it doesn't give away the plot before you upload it.
+
+From the command line: `ai-editor shorts 7` lists the suggestions; `ai-editor shorts 7 --render 1,3` renders them.
+
+### 17.2 What a Short looks like
+
+**Length:** 15–60 seconds. Each one opens about 8 seconds before its moment, straight into the action, and runs 3 seconds past it so your reaction finishes. It never starts or ends mid-word.
+
+**Layout.** You don't have a facecam yet, so the game fills the frame in one of two ways:
+
+| Layout | Looks like | Default for |
 |---|---|---|
-| **Length** | 15–60 seconds | AI-Editor picks the best length per clip within this range. Both platforms allow longer clips, but under 60 seconds tends to perform best. |
-| **Platforms** | Universal | *YouTube Shorts*, *TikTok*, or *Universal* (safe for both). Controls where captions sit so platform buttons don't cover them. |
-| **Layout** | Facecam top, gameplay bottom | Facecam takes the top third, gameplay the bottom two thirds. |
-| **Gameplay crop** | Game default | Usually the center of the screen for shooters. |
-| **Follow action** | Off | Moves the crop to follow movement on screen. |
-| **Hook** | On | Starts on the reaction or adds a text teaser in the first 1–2 seconds. |
-| **Captions** | Word pop, large, center | Bold captions for viewers watching without sound. |
-| **Must make sense alone** | On | Skips clips that need context to understand. |
-| **Link to full video** | On | Remembers which long video the Short came from. |
-| **Spoiler check** | On (Dawnwalker) | Flags story Shorts for your approval. |
+| **Zoomed centre** (`crop`) | The middle of the screen, zoomed in, filling 75% of the phone's height with a thin band of blur above and below, so health bars and the ability bar aren't cut off at the sides. | League of Legends, Escape from Tarkov, Wardogs: the champion or crosshair is in the middle |
+| **Whole picture** (`fit`) | The full game, sharp across the middle, a blurred copy of it above and below. Nothing is cut off, but it's smaller. | The Blood of Dawnwalker: wide story scenes |
+
+How far it's zoomed is `shorts.crop_fill` (0.75; 1 fills the whole height, lower shows more of the sides), or per game in `shorts.crop_fills` (League is 0.65: its fights spread wide). To use the other layout for a single Short: `ai-editor shorts 7 --render 2 --layout fit`. To change a game's default, edit `shorts.layouts` in `settings.yaml`.
+
+**When you get a facecam:** mark where it is in your OBS scene once, under `shorts.facecam` (for example `League of Legends: { x: 0.0, y: 0.7, w: 0.2, h: 0.3 }`, as shares of the picture). From then on that game's Shorts put your facecam across the top third and the game below it. (In the window, you'll draw the box instead.)
+
+**Captions:** big, bold, 3 words at a time, the word you're saying lit up in yellow. Only your words. Recordings with just one mixed sound track get none for Let's Play games, because the characters' lines can't be told apart from yours (19.2c). Change them with `captions.shorts_size`, `shorts_words` and `shorts_highlight`.
 
 ### 17.3 Safe zones (important for TikTok)
 
-Each platform covers parts of the screen with its own buttons, username, and caption text. AI-Editor keeps your captions and the action clear of those areas.
+Each app covers parts of the screen with its own buttons, your username and the caption text. AI-Editor keeps your captions clear of them.
 
-- **Universal** (default) avoids the covered areas of *both* platforms, so you can upload the same file to YouTube Shorts and TikTok.
-- Choosing a single platform gives you slightly more usable screen space.
-- On the Review screen, tick **Show safe zones** to see shaded overlays of what each platform covers.
+- **Universal** (the default, `shorts.platform`) avoids the covered areas of YouTube Shorts, TikTok and Reels at once: the bottom 26% and the right-hand 20%. One file, uploaded everywhere.
+- The margins are in `shorts.safe_zones`, because the apps change their layouts now and then.
 
-If you want separate versions, tick **Render per-platform variants**. You'll get one file per platform with captions positioned for each.
+**Not built yet:** separate versions per platform.
 
 ### 17.4 Adjusting a Short
 
@@ -1151,6 +1160,8 @@ On the Review screen for Shorts you can:
 - Drag the **facecam box** to resize or move it.
 - Edit **caption text** if a word was misheard.
 - Change the **start and end** of the clip.
+
+**Built so far:** switching the layout (17.1). **Not built yet:** moving the crop or facecam box by dragging, editing caption words, and changing the start and end.
 
 ### 17.5 Using Shorts to grow your channel
 
@@ -1195,6 +1206,8 @@ Changes are saved straight away. You can close AI-Editor and carry on later. Eve
 ### 19.1 Preview render
 
 In Review, click **Quick preview of the whole video** (or **of the selected part** for a Let's Play). It's made from the preview copies in seconds, and plays in Review's player. Use it to check the order and pacing before the full render.
+
+Quick previews are kept. Opening a plan in Review shows its last one, ready to play (and, for a Let's Play, choosing a part under **Parts** shows that part's). If you've changed the plan since, it says so: make a new one to see the changes.
 
 ### 19.2 Final render
 
@@ -1352,7 +1365,7 @@ AI-Editor takes 12 full-size frames from the video's strongest moments (at least
 
 ### 20.5 Linking Shorts to full videos
 
-Not built yet (Shorts arrive in the next part of Phase 2).
+Once a long video is uploaded, paste its YouTube link in its Publish section (**This video's YouTube link → Save the link**). The Publish text of every Short whose moment is in that video then includes **Full video:** and the link. A Short's Publish section says which video it's from, and whether its link is saved yet.
 
 ### 20.6 Release planning
 
@@ -1556,6 +1569,15 @@ You can change the recordings and output folders there. The cache and models fol
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
 | Render | Keep the music from your stream (`render.include_stream_music`) | Off | On: finished videos use the stream's mixed track, Spotify included (19.2). Usually gets a YouTube Content ID claim. |
+| Shorts | Suggestions per stream (`shorts.per_recording`) | 5 (1–20) | Your Numpad − moments always, then the best others up to this (17.1). |
+| Shorts | Length (`shorts.min_length_sec`, `max_length_sec`) | 15–60 s | How long a Short may be. |
+| Shorts | Lead-in (`shorts.lead_in_sec`) / after (`tail_sec`) | 8 s / 3 s | How long before its moment a Short opens, and how long it runs on after. |
+| Shorts | Layout (`shorts.default_layout`, `shorts.layouts`) | `crop`; Dawnwalker `fit` | Zoomed centre, or the whole picture over a blurred copy (17.2). |
+| Shorts | Crop centre (`shorts.crop_centre`) | 0.5 per game | Where the zoomed crop sits, left (0) to right (1). |
+| Shorts | Zoom (`shorts.crop_fill`, `crop_fills`) | 0.75; League 0.65 | How much of the height the zoomed game fills; lower keeps more of the sides (17.2). |
+| Shorts | Facecam (`shorts.facecam`) | none | Where your facecam is, per game. A game with one gets facecam on top (17.2). |
+| Shorts | Platform (`shorts.platform`) | `universal` | Which apps' buttons the captions avoid (17.3). |
+| Captions | Shorts size / words / highlight (`captions.shorts_size`, `shorts_words`, `shorts_highlight`) | 88 / 3 / `#FFD400` | Letter height on a 1920-high picture, words at once, and the colour of the word being said. |
 | Publish | Let's Play title (`publish.lets_play_title`) | `{game} - EP {episode} Part {part}: {subtitle}` | The series pattern; the AI writes `{subtitle}` (20.1). |
 | Publish | Description footer (`publish.description_footer`) | (empty) | Lines added under every description, e.g. your Twitch link. |
 | Publish | Thumbnails (`publish.thumbnails`) | 6 (1–12) | Frames kept, best first (20.4). |

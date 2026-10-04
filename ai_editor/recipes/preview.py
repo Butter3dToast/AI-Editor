@@ -49,6 +49,93 @@ def _encode(proxy: Path, start: float, length: float, target: Path, gpu: bool) -
     ]
 
 
+SHORT_SIZE = (540, 960)
+SAFE_ZONE_SHADE = "red@0.12"
+SAFE_ZONE_EDGE = "red@0.7"
+
+
+def safe_zone_boxes(zone) -> list[str]:
+    """Faint red where the apps' buttons and text cover a Short (preview only)."""
+    boxes = []
+    if zone.bottom:
+        boxes.append(f"drawbox=x=0:y=ih*{1 - zone.bottom:.3f}:w=iw:h=ih*{zone.bottom:.3f}:"
+                     f"color={SAFE_ZONE_SHADE}:t=fill")
+    if zone.right:
+        boxes.append(f"drawbox=x=iw*{1 - zone.right:.3f}:y=0:w=iw*{zone.right:.3f}:"
+                     f"h=ih*{1 - zone.bottom:.3f}:color={SAFE_ZONE_SHADE}:t=fill")
+    if zone.top:
+        boxes.append(f"drawbox=x=0:y=0:w=iw*{1 - zone.right:.3f}:h=ih*{zone.top:.3f}:"
+                     f"color={SAFE_ZONE_SHADE}:t=fill")
+    # A thin line where the covered areas begin, so the free area is easy to see.
+    free_w, top, bottom = 1 - zone.right, zone.top, 1 - zone.bottom
+    boxes.append(f"drawbox=x=0:y=ih*{top:.3f}:w=iw*{free_w:.3f}:h=ih*{bottom - top:.3f}:"
+                 f"color={SAFE_ZONE_EDGE}:t=2")
+    return boxes
+
+
+def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
+                         on_progress: Callable[[float], None] | None = None, *,
+                         target: Path | None = None) -> Path:
+    """A Short as it will look -- tall, its layout, its captions -- from the
+    preview copy, with the areas the apps cover shaded. Seconds, not minutes."""
+    from ..analysis.captions import realistic_timing
+    from ..config import RenderPreset
+    from ..render.captions import short_document
+    from ..render.final import vertical_of
+    from ..render.vertical import picture_graph
+
+    target = target or preview_path(settings, plan)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    segment = plan.segments[0]
+    row = conn.execute("SELECT proxy_path FROM recordings WHERE id = ?",
+                       (segment.recording_id,)).fetchone()
+    proxy = Path(row["proxy_path"]) if row and row["proxy_path"] else None
+    if proxy is None or not proxy.exists():
+        raise NotImported(f"The preview copy of recording #{segment.recording_id} is missing")
+    width, height = SHORT_SIZE
+    preset = RenderPreset(width=width, height=height, fps=FPS, bitrate="3M")
+    zone = settings.shorts.safe_zone()
+    work = target.with_suffix("")
+    work.mkdir(parents=True, exist_ok=True)
+    finish = []
+    if settings.shorts.captions and segment.captions:
+        words = realistic_timing(load_words(conn, segment.recording_id))
+        (work / "captions.ass").write_text(short_document(
+            words, segment.src_in, segment.src_out, width=width, height=height,
+            style=settings.captions, zone=zone), encoding="utf-8")
+        finish.append("subtitles=filename=captions.ass")
+    finish += [*safe_zone_boxes(zone), "format=yuv420p"]
+    from ..ffmpeg import probe
+
+    info = probe(proxy)
+    graph = picture_graph(vertical_of(settings, plan), (info.width or 960, info.height or 540),
+                          preset, finish=finish)
+    gpu = settings.performance.device == "gpu" and "h264_nvenc" in nvenc_encoders()
+
+    def args(use_gpu: bool) -> list[str]:
+        video = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
+                 if use_gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
+        return ["-ss", f"{segment.src_in:.3f}", "-i", str(proxy), "-t", f"{segment.length:.3f}",
+                "-filter_complex", graph, "-map", "[v]", "-map", "0:a:0?", *video,
+                "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
+                "-movflags", "+faststart", str(target)]
+
+    try:
+        try:
+            run_ffmpeg(args(gpu), duration_sec=segment.length, on_progress=on_progress, cwd=work,
+                       what="making a Short's preview")
+        except MediaProcessingFailed:
+            if not gpu:
+                raise
+            run_ffmpeg(args(False), duration_sec=segment.length, on_progress=on_progress,
+                       cwd=work, what="making a Short's preview")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    if on_progress:
+        on_progress(1.0)
+    return target
+
+
 def render_preview(
     conn: sqlite3.Connection,
     settings: Settings,

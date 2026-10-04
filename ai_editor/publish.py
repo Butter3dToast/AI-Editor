@@ -210,7 +210,12 @@ def _schema(chapters: int, lets_play: bool) -> dict:
 def question(plan: EditPlan, found: list[Section], *, part: int | None,
              episode: int | None, spoiler_games: list[str] = ()) -> str:
     total = found[-1].end if found else 0.0
-    if plan.recipe == "letsplay":
+    if plan.recipe == "shorts":
+        what = (f"A vertical Short (YouTube Shorts, TikTok, Reels), {clock(total)} long, from a "
+                f"Twitch stream of {plan.game or 'a game'}. Titles: at most 60 characters, "
+                "saying what happens. Description: one or two sentences. Tags: single words "
+                "or names, used as hashtags (no # sign).")
+    elif plan.recipe == "letsplay":
         what = (f"A Let's Play of {plan.game or 'a game'}: episode {episode or '?'}, part "
                 f"{part or 1}. The titles are only the part after the colon in "
                 f'"{plan.game} - EP {episode or "?"} Part {part or 1}: ...", so 2-7 words '
@@ -245,6 +250,7 @@ class Publish:
     thumbnails: list[Thumbnail]
     fingerprint: str
     made_at: str
+    short: bool = False
     # What the creator changed in Review: "title", "description" (as pasted,
     # chapters included) and "tags". Kept over the AI's.
     edited: dict | None = None
@@ -259,7 +265,7 @@ class Publish:
                 "thumbnails": [{"path": str(t.path), "rating": t.rating, "reason": t.reason}
                                for t in self.thumbnails],
                 "fingerprint": self.fingerprint, "made_at": self.made_at,
-                "prompt_version": PROMPT_VERSION, "edited": self.edited}
+                "prompt_version": PROMPT_VERSION, "edited": self.edited, "short": self.short}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Publish":
@@ -268,7 +274,8 @@ class Publish:
                    [(float(t), str(name)) for t, name in data.get("chapters", [])],
                    [Thumbnail(Path(t["path"]), int(t.get("rating", 0)), t.get("reason", ""))
                     for t in data.get("thumbnails", [])],
-                   data.get("fingerprint", ""), data.get("made_at", ""), data.get("edited"))
+                   data.get("fingerprint", ""), data.get("made_at", ""),
+                   bool(data.get("short")), data.get("edited"))
 
 
 def full_titles(settings: Settings, plan: EditPlan, ideas: list[str], *, part: int | None,
@@ -291,11 +298,25 @@ def full_titles(settings: Settings, plan: EditPlan, ideas: list[str], *, part: i
     return list(dict.fromkeys(titles))
 
 
-def description_text(settings: Settings, publish: Publish) -> str:
-    """Ready to paste into YouTube: the description, the chapters, your footer."""
+def hashtags(tags: list[str]) -> str:
+    """'#Shorts #LeagueOfLegends #Teamfight': the game's name and the AI's words, joined up."""
+    import re
+
+    found = ["#Shorts"] + [f"#{re.sub(r'[^0-9A-Za-z]', '', t.title() if ' ' in t else t)}"
+                           for t in tags]
+    return " ".join(list(dict.fromkeys(h for h in found if len(h) > 1))[:6])
+
+
+def description_text(settings: Settings, publish: Publish, full_video: str | None = None) -> str:
+    """Ready to paste into YouTube: the description, the chapters, your footer.
+    A Short's has the link to the full video (once you've pasted it) and hashtags."""
     if (publish.edited or {}).get("description"):
         return publish.edited["description"]
     parts = [publish.description.strip()]
+    if publish.short:
+        if full_video:
+            parts.append(f"Full video: {full_video}")
+        parts.append(hashtags(publish.tags))
     if len(publish.chapters) >= MIN_CHAPTERS:
         parts.append("\n".join(f"{clock(t)} {name}" for t, name in publish.chapters))
     if settings.publish.description_footer.strip():
@@ -307,11 +328,12 @@ def tags_of(publish: Publish) -> list[str]:
     return list((publish.edited or {}).get("tags") or publish.tags)
 
 
-def text_file(settings: Settings, publish: Publish, title: str | None = None) -> str:
+def text_file(settings: Settings, publish: Publish, title: str | None = None,
+              full_video: str | None = None) -> str:
     title = title or publish.title
     lines = (["TITLE", f"  {title}"] if title
              else ["TITLE (pick one)"] + [f"  {t}" for t in publish.titles])
-    lines += ["", "DESCRIPTION", description_text(settings, publish), "",
+    lines += ["", "DESCRIPTION", description_text(settings, publish, full_video), "",
               "TAGS", ", ".join(tags_of(publish))]
     if publish.thumbnails:
         lines += ["", "THUMBNAIL FRAMES (best first)"] + [f"  {t.path}" for t in publish.thumbnails]
@@ -319,9 +341,9 @@ def text_file(settings: Settings, publish: Publish, title: str | None = None) ->
 
 
 def write_text_beside(settings: Settings, publish: Publish, video: Path,
-                      title: str | None = None) -> Path:
+                      title: str | None = None, full_video: str | None = None) -> Path:
     path = video.with_suffix(".txt")
-    path.write_text(text_file(settings, publish, title), encoding="utf-8")
+    path.write_text(text_file(settings, publish, title, full_video), encoding="utf-8")
     return path
 
 
@@ -474,8 +496,10 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
         for n, section in enumerate(found):
             name = section.name or next(names, "") or f"Part {n + 1}"
             chapters.append((0.0 if n == 0 else section.start, name))
-        thumbs = thumbnails(conn, settings, video, thumbnail_folder(settings, plan, part),
-                            step("Picking thumbnail frames"))
+        # Shorts don't take a custom thumbnail on YouTube or TikTok.
+        thumbs = [] if plan.recipe == "shorts" else thumbnails(
+            conn, settings, video, thumbnail_folder(settings, plan, part),
+            step("Picking thumbnail frames"))
     tags = list(dict.fromkeys(str(t).strip() for t in answer.get("tags", []) if str(t).strip()))
     if plan.game and plan.game not in tags:
         tags.insert(0, plan.game)
@@ -483,7 +507,8 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
                                episode=episode),
                    str(answer.get("description", "")).strip(), tags[:15], chapters, thumbs,
                    fingerprint(video),
-                   datetime.now(timezone.utc).isoformat(timespec="seconds"))
+                   datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                   short=plan.recipe == "shorts")
 
 
 def chapter_name(text: object) -> str:
@@ -491,6 +516,51 @@ def chapter_name(text: object) -> str:
     import re
 
     return re.sub(r"^\s*\d{1,2}(:\d{2}){1,2}\s*[-–:.]?\s*", "", str(text)).strip()
+
+
+# --- Linking Shorts to the full video (spec 7.6: "the description can link to it") ------
+
+
+def link_of(plan: EditPlan, part: int | None) -> str:
+    """The YouTube link the creator pasted for this video, once it's uploaded."""
+    return (plan.source or {}).get("links", {}).get(key_of(part), "")
+
+
+def set_link(plan: EditPlan, part: int | None, link: str) -> None:
+    links = plan.source.setdefault("links", {})
+    if link.strip():
+        links[key_of(part)] = link.strip()
+    else:
+        links.pop(key_of(part), None)
+
+
+def full_video_of(conn: sqlite3.Connection, short: EditPlan) -> tuple[EditPlan, int | None] | None:
+    """The long video (and part) a Short's moment is in: rendered ones first, newest first."""
+    from .recipes.plan import is_short
+
+    if not short.segments:
+        return None
+    mine = short.segments[0]
+    rows = conn.execute("SELECT plan_json, status FROM edit_plans "
+                        "ORDER BY status = 'approved' DESC, updated_at DESC").fetchall()
+    for row in rows:
+        other = EditPlan.from_json(row["plan_json"])
+        if is_short(other.plan_id):
+            continue
+        for s in other.segments:
+            if s.kind != "teaser" and s.recording_id == mine.recording_id \
+                    and s.src_in < mine.src_out and mine.src_in < s.src_out:
+                return other, s.part
+    return None
+
+
+def full_video_link(conn: sqlite3.Connection, short: EditPlan) -> tuple[str, str]:
+    """(the link, or "", and which video it is), for a Short's description."""
+    found = full_video_of(conn, short)
+    if found is None:
+        return "", ""
+    other, part = found
+    return link_of(other, part), other.title + (f", part {part}" if part else "")
 
 
 def saved(plan: EditPlan, part: int | None) -> Publish | None:

@@ -16,7 +16,7 @@ from ..analysis.ai_rating import notes_for
 from ..analysis.captions import clock
 from ..cli import SIGNAL_LABELS
 from ..config import Settings
-from ..recipes.plan import APPROVED, EditPlan, load_plan
+from ..recipes.plan import APPROVED, EditPlan, load_plan, used_in
 
 CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "AI says", "You said",
                 "Rated", "Used"]
@@ -37,7 +37,7 @@ def why(reasons: list[str]) -> str:
 
 
 def player(path: str | Path | None, start: float | None = None, end: float | None = None,
-           *, note: str = "") -> str:
+           *, note: str = "", autoplay: bool = True) -> str:
     """An in-page video player, optionally playing only start..end.
 
     Served by the window itself (only files in AI-Editor's own cache and
@@ -51,7 +51,8 @@ def player(path: str | Path | None, start: float | None = None, end: float | Non
     if start is not None:
         url += f"#t={start:.2f}" + (f",{end:.2f}" if end is not None else "")
     caption = f"<div class='aie-player-note'>{html.escape(note)}</div>" if note else ""
-    return (f"<video class='aie-player' src='{url}' controls autoplay preload='metadata'>"
+    play = " autoplay" if autoplay else ""
+    return (f"<video class='aie-player' src='{url}' controls{play} preload='metadata'>"
             f"</video>{caption}")
 
 
@@ -106,7 +107,8 @@ def clip_summary(conn, settings: Settings, recording_id: int,
                         "WHERE recording_id = ?", (recording_id,)).fetchall()
     up = [r for r in rows if (r["user_rating"] or 0) > 0]
     down = sum((r["user_rating"] or 0) < 0 for r in rows)
-    fresh = sum(lengths.get(r["clip_id"], 0.0) for r in up if not r["used_in_json"])
+    fresh = sum(lengths.get(r["clip_id"], 0.0) for r in up
+                if not used_in(r["used_in_json"], shorts=False))
     text = f"**{len(rows)} clips** · {len(up)} 👍 · {down} 👎"
     if up:
         text += (f" · your unused 👍 clips make about **{fresh / 60:.1f} min** of video "
@@ -126,7 +128,8 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
     notes = notes_for(conn, recording_id, rows)
     table, ids = [], []
     for row in rows:
-        used = json.loads(row["used_in_json"] or "[]")
+        used = used_in(row["used_in_json"], shorts=False)
+        in_shorts = used_in(row["used_in_json"], shorts=True)
         if show == "Not used yet" and used:
             continue
         if show == "Rated" and row["user_rating"] is None:
@@ -144,7 +147,7 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
             f"{note.stars} {note.summary}" if note else "-",
             said[:70] + ("..." if len(said) > 70 else "") or "-",
             RATINGS.get(row["user_rating"], "-"),
-            "yes" if used else "-",
+            " + ".join((["video"] if used else []) + (["Short"] if in_shorts else [])) or "-",
         ])
         ids.append(row["clip_id"])
     return table, ids
@@ -196,15 +199,69 @@ def rate(conn, clip_id: str, rating: int | None) -> str:
 # --- Plans ------------------------------------------------------------------------
 
 
+# --- Quick previews, kept: one per plan, per Let's Play part, per Short layout ---------
+
+
+def preview_file(settings: Settings, plan: EditPlan, part: int | None = None,
+                 layout: str | None = None) -> Path:
+    from ..recipes.preview import FOLDER
+    from ..render.final import vertical_of
+
+    name = plan.plan_id
+    if plan.recipe == "shorts":
+        name += f" {layout or vertical_of(settings, plan).layout}"
+    elif part is not None:
+        name += f" part {part}"
+    return settings.folders.output / FOLDER / f"{name}.mp4"
+
+
+def remember_preview(path: Path, plan: EditPlan, part: int | None = None) -> None:
+    """Note beside a preview which version of the plan it shows."""
+    from ..publish import fingerprint
+    from ..render.parts import part_plan
+
+    shown = part_plan(plan, part) if part else plan
+    path.with_suffix(".json").write_text(json.dumps({"fingerprint": fingerprint(shown)}),
+                                         encoding="utf-8")
+
+
+def last_preview(settings: Settings, plan: EditPlan, part: int | None = None,
+                 layout: str | None = None) -> str | None:
+    """The quick preview already made for this plan (part, layout), ready to play
+    -- not started, and saying if the plan has changed since. None if there isn't one."""
+    from ..publish import fingerprint
+    from ..render.parts import part_plan
+
+    path = preview_file(settings, plan, part, layout)
+    if not path.is_file():
+        return None
+    made = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d %b, %H:%M")
+    note = f"Your quick preview from {made}."
+    try:
+        kept = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["fingerprint"]
+        shown = part_plan(plan, part) if part else plan
+        if kept != fingerprint(shown):
+            note += " The plan has changed since: make a new one to see the changes."
+    except (OSError, ValueError, KeyError):
+        pass
+    return player(path, note=note, autoplay=False)
+
+
+def kind_of(plan: EditPlan) -> str:
+    return {"letsplay": "Let's Play", "shorts": "Short"}.get(plan.recipe, "Highlights")
+
+
 def plan_choices(conn) -> list[tuple[str, str]]:
     """(label, plan id) for every plan, newest first."""
     out = []
     for row in conn.execute("SELECT plan_id, plan_json, status FROM edit_plans "
                             "ORDER BY created_at DESC, rowid DESC"):
         plan = EditPlan.from_json(row["plan_json"])
-        kind = "Let's Play" if plan.recipe == "letsplay" else "Highlights"
+        kind = kind_of(plan)
         state = "rendered" if row["status"] == APPROVED else "draft"
-        out.append((f"{plan.title}  ·  {kind}, {plan.total_sec / 60:.1f} min, {state}  "
+        length = (f"{plan.total_sec:.0f} s" if plan.recipe == "shorts"
+                  else f"{plan.total_sec / 60:.1f} min")
+        out.append((f"{plan.title}  ·  {kind}, {length}, {state}  "
                     f"({plan.plan_id})", plan.plan_id))
     return out
 
@@ -240,10 +297,12 @@ def part_table(plan: EditPlan) -> list[list]:
 
 
 def plan_summary(plan: EditPlan, status: str) -> str:
-    kind = "Let's Play" if plan.recipe == "letsplay" else "Highlights"
+    kind = kind_of(plan)
+    length = (f"**{plan.total_sec:.0f} s**, vertical 1080×1920" if plan.recipe == "shorts"
+              else f"**{plan.total_sec / 60:.1f} min**")
     lines = [f"### {plan.title}",
-             f"{kind} · **{plan.total_sec / 60:.1f} min**"
-             + (f" (target {plan.target_sec / 60:.0f})" if plan.recipe != "letsplay" else "")
+             f"{kind} · {length}"
+             + (f" (target {plan.target_sec / 60:.0f})" if plan.recipe == "highlights" else "")
              + f" · {'rendered' if status == APPROVED else 'draft'} · `{plan.plan_id}`"]
     lines += [f"- {note}" for note in plan.notes]
     return "\n\n".join(lines[:2]) + ("\n\n" + "\n".join(lines[2:]) if lines[2:] else "")

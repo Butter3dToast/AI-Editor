@@ -20,6 +20,18 @@ from typing import Any
 
 DRAFT = "draft"
 APPROVED = "approved"
+SHORTS_PREFIX = "shorts_"
+
+
+def is_short(plan_id: str) -> bool:
+    return plan_id.startswith(SHORTS_PREFIX)
+
+
+def used_in(used_json: str | None, *, shorts: bool) -> list[str]:
+    """The plans a clip is used in: Shorts, or long videos. Each kind uses
+    clips up for its own kind only -- a clip that's a Short can still be in a
+    highlight video, and the other way round (Shorts point viewers to them)."""
+    return [p for p in json.loads(used_json or "[]") if is_short(p) == shorts]
 
 
 @dataclass

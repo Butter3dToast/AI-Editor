@@ -203,8 +203,29 @@ highlights: # Spec section 7.6 Recipe B
 shorts: # Spec section 7.6 Recipe C
   min_length_sec: 15
   max_length_sec: 60
-  platform: universal # youtube_shorts | tiktok | universal
-  layout: facecam_top # Facecam top third, gameplay bottom two thirds
+  lead_in_sec: 8 # Each Short opens this long before its moment: straight into the action
+  tail_sec: 3 # ...and runs this long after it, so the reaction finishes
+  per_recording: 5 # Shorts suggested per stream: your Numpad - marks first, then the AI's picks
+  platform: universal # youtube_shorts | tiktok | universal: one file for all three
+  preset: vertical_1080x1920_60 # One of render.presets
+  # How the game fills the tall frame. crop: its centre, zoomed in to fill it.
+  # fit: the whole picture, a blurred copy above and below. facecam_top: your
+  # facecam above, the game below (needs the facecam marked, below).
+  default_layout: crop
+  layouts:
+    The Blood of Dawnwalker: fit
+  crop_centre: {} # Per game, where the crop sits left to right (0.5 = middle)
+  # How much of the height the zoomed game fills (1 = all of it); the rest is the
+  # blurred copy above and below. Lower = zoomed out, more of the game's sides kept.
+  crop_fill: 0.75 # chosen 2026-10-05
+  crop_fills: # Per game
+    League of Legends: 0.65 # Its fights spread wide
+  # Where your facecam is in the recording, per game, as shares of the picture:
+  #   League of Legends: { x: 0.0, y: 0.7, w: 0.2, h: 0.3 }
+  # None yet. A game with one uses facecam_top.
+  facecam: {}
+  facecam_share: 0.33 # Height of the facecam strip at the top of a Short
+  captions: true # Shorts are watched with the sound off: captions on
   follow_action: false
   hook: true
   must_make_sense_alone: true
@@ -248,6 +269,10 @@ captions:
   position:
     highlights: 0.12
     lets_play: 0.22
+  # Shorts: a few words at a time, the word being said in this colour
+  shorts_size: 88 # Letter height in pixels on a 1920-high picture
+  shorts_words: 3 # Words on screen at once, at most
+  shorts_highlight: "#FFD400"
 
 storage:
   low_space_warning_gb: 100

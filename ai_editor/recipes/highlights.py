@@ -43,7 +43,7 @@ from ..analysis.hype import dark_seconds, load_signals
 from ..analysis.moments import load_signal
 from ..analysis.pipeline import load_scene_cuts
 from ..config import Settings
-from .plan import EditPlan, Segment, discard_drafts, new_plan_id, save_plan
+from .plan import EditPlan, Segment, discard_drafts, new_plan_id, save_plan, used_in
 
 # A video counts as on target within this share of the target (spec section 7.6).
 TOLERANCE = 0.15
@@ -173,7 +173,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         # The local AI's rating counts for llm.rating_weight of the score (0 by default).
         scores = scores_for(conn, settings, row["id"], clips)
         for clip in clips:
-            if clip["used_in_json"] and not (h.allow_reused_clips or reuse) \
+            if used_in(clip["used_in_json"], shorts=False) and not (h.allow_reused_clips or reuse) \
                     and clip["clip_id"] not in allow:
                 continue
             summary = json.loads(clip["signals_json"] or "{}")
@@ -444,7 +444,7 @@ def nothing_left_note(conn: sqlite3.Connection, settings: Settings,
     if not reuse and gather(conn, settings, recordings, game=game, refresh=False, reuse=True):
         used = sorted({p for r in recordings for (u,) in conn.execute(
             "SELECT used_in_json FROM clips WHERE recording_id = ? AND used_in_json IS NOT NULL",
-            (r["id"],)) for p in json.loads(u)})
+            (r["id"],)) for p in used_in(u, shorts=False)})
         return ("Every good clip from these streams is already in a rendered video ("
                 + ", ".join(used) + "). To render that video again with new settings (like "
                 "the stream's music), open it in Review and press Render. To make another "

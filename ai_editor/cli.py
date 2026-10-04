@@ -1893,6 +1893,80 @@ def export_command(
         os.startfile(folder)  # noqa: S606 -- File Explorer on our own folder
 
 
+@app.command("shorts")
+def shorts_command(
+    recording: str = typer.Argument(
+        ..., help="The recording's number from the library, or its file path"
+    ),
+    render: str = typer.Option(
+        None, "--render", "-r",
+        help="Render these suggestions too, by number: 1,3 or all",
+    ),
+    layout: str = typer.Option(
+        None, "--layout", help="crop, fit or facecam_top for the ones rendered (default: the game's)"
+    ),
+    settings_path: Path = typer.Option(
+        DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
+    ),
+) -> None:
+    """Suggest a recording's Shorts (vertical 1080x1920), and render them if asked.
+
+    Your Numpad - moments first, then clips the AI says make sense on their
+    own, up to five. Each is a plan you can also open in Review.
+    """
+    from .analysis import resolve_recording
+    from .analysis.captions import clock
+    from .recipes.plan import approve_plan, save_plan
+    from .recipes.shorts import WHY, build_shorts
+    from .render.final import render_plan
+
+    settings = _load(settings_path)
+    setup_logging(settings.log_dir, settings.logging.level)
+    conn = init_db(settings.db_path)
+    try:
+        row = resolve_recording(conn, recording)
+        result = build_shorts(conn, settings, row["id"])
+        table = Table(title=f"Shorts suggested from #{row['id']}", header_style="bold")
+        for column in ("#", "Starts", "Length", "Layout", "What happens", "Why"):
+            table.add_column(column, overflow="fold" if column == "What happens" else "ellipsis")
+        for n, plan in enumerate(result.plans, 1):
+            seg = plan.segments[0]
+            table.add_row(str(n), clock(seg.src_in), f"{seg.length:.0f}s", plan.source["layout"],
+                          plan.title.removeprefix("Short: "), WHY[plan.source["why"]])
+        console.print(table)
+        for note in result.notes:
+            console.print(f"[yellow]{note}[/yellow]")
+        if not render:
+            console.print(f"Render some: [bold]ai-editor shorts {row['id']} --render 1,2[/bold]")
+            return
+        numbers = (range(1, len(result.plans) + 1) if render.strip().lower() == "all"
+                   else [int(n) for n in render.replace(" ", "").split(",") if n])
+        for n in numbers:
+            if not 1 <= n <= len(result.plans):
+                console.print(f"[red]There's no suggestion {n}.[/red]")
+                continue
+            plan = result.plans[n - 1]
+            if layout:
+                plan.source["layout"] = layout
+                save_plan(conn, plan)
+            progress = _progress_bar()
+            task = progress.add_task(f"Rendering Short {n}", total=1.0)
+            progress.start()
+            try:
+                done = render_plan(conn, settings, plan,
+                                   lambda f: progress.update(task, completed=f))
+            finally:
+                progress.stop()
+            approve_plan(conn, plan.plan_id)
+            console.print(f"[green]Saved[/green] {done.path} ({done.length_sec:.0f} s, "
+                          f"{done.seconds_taken:.0f} s to render)")
+    except AIEditorError as exc:
+        console.print(f"[red]{exc.user_message()}[/red]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        conn.close()
+
+
 @app.command("render")
 def render_command(
     plan_ref: str = typer.Argument(

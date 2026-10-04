@@ -344,17 +344,88 @@ class SafeZone(BaseModel):
     top: float = Field(0.0, ge=0.0, le=0.6)
 
 
+class Box(BaseModel):
+    """A rectangle on the recording, as shares of its width and height (0-1)."""
+
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    w: float = Field(gt=0.0, le=1.0)
+    h: float = Field(gt=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _inside(self) -> "Box":
+        if self.x + self.w > 1.0001 or self.y + self.h > 1.0001:
+            raise ValueError("a box must fit inside the picture (x + w and y + h at most 1)")
+        return self
+
+
+Layout = Literal["crop", "fit", "facecam_top"]
+
+
 class Shorts(BaseModel):
+    """Vertical clips (spec 7.6 Recipe C). The creator's choices, 2026-10-04: no
+    facecam yet, so the game fills the frame -- zoomed in on the centre for
+    League, Tarkov and Wardogs, the whole picture over a blurred copy for
+    Dawnwalker -- switchable per Short; up to five suggested per stream; one
+    file for every platform."""
+
     min_length_sec: float = Field(15.0, gt=0)
     max_length_sec: float = Field(60.0, gt=0)
+    # Each Short opens this long before its moment: straight into the action
+    # (spec: "hook in the first 1-2 seconds"), with just enough to follow it.
+    lead_in_sec: float = Field(8.0, ge=0.0, le=30.0)
+    tail_sec: float = Field(3.0, ge=0.0, le=20.0)
+    per_recording: int = Field(5, ge=1, le=20)
     platform: Literal["youtube_shorts", "tiktok", "universal"] = "universal"
-    layout: str = "facecam_top"
+    preset: str = "vertical_1080x1920_60"
+    # crop: the centre of the game, zoomed to fill the frame. fit: the whole
+    # picture, a blurred copy filling above and below. facecam_top: the
+    # facecam (marked in `facecam`) above, the game below.
+    default_layout: Layout = "crop"
+    layouts: dict[str, Layout] = Field(
+        default_factory=lambda: {"The Blood of Dawnwalker": "fit"})
+    # Where the crop is centred, left to right (0.5 = the middle), per game.
+    crop_centre: dict[str, float] = Field(default_factory=dict)
+    # How much of the frame's height the zoomed game fills; the rest is the
+    # blurred copy, above and below. 1.0 fills it all. Below 1 is zoomed out:
+    # at 1.0 League's health bars and ability bar were cut off at the sides
+    # (the creator, 2026-10-05: "zoom out a tad").
+    crop_fill: float = Field(0.75, ge=0.5, le=1.0)  # chosen 2026-10-05
+    # Per game. League at 0.65: its fights spread wide (the creator, 2026-10-05).
+    crop_fills: dict[str, float] = Field(
+        default_factory=lambda: {"League of Legends": 0.65})
+    # Where the facecam is on screen, per game. None yet: the creator has no
+    # facecam. Marking one makes facecam_top that game's layout.
+    facecam: dict[str, Box] = Field(default_factory=dict)
+    facecam_share: float = Field(0.33, ge=0.2, le=0.5)  # of the frame's height
+    captions: bool = True
     follow_action: bool = False
     hook: bool = True
     must_make_sense_alone: bool = True
     link_to_full_video: bool = True
-    spoiler_check_games: list[str] = Field(default_factory=list)
+    # Story games: titles avoid spoilers, and Shorts are flagged to check (spec 7.6).
+    spoiler_check_games: list[str] = Field(
+        default_factory=lambda: ["The Blood of Dawnwalker"])
     safe_zones: dict[str, SafeZone] = Field(default_factory=dict)
+
+    @field_validator("crop_centre")
+    @classmethod
+    def _centres(cls, v: dict[str, float]) -> dict[str, float]:
+        for game, x in v.items():
+            if not 0.0 <= x <= 1.0:
+                raise ValueError(f"shorts.crop_centre for {game} must be 0-1, got {x}")
+        return v
+
+    def fill_for(self, game: str | None) -> float:
+        return self.crop_fills.get(game or "", self.crop_fill)
+
+    def layout_for(self, game: str | None) -> str:
+        if game and game in self.facecam:
+            return "facecam_top"
+        return self.layouts.get(game or "", self.default_layout)
+
+    def safe_zone(self) -> SafeZone:
+        return self.safe_zones.get(self.platform) or SafeZone(bottom=0.26, right=0.20, top=0.08)
 
     def check_consistency(self) -> None:
         if self.min_length_sec >= self.max_length_sec:
@@ -385,6 +456,20 @@ class Captions(BaseModel):
     # How far up from the bottom the captions sit, as a share of the picture's
     # height. Higher in Let's Plays, above the game's own subtitles.
     position: CaptionPlace = CaptionPlace()
+    # Shorts: a few words at a time, the one being said lit up (the creator's
+    # choice, 2026-10-04), big, kept out of the platforms' buttons.
+    shorts_size: int = Field(88, ge=30, le=200)   # pixels on a 1920-high picture
+    shorts_words: int = Field(3, ge=1, le=6)      # words on screen at once, at most
+    shorts_highlight: str = "#FFD400"             # the word being said
+
+    @field_validator("shorts_highlight")
+    @classmethod
+    def _colour(cls, v: str) -> str:
+        import re
+
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError(f"captions.shorts_highlight must look like #FFD400, got {v!r}")
+        return v.upper()
 
 
 class Render(BaseModel):
@@ -521,6 +606,9 @@ class Settings(BaseModel):
     def check_consistency(self) -> None:
         self.lets_play.check_consistency()
         self.shorts.check_consistency()
+        if self.shorts.preset not in self.render.presets:
+            raise ValueError(f"shorts.preset '{self.shorts.preset}' isn't one of the render "
+                             f"presets: {', '.join(self.render.presets)}")
         self.clips.check_consistency()
 
 

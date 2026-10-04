@@ -28,6 +28,8 @@ from .worker import DONE, Worker, submitted
 ALL_STREAMS = "All my streams"
 ALL_PARTS = "All parts"
 WHOLE_VIDEO = "Quick preview of the whole video"
+SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
+LAYOUTS = [("Zoomed centre", "crop"), ("Whole picture", "fit")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]
 PART_WIDTHS = ["10%", "20%", "45%", "25%"]
@@ -82,7 +84,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     # --- Create video --------------------------------------------------------------------
     with gr.Tab("Create video", id="create"):
-        kind = gr.Radio(["Highlights", "Let's Play"], value="Highlights", label="What to make")
+        kind = gr.Radio(["Highlights", "Let's Play", "Shorts"], value="Highlights",
+                        label="What to make")
         with gr.Group(visible=True) as hl_group:
             hl_game = gr.Dropdown(choices=[ALL_STREAMS, *stream_games()], value=ALL_STREAMS,
                                   label="Game",
@@ -104,6 +107,12 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                  info="Trimmed (loading screens, silent menus, long pauses) and "
                                       "split into parts of about "
                                       f"{settings.lets_play.target_min:.0f} minutes.")
+        with gr.Group(visible=False) as sh_group:
+            sh_rec = gr.Dropdown(choices=read(videos.analysed_choices, settings), value=None,
+                                 label="Stream or recording",
+                                 info="Up to five suggestions, each 15-60 seconds and vertical: "
+                                      "your Numpad - moments first, then the AI's picks that make "
+                                      "sense on their own.")
         make_btn = gr.Button("Make the plan", variant="primary")
         make_msg = gr.Markdown()
 
@@ -153,6 +162,9 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                     None, note="Click a row to watch it here, or make a quick preview of the "
                                "whole video."))
                 preview_btn = gr.Button(WHOLE_VIDEO)
+                layout_pick = gr.Radio(LAYOUTS, value="crop", visible=False,
+                                       label="How the game fills the tall frame",
+                                       info="Then make a quick preview to see it.")
         gr.Markdown("### Finish it")
         with gr.Row():
             captions_box = gr.Checkbox(value=settings.captions.highlights,
@@ -179,6 +191,12 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         tags_box = gr.Textbox(label="Tags", buttons=["copy"],
                               info="YouTube Studio: Show more > Tags.")
         keep_btn = gr.Button("Keep my changes")
+        with gr.Row(visible=False) as link_row:
+            link_box = gr.Textbox(label="This video's YouTube link, once uploaded", scale=4,
+                                  placeholder="https://youtu.be/...",
+                                  info="Shorts made from it then say \"Full video:\" with "
+                                       "this link.")
+            link_btn = gr.Button("Save the link", scale=1)
         thumbs = gr.Gallery(label="Thumbnail frames, best first (full size, in "
                                   "output/thumbnails)", columns=3, height=420,
                             buttons=["download", "fullscreen"], interactive=False)
@@ -254,10 +272,17 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     # --- Create video: handlers ---------------------------------------------------------
 
-    kind.change(lambda k: (gr.update(visible=k == "Highlights"), gr.update(visible=k != "Highlights")),
-                kind, [hl_group, lp_group])
+    kind.change(lambda k: (gr.update(visible=k == "Highlights"),
+                           gr.update(visible=k == "Let's Play"), gr.update(visible=k == "Shorts")),
+                kind, [hl_group, lp_group, sh_group])
 
-    def make(what, game, chosen, minutes, episode_rec, reuse=False):
+    def make(what, game, chosen, minutes, episode_rec, reuse=False, short_rec=None):
+        if what == "Shorts":
+            if short_rec is None:
+                return "Pick the stream or recording first."
+            return submitted(worker, worker.submit(
+                f"Suggesting Shorts from #{short_rec}", f"make:shorts:{short_rec}",
+                tasks.make_shorts(settings, int(short_rec))))
         if what == "Highlights":
             game = None if not game or game == ALL_STREAMS else canonical_game(game)
             ids = [int(x) for x in chosen] if chosen else None
@@ -274,7 +299,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             tasks.make_letsplay(settings, int(episode_rec))))
 
     make_btn.click(lambda *a: make(*a) + " When it's finished, it opens in Review.",
-                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse], make_msg)
+                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse, sh_rec], make_msg)
 
     # --- Review: handlers ---------------------------------------------------------------
 
@@ -304,16 +329,19 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             from ..render.parts import episode_of
 
             episode = read(episode_of, plan)
-        else:
+        elif plan.recipe == "highlights":
             extra = read(review.addable, settings, plan)
+        shown = None if lets_play else videos.last_preview(settings, plan)
         return (videos.plan_summary(plan, status), shaped_table(plan),
-                *show_editing(not lets_play, extra),
+                *show_editing(plan.recipe == "highlights", extra),
                 gr.Number(visible=lets_play, value=episode),
                 gr.Dropdown(visible=lets_play, choices=[ALL_PARTS, *parts], value=ALL_PARTS),
                 gr.Checkbox(value=settings.captions.lets_play if lets_play
+                            else settings.shorts.captions if plan.recipe == "shorts"
                             else settings.captions.highlights),
-                gr.Button(value=ONE_PART if lets_play else WHOLE_VIDEO),
-                empty, None, "", "", spots(extra))
+                gr.Button(value=ONE_PART if lets_play else SHORT_PREVIEW
+                          if plan.recipe == "shorts" else WHOLE_VIDEO),
+                shown or empty, None, "", "", spots(extra))
 
     def spots(extra) -> dict:
         """Where each addable clip is, to play it: {clip id: [recording, in, out]}."""
@@ -330,6 +358,46 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     # Again on opening the tab: Gradio 6 drops "hide this" sent to a tab that
     # isn't on screen yet, so a Let's Play could open showing highlight buttons.
     review_tab.select(show_plan, plan_pick, plan_outputs)
+
+    def show_layout(plan_id):
+        from ..render.final import vertical_of
+
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe != "shorts":
+            return gr.Radio(visible=False)
+        choices = LAYOUTS + ([("Facecam on top", "facecam_top")]
+                             if plan.game in settings.shorts.facecam else [])
+        return gr.Radio(visible=True, choices=choices, value=vertical_of(settings, plan).layout)
+
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(show_layout, plan_pick, layout_pick)
+
+    def set_layout(plan_id, layout):
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None or plan.recipe != "shorts" or not layout:
+                return gr.skip(), gr.skip()
+            plan.source["layout"] = layout
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        name = dict((v, k) for k, v in LAYOUTS).get(layout, layout)
+        shown = videos.last_preview(settings, plan, layout=layout)
+        if shown:
+            return f"This Short will use **{name}**. Here's its quick preview.", shown
+        return (f"This Short will use **{name}**. Make a quick preview to see it.",
+                videos.player(None, note=f"No quick preview of {name} yet."))
+
+    layout_pick.input(set_layout, [plan_pick, layout_pick], [review_msg, review_player])
+
+    def part_preview(plan_id, part):
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe != "letsplay" or part in (None, ALL_PARTS):
+            return gr.skip()
+        return videos.last_preview(settings, plan, int(part.split()[-1])) or gr.skip()
+
+    part_pick.input(part_preview, [plan_pick, part_pick], review_player)
 
     def pick_row(plan_id, evt: gr.SelectData):
         row = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
@@ -504,6 +572,9 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         plan, _ = read(videos.get_plan, plan_id)
         if plan is None:
             return "Pick a plan first."
+        if plan.recipe == "shorts":
+            return ("Shorts are finished here: the tall layout and captions don't carry over to "
+                    "Resolve, so there's nothing to export (manual 19.2b). Render it instead.")
         if plan.recipe == "letsplay" and not episode:
             return "Fill in the episode number first."
         try:
@@ -538,16 +609,33 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         plan, _ = read(videos.get_plan, plan_id)
         empty = gr.update(choices=[], value=None)
         if plan is None:
-            return "", empty, "", "", "", []
+            return "", empty, "", "", "", gr.Gallery(value=[], visible=True),                 gr.Row(visible=False), ""
         number = publish_part(plan, part)
         made = publish.saved(plan, number)
-        which = f"part {number}" if number else "this video"
+        which = f"part {number}" if number else "this Short" if plan.recipe == "shorts" \
+            else "this video"
+        link_row = gr.Row(visible=plan.recipe != "shorts")
+        link = publish.link_of(plan, number)
+        full, from_video = (read(publish.full_video_link, plan) if plan.recipe == "shorts"
+                            else ("", ""))
+        if plan.recipe == "shorts" and from_video:
+            source = (f" It's from **{from_video}**: " + (
+                "its link goes in the description." if full else
+                "paste that video's YouTube link in its Publish section, and the description "
+                "here links to it."))
+        else:
+            source = ""
         if made is None:
-            note = (f"Nothing written for {which} yet. **Write titles, description and "
-                    "chapters** asks the local AI (about a minute, with the thumbnails). Its "
-                    "summaries of the clips are what it writes from.")
-            return note, empty, "", "", "", []
-        note = f"For {which}, written {made.made_at[:16].replace('T', ' ')} (UTC)."
+            if plan.recipe == "shorts":
+                note = (f"Nothing written for {which} yet. **Write titles, description and "
+                        "chapters** asks the local AI for a title, a line or two and hashtags "
+                        "(a few seconds; Shorts have no chapters or thumbnail).")
+            else:
+                note = (f"Nothing written for {which} yet. **Write titles, description and "
+                        "chapters** asks the local AI (about a minute, with the thumbnails). Its "
+                        "summaries of the clips are what it writes from.")
+            return note + source, empty, "", "", "", gallery(plan, []), link_row, link
+        note = f"For {which}, written {made.made_at[:16].replace('T', ' ')} (UTC)." + source
         if publish.is_stale(plan, number, made):
             note += (" **The video has changed since, so the chapter times may be off: write "
                      "it again.**")
@@ -555,14 +643,19 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             note += " Choose another part under **Parts** to see its text."
         return (note, gr.update(choices=made.titles, value=None),
                 made.title or (made.titles[0] if made.titles else ""),
-                publish.description_text(settings, made), ", ".join(publish.tags_of(made)),
-                [(str(t.path), f"{t.rating}/10 {t.reason}") for t in made.thumbnails
-                 if t.path.is_file()])
+                publish.description_text(settings, made, full), ", ".join(publish.tags_of(made)),
+                gallery(plan, [(str(t.path), f"{t.rating}/10 {t.reason}")
+                               for t in made.thumbnails if t.path.is_file()]),
+                link_row, link)
+
+    def gallery(plan, pictures):
+        return gr.Gallery(value=pictures, visible=plan.recipe != "shorts")
 
     def publish_parts(plan) -> list[str]:
         return list(plan.publish)
 
-    publish_outputs = [publish_msg, title_pick, title_box, desc_box, tags_box, thumbs]
+    publish_outputs = [publish_msg, title_pick, title_box, desc_box, tags_box, thumbs, link_row,
+                       link_box]
     plan_pick.change(show_publish, [plan_pick, part_pick], publish_outputs)
     part_pick.change(show_publish, [plan_pick, part_pick], publish_outputs)
     review_tab.select(show_publish, [plan_pick, part_pick], publish_outputs)
@@ -583,6 +676,23 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                 episode=int(episode) if episode else None)))
 
     publish_btn.click(write_publish, [plan_pick, episode_box, part_pick], publish_msg)
+
+    def save_link(plan_id, part, link):
+        from .. import publish
+
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None:
+                return "Pick a plan first."
+            publish.set_link(plan, publish_part(plan, part), link or "")
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        return ("Saved. Shorts from this video now link to it." if (link or "").strip()
+                else "Link removed.")
+
+    link_btn.click(save_link, [plan_pick, part_pick, link_box], publish_msg)
 
     def keep_changes(plan_id, part, episode, title, description, tags):
         from .. import publish
@@ -617,7 +727,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     def tick(seen_version, done, recording, plan_id, show, part):
         version = worker.version
         if version == seen_version:
-            return (gr.skip(),) * 16 + (done, seen_version)
+            return (gr.skip(),) * 19 + (done, seen_version)
         done = dict(done)
         new_plan = preview_file = None
         rated = wrote = False
@@ -642,7 +752,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         plan, status = read(videos.get_plan, chosen)
         # The AI's verdicts just arrived for the recording on show: fill them in.
         clip_view = clips_view(recording, show) if rated else (gr.skip(),) * 3
-        publish_view = show_publish(plan_id, part) if wrote else (gr.skip(),) * 6
+        publish_view = show_publish(plan_id, part) if wrote else (gr.skip(),) * 8
         return (
             *clip_view,
             *publish_view,
@@ -651,6 +761,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             gr.update(choices=plans, value=chosen),
             gr.update(choices=read(videos.analysed_choices, settings, lets_play=False)),
             gr.update(choices=episode_choices()),
+            gr.update(choices=recordings),
             videos.player(preview_file, note="Quick preview") if preview_file else gr.skip(),
             "Your new plan is open below." if new_plan else gr.skip(),
             videos.plan_summary(plan, status) if plan is not None else gr.skip(),
@@ -659,6 +770,6 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     timer.tick(tick, [seen, handled, clip_rec, plan_pick, clip_show, part_pick],
                [clip_tbl, clip_ids, clip_counts, *publish_outputs, clip_rec, plan_pick, hl_from,
-                lp_rec,
+                lp_rec, sh_rec,
                 review_player, review_msg, summary, handled, seen],
                show_progress="hidden")
