@@ -17,6 +17,8 @@ from pathlib import Path
 STATUS_FILE = "status.json"
 STOP_FILE = "stop-requested"
 FRESH_SEC = 15.0  # written every second, but connecting to OBS can hold it up a few
+WRITE_TRIES = 5
+WRITE_RETRY_SEC = 0.02
 
 
 def folder(settings) -> Path:
@@ -50,11 +52,28 @@ def snapshot(app_) -> dict:
     }
 
 
-def write(where: Path, status: dict) -> None:
-    where.mkdir(parents=True, exist_ok=True)
+def write(where: Path, status: dict, tries: int = WRITE_TRIES) -> bool:
+    """Save the status. False if Windows wouldn't let us this second; never raises.
+
+    Windows refuses to replace a file while another program has it open, and
+    the app window opens this one every second to read it. When the two meet,
+    try again a moment later; if it's still busy, skip this second (the next
+    write is a second away). A missed status line must never stop the Companion.
+    """
     temporary = where / (STATUS_FILE + ".tmp")
-    temporary.write_text(json.dumps(status), encoding="utf-8")
-    os.replace(temporary, where / STATUS_FILE)  # never half-written when read
+    try:
+        where.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(json.dumps(status), encoding="utf-8")
+    except OSError:
+        return False
+    for attempt in range(tries):
+        try:
+            os.replace(temporary, where / STATUS_FILE)  # never half-written when read
+            return True
+        except OSError:
+            if attempt + 1 < tries:
+                time.sleep(WRITE_RETRY_SEC)
+    return False
 
 
 def read(where: Path, now: float | None = None) -> dict | None:

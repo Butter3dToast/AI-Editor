@@ -8,5 +8,5 @@ Everything runs locally and free, and the tool never interacts with a game
 process in any way (specification section 6).
 """
 
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 __product_name__ = "AI-Editor"

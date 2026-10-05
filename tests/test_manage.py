@@ -150,3 +150,50 @@ def test_stop_is_a_request_the_companion_sees(tmp_path):
 def test_starting_twice_is_refused(settings):
     status.write(status.folder(settings), {"updated": time.time(), "obs": "waiting"})
     assert "already running" in companion_panel.start(settings)
+
+
+@pytest.mark.skipif(__import__("sys").platform != "win32", reason="a Windows file-locking rule")
+def test_the_status_is_skipped_not_fatal_while_the_app_is_reading_it(tmp_path):
+    """Windows won't replace a file another program has open: the app window
+    reads this one every second. On 5 Oct that closed the Companion mid-stream."""
+    status.write(tmp_path, {"updated": time.time(), "obs": "connected"})
+    with open(tmp_path / status.STATUS_FILE, encoding="utf-8"):  # the app, reading
+        assert status.write(tmp_path, {"updated": time.time(), "obs": "waiting"}) is False
+    assert status.write(tmp_path, {"updated": time.time(), "obs": "waiting"}) is True
+    assert status.read(tmp_path)["obs"] == "waiting"
+
+
+def test_an_unexpected_problem_doesnt_close_the_companion(settings, monkeypatch):
+    from typer.testing import CliRunner
+
+    from ai_editor import cli
+    from ai_editor.companion import app as companion_app
+
+    steps = []
+
+    class Flaky:
+        hotkey_problems: list = []
+
+        def __init__(self, settings_):
+            self.log = type("Log", (), {"active": False})()
+
+        def start_hotkeys(self):
+            pass
+
+        def step(self, wait):
+            steps.append(wait)
+            if len(steps) == 1:
+                raise RuntimeError("something odd from OBS")
+            status.request_stop(status.folder(settings))  # the app's Stop button
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(companion_app, "Companion", Flaky)
+    monkeypatch.setattr(cli, "_steady_console", lambda: None)
+    monkeypatch.setattr(cli, "_companion_panel", lambda app_: "")
+    monkeypatch.setattr(status, "snapshot", lambda app_: {"updated": time.time()})
+    monkeypatch.setattr(time, "sleep", lambda sec: None)
+    result = CliRunner().invoke(cli.app, ["companion", "--settings", str(settings.source_path)])
+    assert result.exit_code == 0, result.output
+    assert len(steps) == 2 and "Stream Companion stopped." in result.output

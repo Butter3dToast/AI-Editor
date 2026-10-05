@@ -990,7 +990,8 @@ def companion(
 
     Start it before you go live or record, and leave the window open. It logs
     when OBS starts and stops streaming and recording, so markers and chat
-    line up with your footage. Press Ctrl+C to stop it.
+    line up with your footage. Stop it with Stop in the app window, or close
+    its window. Ctrl+C is ignored, so copying something can't stop it.
     """
     from rich.live import Live
 
@@ -1009,23 +1010,24 @@ def companion(
                       "app window's Stream Companion panel).")
         return
     status.clear(where)  # an old stop request must not stop this one
-    if sys.platform == "win32":
-        import ctypes
-
-        ctypes.windll.kernel32.SetConsoleTitleW("AI-Editor Stream Companion")
+    _steady_console()
     init_db(settings.db_path).close()
     app_ = Companion(settings)
     app_.start_hotkeys()
     for problem in app_.hotkey_problems:
         console.print(f"[yellow]{problem}[/yellow]")
+    log = get_logger(__name__)
     try:
         with Live(_companion_panel(app_), console=console, refresh_per_second=1) as live:
             while not status.stop_requested(where):
-                app_.step(wait=1.0)
-                live.update(_companion_panel(app_))
-                status.write(where, status.snapshot(app_))  # for the app window
-    except KeyboardInterrupt:
-        pass
+                try:
+                    app_.step(wait=1.0)
+                    live.update(_companion_panel(app_))
+                    status.write(where, status.snapshot(app_))  # for the app window
+                except Exception:  # noqa: BLE001
+                    # Mid-stream, carrying on beats closing: note it and keep going.
+                    log.exception("Stream Companion: something went wrong; carrying on")
+                    time.sleep(1.0)
     finally:
         status.clear(where)
         app_.close()
@@ -1034,6 +1036,30 @@ def companion(
                       "Start it again soon; it will catch up with what it missed.")
     else:
         console.print("Stream Companion stopped.")
+
+
+def _steady_console() -> None:
+    """Make the Companion's window hard to stop or freeze by accident, mid-stream.
+
+    Ctrl+C is ignored: Stop in the app window, or closing this window, stops
+    it. Quick Edit is switched off: with it on, a click inside a terminal window
+    starts selecting text and pauses the program until a key is pressed, which
+    would hold up markers and make the app window think it had stopped.
+    """
+    import signal
+
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.SetConsoleTitleW("AI-Editor Stream Companion")
+    handle = kernel32.GetStdHandle(-10)  # this window's keyboard input
+    mode = ctypes.c_uint32()
+    if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+        QUICK_EDIT, EXTENDED_FLAGS = 0x0040, 0x0080
+        kernel32.SetConsoleMode(handle, (mode.value & ~QUICK_EDIT) | EXTENDED_FLAGS)
 
 
 def _play_marker_sounds(settings: Settings) -> None:
@@ -1064,7 +1090,8 @@ def _companion_panel(app_) -> Table:
     }[app_.status.obs]
 
     table = Table(title="AI-Editor Stream Companion", show_header=False, header_style="bold",
-                  caption="Leave this open while you play. Ctrl+C to stop.")
+                  caption="Leave this open while you play. To stop: Stop in AI-Editor, "
+                          "or close this window.")
     table.add_column("What", style="bold")
     table.add_column("Status")
     table.add_row("OBS", obs_text)

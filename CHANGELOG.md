@@ -3,6 +3,21 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.11.1 — Phase 2B fix: the Stream Companion stays open — 5 October 2026
+
+**Fixed**
+
+- **The Stream Companion could close by itself mid-stream.** Every second it
+  saves a small status file that the app window reads; if both happened at
+  the same instant, Windows refused the save and the Companion closed. It now
+  tries again a moment later, and anything else unexpected is written to the
+  log file while it carries on.
+- **Ctrl+C no longer stops it.** Copying something while its window had focus
+  closed it. Stop it with **Stop** in AI-Editor, or by closing its window.
+- **Clicking inside its window no longer pauses it.** Windows freezes a
+  terminal program while you select text in it, which would hold up your
+  markers; that's switched off for the Companion.
+
 ## 0.11.0 — Phase 2B: Shorts — 4 October 2026
 
 AI-Editor now makes vertical Shorts (1080×1920) from your streams: one file

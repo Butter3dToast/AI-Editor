@@ -385,6 +385,8 @@ Stream Companion is a small app that runs in the background while you stream or 
    - How many moments you've marked, and when the last was.
 5. When you've finished, click **Stop**. (Or close its own window.)
 
+Its window can't be stopped or paused by accident: **Ctrl+C does nothing there** (so copying something while it has focus is safe), and clicking inside it doesn't pause it. If something unexpected goes wrong mid-stream, it notes it in the log file and carries on rather than closing.
+
 It can't run twice: **Start** while it's already running just says so.
 
 **Always start Stream Companion before you go live or start recording.** If it wasn't running, AI-Editor still works, but without markers, scene changes (which keep clips out of "BRB" and your ending screen) and League events.
@@ -406,7 +408,7 @@ It can't run twice: **Start** while it's already running just says so.
 | **Game** | The game on screen, from your OBS scene (see 8.1b). **—** on a scene that isn't a game, like "Brb". |
 | **Logged** | How many things it has noted since you started it. |
 
-4. When you've finished, click that window first so it has focus, then press **Ctrl+C**, or click **Stop** in AI-Editor. (Ctrl+C only reaches a terminal window that has focus.)
+4. When you've finished, click **Stop** in AI-Editor, or close that window. (Ctrl+C doesn't stop it, so it can't be stopped by accident mid-stream.)
 
 It uses next to no computer power: it sleeps until OBS tells it something changed.
 
@@ -1639,7 +1641,10 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 - Run `ai-editor doctor`: its **OBS** line tells you whether AI-Editor can reach OBS right now.
 
 ### I closed the Companion (or OBS) in the middle of a recording
-Start it again. When it reconnects it asks OBS what's running and logs anything it missed. Those lines show **noticed after it happened** in `ai-editor sessions`. The start of a recording is still exact, because OBS reports how long it's been recording.
+Start it again. When it reconnects it asks OBS what's running and logs anything it missed. Those lines show **noticed after it happened** in `ai-editor sessions`. The start of a recording is still exact, because OBS reports how long it's been recording. Markers you pressed while it was closed aren't kept, so start it again soon.
+
+### The Companion closed by itself
+Fixed in version 0.11.1. Before that, it could close when it saved its status at the very moment the app window was reading it, which happened once on 5 October. Now it tries again a moment later, and anything else unexpected is noted in the log file (`cache/logs/ai-editor.log`) while it carries on. If it ever does close, start it again and send that log file along.
 
 ### League events aren't being logged
 - Events only appear during a loaded match, not in lobby or champion select.
