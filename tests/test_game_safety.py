@@ -71,9 +71,32 @@ def test_no_game_interaction_anywhere(path):
     assert not problems, f"{path.name} uses: " + ", ".join(problems)
 
 
-def test_the_companion_only_talks_to_obs():
-    """Its one network connection is the OBS WebSocket."""
+NETWORK = ("requests", "urllib", "http.client", "http", "socket", "aiohttp", "httpx")
+LEAGUE = PACKAGE / "companion" / "league.py"
+
+
+def test_the_companion_only_talks_to_obs_and_league():
+    """Its network connections: the OBS WebSocket, and League's own local API (Phase 2E)."""
     companion = PACKAGE / "companion"
-    text = "\n".join(p.read_text(encoding="utf-8") for p in companion.rglob("*.py"))
-    for network in ("requests", "urllib", "http.client", "socket"):
-        assert not re.search(rf"^\s*(import|from)\s+{network}\b", text, re.MULTILINE), network
+    for path in companion.rglob("*.py"):
+        if path == LEAGUE:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for network in NETWORK:
+            assert not re.search(rf"^\s*(import|from)\s+{network}\b", text, re.MULTILINE), \
+                f"{path.name} imports {network}"
+
+
+def test_league_events_only_ask_league_on_this_pc():
+    """Riot's read-only Live Client Data API on 127.0.0.1:2999, and nowhere else:
+    no other address, port or web site, and only ever a GET."""
+    text = LEAGUE.read_text(encoding="utf-8")
+    code = re.sub(r'""".*?"""', "", text, flags=re.DOTALL)        # not the explanations
+    code = "\n".join(line.split("#")[0] for line in code.splitlines())
+    assert set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", code)) == {"127.0.0.1"}
+    assert re.search(r"^HOST = \"127\.0\.0\.1\"$", code, re.MULTILINE)
+    assert re.search(r"^PORT = 2999$", code, re.MULTILINE)
+    assert re.findall(r"HTTPSConnection\(([^,]+), ([^,]+),", code) == [("HOST", "PORT")]
+    assert re.findall(r"\.request\(\"(\w+)\"", code) == ["GET"]
+    assert not re.search(r"https?://|localhost|\.com\b|\.net\b", code)
+    assert not re.search(r"CERT_NONE|_create_unverified_context|verify\s*=\s*False", code)

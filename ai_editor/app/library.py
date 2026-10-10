@@ -6,6 +6,7 @@ window so they can be tested without it.
 
 from __future__ import annotations
 
+import html
 import json
 import subprocess
 import sys
@@ -14,7 +15,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..analysis.captions import clock
 from ..cli import _duration
+from ..companion.link import league_events, league_summary, listed
 from ..config import Settings
 from ..games import KNOWN_GAMES
 
@@ -155,6 +158,14 @@ def recording_details(conn, settings: Settings, recording_id: int) -> str:
             "SELECT COUNT(*) FROM companion_events WHERE session_id = ? "
             "AND event_type IN ('marker', 'marker_short')", (row["session_id"],)).fetchone()[0]
         lines.append(f"- **Stream Companion:** session {row['session_id']}, {markers} marker(s)")
+        events = league_events(conn, recording_id)
+        if events:
+            lines.append(f"- **League events:** {league_summary(events)}")
+            shown = [(t, e) for t, e in events if listed(e)]
+            items = "".join(f"<li>{clock(t)} · {html.escape(e.get('text') or '')}</li>"
+                            for t, e in shown)
+            lines.append(f"\n<details><summary>Every League event ({len(shown)}): times in the "
+                         f"recording</summary><ul>{items}</ul></details>\n")
     lines.append(f"- **File:** `{source}`" + ("" if source.exists() else "  **(not found)**"))
     return "\n".join(lines)
 

@@ -44,6 +44,8 @@ def status_html(current: dict | None) -> str:
     if current.get("last_marker"):
         marked += f" (last at {current['last_marker']})"
     parts.append(marked)
+    if current.get("league"):
+        parts.append(f"League: {current['league']}")
     problem = current.get("message")
     good = current.get("obs") == "connected"
     return (f"<div class='aie-companion {'on' if good else 'warn'}'>{'🟢' if good else '🟡'} "

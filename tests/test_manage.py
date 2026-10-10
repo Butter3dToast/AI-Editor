@@ -180,6 +180,9 @@ def test_an_unexpected_problem_doesnt_close_the_companion(settings, monkeypatch)
         def start_hotkeys(self):
             pass
 
+        def start_league(self):
+            pass
+
         def step(self, wait):
             steps.append(wait)
             if len(steps) == 1:

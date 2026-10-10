@@ -385,6 +385,7 @@ Stream Companion is a small app that runs in the background while you stream or 
    - **Live since 19:55**, **Recording since 19:55**.
    - The game on screen, from your OBS scene (8.1b).
    - How many moments you've marked, and when the last was.
+   - During a League match: **League: match running: 4/1/6, double kill, 1 objective** (8.3).
 5. When you've finished, click **Stop**. (Or close its own window.)
 
 Its window can't be stopped or paused by accident: **Ctrl+C does nothing there** (so copying something while it has focus is safe), and clicking inside it doesn't pause it. If something unexpected goes wrong mid-stream, it notes it in the log file and carries on rather than closing.
@@ -408,6 +409,7 @@ It can't run twice: **Start** while it's already running just says so.
 | **Keys** | **set in OBS: Show 'Mark moment', Show 'Mark Short'** when chapter 7.4a is done. If it says **not set up in OBS yet**, do 7.4a. |
 | **Session** | The session name, from the moment you record or go live. |
 | **Game** | The game on screen, from your OBS scene (see 8.1b). **—** on a scene that isn't a game, like "Brb". |
+| **League** | **waiting for a match** while you record on your League scene, then **match running: 4/1/6, double kill** (kills/deaths/assists) during one (8.3). |
 | **Logged** | How many things it has noted since you started it. |
 
 4. When you've finished, click **Stop** in AI-Editor, or close that window. (Ctrl+C doesn't stop it, so it can't be stopped by accident mid-stream.)
@@ -449,9 +451,24 @@ Markers are the strongest signal AI-Editor has. Even a few per stream noticeably
 
 ### 8.3 League of Legends events
 
-When a League match loads, Stream Companion automatically reads League's built-in, official local game data and logs kills, deaths, assists, multikills, objectives, and the result. You don't need to do anything, set up any account, or get any key.
+When a League match loads, Stream Companion reads League's own **Live Client Data API**: a small, official, read-only feed that the League game itself runs on your PC during a match, made by Riot for tools like this one. It logs, each at the exact second it happened in your recording:
 
-It only works during an actual match (not in the lobby or champion select). This is normal.
+- your kills, deaths and assists (and everyone else's kills, for spotting team fights);
+- double, triple, quadra and penta kills, aces and first blood;
+- Dragons (which kind), Baron, Rift Herald, Voidgrubs and Atakhan, turrets and inhibitors, and whether one was **stolen**;
+- when the match started, and whether you won.
+
+You don't need to do anything, set up an account, or get a key. The times come from the game's own clock, so an event lands on the right second in your recording even though the Companion only asks every couple of seconds.
+
+**When it asks:** only while OBS is recording or streaming, and only while your scene is your League scene (or a scene that isn't a game, like "Brb"). On your Wardogs or Tarkov scenes it doesn't ask at all. Outside a match (lobby, champion select) League doesn't answer, which is normal: the **League** line says **waiting for a match**.
+
+**After you import the recording**, the import message adds a line like *"League events: 2 matches (1 won), 9/4/12, triple kill, 3 objectives"*. In the **Library**, pick the recording and open **Every League event** under its details: each one with its time in the recording (`1:02:13 · Triple kill`), so you can jump there in a video player and check. Turrets your teammates take aren't listed, to keep it short, but they're still logged.
+
+**What uses them:** from Phase 2E-2 (the next update), these events pick clips and place effects. Recordings made before version 0.14 have no League events; they keep working as before.
+
+**Switching it off:** `companion.league_events: false` in `config/settings.yaml`.
+
+**Is it safe for my account?** Yes: see chapter 27. It's Riot's documented feature, read-only, on your own PC, and the Companion checks that the answer really comes from League before using it.
 
 ### 8.4 Session log
 
@@ -1581,6 +1598,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Companion | Mark Short-worthy hotkey | `numpad-` | Logs a Short moment. |
 | Companion | Confirmation sound | Off | A click when you mark. Off because a microphone can pick it up and send it to your stream, which happened on 26 Sep (chapter 8.2). |
 | Companion | Start with Windows | Off | Launches Companion at startup. |
+| Companion | League events (`league_events`) | On | Logs your kills, deaths, multikills, objectives and the result from League's official local game data during matches (chapter 8.3). |
 | OBS | WebSocket port / password | 4455 / from OBS | OBS connection. Set the password with `ai-editor setup-obs` (chapter 7.4), which keeps it in `config/settings.local.yaml` on this PC only. |
 | Analysis | Transcription model | `large-v3` | Which speech-recognition AI writes your transcripts. `large-v3` is the most accurate and still transcribes 2 hours in about 3 minutes on your PC. `large-v3-turbo` is several times faster but misses more unclear speech. Changing it re-transcribes recordings the next time you analyse them. |
 | Analysis | Voice separation | Twitch VODs only (`vods`) | On a recording with one mixed audio track, splits the sound into voices and everything else (music, combat) before analysing it, so the game's music can't hide your speech or trick the speech recognition. `vods` does this for Twitch VODs only; `mixed` for any single-track recording; `off` never. Recordings with a separate microphone track never need it. Takes about 2 minutes per 2 hours. The separated sound is only used for analysis, never in your videos. |
@@ -1702,8 +1720,10 @@ Fixed in version 0.11.1. Before that, it could close when it saved its status at
 
 ### League events aren't being logged
 - Events only appear during a loaded match, not in lobby or champion select.
-- Make sure Stream Companion was running *before* the match started.
-- Restart Stream Companion and check the tray status says **League: Match detected** during a game.
+- OBS must be recording or streaming, and your **League** scene showing. On another game's scene the Companion doesn't ask (8.3). If your League scene's name doesn't say "League", add it under `scene_games` (8.1b).
+- Starting the Companion mid-match is fine: it picks up everything from the start of the match. Events from before the recording began are kept but have no place in the recording.
+- During a match, the Companion's **League** line should say **match running**. If it says **can't read events: couldn't confirm it's League's own server**, something answered that wasn't signed by Riot; nothing from it is used. Restart League, and send the log file (`cache/logs/ai-editor.log`) if it keeps happening.
+- Check `companion.league_events` isn't set to `false`.
 
 ### My hotkey doesn't do anything
 - Check the **Keys** line in the Companion. If it says **not set up in OBS yet**, do chapter 7.4a. If it says **set in OBS** but pressing does nothing, open OBS's **Settings → Hotkeys**, filter on **Mark**, and check **Show 'Mark moment'** has your key.
@@ -1799,9 +1819,9 @@ Yes. On a recording's timeline, select a range → **Create clip**, then **Make 
 ### Your game accounts
 - AI-Editor never reads game memory, injects into games, or automates input.
 - Escape from Tarkov (BattlEye), League of Legends (Vanguard), and Wardogs anti-cheat are not affected by AI-Editor because it only works with your recordings.
-- **Stream Companion**, the only part that runs while you play, talks to **OBS and nothing else**. It doesn't look at which programs are running, doesn't touch the game in any way, and never presses keys for you. Its hotkeys are registered the same way Discord's and OBS's own hotkeys are, through Windows' standard hotkey feature. It doesn't use a keyboard hook, which is what key-logging and macro tools use.
+- **Stream Companion**, the only part that runs while you play, talks to **OBS**, and during League matches to **League's own Live Client Data API** on your PC (8.3): Riot's official, read-only feed, at `127.0.0.1:2999`, which only ever *asks* what happened. Nothing else. It doesn't look at which programs are running, doesn't touch the game in any way, and never presses keys for you. Its hotkeys are registered the same way Discord's and OBS's own hotkeys are, through Windows' standard hotkey feature. It doesn't use a keyboard hook, which is what key-logging and macro tools use.
 - These rules are checked automatically: every time AI-Editor is built, a test scans all of its code and fails if anything that could touch a game appears.
-- League events come from Riot's official, built-in local game data feature.
+- League events come from Riot's official, built-in local game data feature (the Live Client Data API). No Riot account, key or web service is involved: the feed never leaves your PC. The automatic test also checks that the Companion can only ask that one address, and only read from it.
 - Don't install third-party add-ons that claim to "improve detection" by reading games directly.
 
 ### Music and sound effects

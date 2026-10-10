@@ -53,6 +53,11 @@ companion:
   # named after their game ("Wardogs", "Escape From Tarkov") need no entry.
   # Example:  scene_games: {"Scene 2": "Escape from Tarkov"}
   scene_games: {}
+  # League of Legends: while a match runs, log your kills, deaths, multikills,
+  # objectives and the result from League's own read-only Live Client Data API
+  # on this PC (127.0.0.1:2999), each at its exact second in the recording.
+  # No key or account; the game itself is never touched.
+  league_events: true
 
 obs:
   websocket_host: 127.0.0.1

@@ -4,25 +4,26 @@ It sleeps until OBS has something to say, so it costs next to nothing while
 you play. If OBS isn't open yet, or closes, it checks again every few seconds
 and carries on by itself.
 
-Game safety (spec section 6, manual chapter 27): the Companion's only
-connection is to OBS. It never looks at which programs are running, never
-opens, reads or writes another program's memory, and never sends key presses
-or mouse input anywhere. tests/test_game_safety.py enforces this for the
-whole of AI-Editor.
+Game safety (spec section 6, manual chapter 27): the Companion talks to OBS,
+and during League matches to League's own read-only Live Client Data API on
+this PC (league.py, Phase 2E). It never looks at which programs are running,
+never opens, reads or writes another program's memory, and never sends key
+presses or mouse input anywhere. tests/test_game_safety.py enforces this for
+the whole of AI-Editor.
 """
 
 from __future__ import annotations
 
 import queue
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from ..config import Settings
 from ..errors import AIEditorError, HotkeyUnavailable, ObsNotReachable, ObsPasswordWrong, ObsTooOld
 from ..logging_setup import get_logger
 from ..games import game_for_scene
-from . import obs_markers, sound
+from . import league, obs_markers, sound
 from .hotkeys import HotkeyListener, describe
 from .obs import DISCONNECTED, ObsClient, ObsRequestFailed
 from .session import OUTPUTS, SessionLog
@@ -57,6 +58,27 @@ class Status:
     sound_off_because: str | None = None
 
 
+@dataclass
+class LeagueStatus:
+    """What the Companion knows about the League match going on, if any."""
+
+    state: str = "off"   # off | not_league | waiting | match | problem
+    match: str | None = None
+    seen: set = field(default_factory=set)
+    tally: league.Tally = field(default_factory=league.Tally)
+    problem: str | None = None
+
+    def text(self) -> str | None:
+        """One line for the Companion window, or None when there's nothing to say."""
+        if self.state == "match":
+            return f"match running: {self.tally.text()}"
+        if self.state == "waiting":
+            return "waiting for a match"
+        if self.state == "problem":
+            return f"can't read events: {self.problem}"
+        return None
+
+
 class Companion:
     def __init__(
         self,
@@ -66,6 +88,7 @@ class Companion:
         session_log: SessionLog | None = None,
         clock: Callable[[], float] = time.monotonic,
         listener_factory: Callable[[dict, Callable[[str], None]], HotkeyListener] | None = None,
+        league_factory: Callable[[queue.Queue, Callable[[], float]], league.Watcher] | None = None,
     ) -> None:
         self.settings = settings
         self._client_factory = client_factory or _default_client
@@ -86,6 +109,8 @@ class Companion:
         self.hotkey_problems: list[str] = []
         # The marker sources in OBS, when the keys are bound there (obs_markers).
         self.obs_markers: dict[str, int] = {}
+        self.league = (league_factory or _default_league)(self.inbox, clock)
+        self.league_status = LeagueStatus()
 
     # --- Hotkeys -------------------------------------------------------------
 
@@ -118,12 +143,58 @@ class Companion:
         """Called on the hotkey thread: hand it straight over to the main loop."""
         self.inbox.put((HOTKEY, {"name": name}))
 
+    # --- League events (league.py) ---------------------------------------------
+
+    def start_league(self) -> None:
+        """Start asking League for events, when it's switched on in Settings."""
+        if self.settings.companion.league_events:
+            self.league.start()
+
+    @property
+    def league_wanted(self) -> bool:
+        """Ask League only while OBS records or streams, and not on another game's scene."""
+        return (self.settings.companion.league_events and self.log.active
+                and self.game in (None, league.LEAGUE))
+
+    def _league_polled(self, poll: league.Poll) -> None:
+        status = self.league_status
+        if poll.match is None:
+            status.state = "problem" if poll.problem else "waiting"
+            status.problem = poll.problem
+            return
+        if not self.log.active:
+            return
+        match = poll.match
+        if match.key != status.match:
+            # A new match, or the Companion restarted during one: count what's logged.
+            status.match, status.seen, status.tally = match.key, set(), league.Tally()
+            for payload in self.log.logged_league(match.key):
+                status.seen.add(payload.get("id"))
+                status.tally.add(payload)
+        status.state, status.problem = "match", None
+        fresh = [e for e in match.events if e.get("EventID") not in status.seen]
+        if not fresh:
+            return
+        record_now, stream_now = self._duration("record"), self._duration("stream")
+        waited = max(0.0, self._clock() - poll.at)   # since League answered
+        for event in fresh:
+            status.seen.add(event.get("EventID"))
+            payload = league.describe(event, match)
+            if payload is None:
+                continue
+            ago = max(0.0, match.game_time - payload["game_time"]) + waited
+            self.log.league(payload, ago_sec=ago, record_now=record_now, stream_now=stream_now)
+            status.tally.add(payload)
+
     # --- Main loop -----------------------------------------------------------
 
     def step(self, wait: float = 1.0) -> None:
         """Do whatever is due, waiting at most ``wait`` seconds for something to happen."""
         if (self.client is None or not self.client.connected) and self._clock() >= self._next_attempt:
             self._try_connect()
+        self.league.wanted = self.league_wanted
+        if not self.league.wanted:
+            self.league_status.state = "not_league" if self.log.active and self.game else "off"
         try:
             event_type, data = self.inbox.get(timeout=wait)
         except queue.Empty:
@@ -195,6 +266,9 @@ class Companion:
     def handle(self, event_type: str, data: dict) -> None:
         if event_type == HOTKEY:
             self.mark(data.get("name", "moment"))
+            return
+        if event_type == league.INBOX:
+            self._league_polled(data["poll"])
             return
         if event_type == DISCONNECTED:
             if self.log.active:
@@ -326,6 +400,7 @@ class Companion:
         return status.duration_sec
 
     def close(self) -> None:
+        self.league.stop()
         if self.listener is not None:
             self.listener.stop()
         if self.client is not None:
@@ -350,6 +425,10 @@ class Companion:
             else:
                 parts.append(f"{describe(key)} = {label}")
         return "   ".join(parts)
+
+
+def _default_league(inbox: queue.Queue, clock: Callable[[], float]) -> league.Watcher:
+    return league.Watcher(inbox, clock=clock)
 
 
 def _default_client(settings: Settings, events: queue.Queue) -> ObsClient:

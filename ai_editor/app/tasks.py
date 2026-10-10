@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..cli import ANALYSIS_LABELS, STEP_LABELS, _duration, _safe_filename
-from ..companion.link import link_recording
+from ..companion.link import league_summary, link_recording
 from ..config import Settings
 from ..db import init_db
 from ..errors import AIEditorError
@@ -145,6 +145,8 @@ def _ingest(conn, settings: Settings, path: Path, report: Reporter, *, game, tra
             detail += f" and {match.short_markers} Short-worthy"
         if match.games:
             detail += f"; games played: {', '.join(match.games)}"
+        if match.league:
+            detail += f"; League events: {league_summary(match.league)}"
         report.say(detail + ".")
     report.say(f"Imported #{recording_id}.")
     return recording_id

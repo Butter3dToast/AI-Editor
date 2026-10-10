@@ -3,8 +3,7 @@
 The Companion runs in its own window, so it keeps going when the app window
 closes. Each second it writes what it's doing to a small file in the cache
 folder; the app reads that to show its status, and leaves a "stop" file to
-ask it to stop. Both stay on this PC: the Companion still talks to nothing
-but OBS.
+ask it to stop. Both stay on this PC.
 """
 
 from __future__ import annotations
@@ -48,6 +47,7 @@ def snapshot(app_) -> dict:
         "markers": app_.markers["moment"],
         "shorts": app_.markers["short"],
         "last_marker": app_.last_marker,
+        "league": app_.league_status.text(),
         "message": app_.status.message,
     }
 

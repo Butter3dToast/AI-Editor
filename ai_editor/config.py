@@ -84,6 +84,10 @@ class Companion(BaseModel):
     # Which game each OBS scene shows, for scenes whose name doesn't say it.
     # A scene named after its game ("Wardogs", "Tarkov Main") needs no entry.
     scene_games: dict[str, str] = Field(default_factory=dict)
+    # League of Legends: log kills, objectives and the result from League's own
+    # read-only Live Client Data API on this PC while a match runs (Phase 2E,
+    # companion/league.py). No key or account.
+    league_events: bool = True
 
 
 class Obs(BaseModel):

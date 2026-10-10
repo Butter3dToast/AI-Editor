@@ -7,6 +7,8 @@ produced it. That gives two things the rest of AI-Editor wants badly:
   strongest highlight signal there is, because you chose them yourself.
 * **Where the recording sits inside the Twitch VOD**, so chat lines up without
   anyone typing --starts-at.
+* **League events** (kills, objectives, the result), logged from the game's
+  own API while you played (league.py, Phase 2E).
 
 Matching is by file first: OBS tells the Companion the exact file it is
 writing, so that is proof. Times are the fallback, for recordings made before
@@ -42,6 +44,7 @@ class SessionMatch:
     markers: int = 0
     short_markers: int = 0
     games: list[str] = field(default_factory=list)  # in the order they were played
+    league: list[tuple[float, dict]] = field(default_factory=list)  # league_events()
 
     @property
     def marker_total(self) -> int:
@@ -172,6 +175,7 @@ def link_recording(conn: sqlite3.Connection, recording_id: int) -> SessionMatch 
         else:
             match.short_markers += 1
 
+    match.league = league_events(conn, recording_id)
     # The games played, from the OBS scenes. Fill in the recording's game if
     # none was given at import: the one played longest.
     timeline = game_timeline(conn, recording_id)
@@ -184,6 +188,53 @@ def link_recording(conn: sqlite3.Connection, recording_id: int) -> SessionMatch 
     log.info("Recording #%s matched session %s by %s (%d markers)",
              recording_id, match.session_id, match.matched_by, match.marker_total)
     return match
+
+
+# Worth listing for the creator: everything about them, every big fight, the
+# monsters, and the buildings they took themselves (the rest are a lot of turrets).
+LISTED = {"kill", "death", "assist", "multikill", "ace", "aced", "first_blood", "objective",
+          "game_start", "game_end"}
+
+
+def league_events(conn: sqlite3.Connection, recording_id: int) -> list[tuple[float, dict]]:
+    """(seconds into the recording, event) for each League event placed in it, in order."""
+    rows = conn.execute(
+        "SELECT recording_time_sec, payload_json FROM companion_events WHERE recording_id = ? "
+        "AND event_type = 'league' AND recording_time_sec IS NOT NULL "
+        "ORDER BY recording_time_sec, id", (recording_id,)).fetchall()
+    found = []
+    for row in rows:
+        try:
+            found.append((float(row["recording_time_sec"]), json.loads(row["payload_json"] or "{}")))
+        except ValueError:
+            continue
+    return found
+
+
+def listed(event: dict) -> bool:
+    """Whether the Library lists this League event."""
+    if event.get("kind") not in LISTED:
+        return False
+    if event.get("monster") in ("Turret", "Inhibitor"):
+        return bool(event.get("by_me"))
+    return True
+
+
+def league_summary(events: list[tuple[float, dict]]) -> str:
+    """"2 matches (1 win), 9/4/12, a triple kill, 3 objectives" for a recording."""
+    from .league import MULTIKILLS, Tally
+
+    tally = Tally()
+    matches, wins = set(), 0
+    for _, event in events:
+        tally.add(event)
+        matches.add(event.get("match"))
+        wins += event.get("kind") == "game_end" and event.get("result") == "win"
+    count = len(matches)
+    head = f"{count} match{'es' if count != 1 else ''}"
+    if wins:
+        head += f" ({wins} won)"
+    return f"{head}, {tally.text()}"
 
 
 def game_timeline(conn: sqlite3.Connection, recording_id: int) -> list[tuple[float, str | None]]:

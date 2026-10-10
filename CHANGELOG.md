@@ -3,6 +3,34 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.14.0 — Phase 2E-1: League events from the game — 10 October 2026
+
+**New**
+
+- **The Stream Companion logs your League matches.** While you record or
+  stream on your League scene, it asks League's own read-only Live Client
+  Data API on this PC (Riot's official feature; no key or account) what
+  happened: your kills, deaths and assists, double to penta kills, aces,
+  first blood, Dragons, Baron, Herald, Voidgrubs, Atakhan, turrets and
+  inhibitors (and steals), and whether you won. Each event is placed at its
+  exact second in the recording, from the game's own clock.
+- **A League line in the Companion**: "waiting for a match", then "match
+  running: 4/1/6, double kill, 1 objective". Tested in the practice tool:
+  "Match started" landed 62 seconds into the recording, right where League
+  loaded.
+- **After import**, a summary of the matches, and in the Library under the
+  recording's details, **Every League event** with its time in the
+  recording ("0:35:03 · Double kill"), to check against the video.
+- The Companion checks the answer really comes from League (Riot's
+  certificate), only asks on your League scene or a non-game one, and picks
+  up where it left off if it's restarted mid-match. Switch it off with
+  `companion.league_events: false`.
+
+**Changed**
+
+- The game-safety test now allows exactly one more connection for the
+  Companion: League's API at 127.0.0.1:2999, read only. Manual 8.3 and 27.
+
 ## 0.13.0 — Phase 2C-3: Your stream's music, and sliding between clips — 10 October 2026
 
 **New**

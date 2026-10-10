@@ -173,6 +173,39 @@ class SessionLog:
         self.log("obs_scene", record_sec=record_sec, stream_sec=stream_sec,
                  payload={"scene": scene, "game": game})
 
+    def league(self, payload: dict[str, Any], *, ago_sec: float, record_now: float | None,
+               stream_now: float | None) -> None:
+        """A League event (companion/league.py) that happened ``ago_sec`` seconds ago.
+
+        Placed by the game's own clock, so it lands on the second it happened even
+        when it's logged a little later. One from before this recording began
+        keeps its clock time but no place in the recording.
+        """
+        def back(now: float | None) -> float | None:
+            return None if now is None or now - ago_sec < 0 else now - ago_sec
+
+        self.log("league", wall=self.now() - timedelta(seconds=ago_sec),
+                 record_sec=back(record_now), stream_sec=back(stream_now), payload=payload)
+
+    def logged_league(self, match: str) -> list[dict[str, Any]]:
+        """This session's League events from one match, so a restarted Companion
+        doesn't log them twice."""
+        if self.session_id is None:
+            return []
+        with db.session(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT payload_json FROM companion_events WHERE session_id = ? "
+                "AND event_type = 'league'", (self.session_id,)).fetchall()
+        found = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except ValueError:
+                continue
+            if payload.get("match") == match:
+                found.append(payload)
+        return found
+
     def file_changed(self, path: str, record_sec: float | None = None) -> None:
         """OBS split the recording into a new file (automatic file splitting)."""
         self.outputs["record"].path = path

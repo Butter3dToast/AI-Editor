@@ -1014,6 +1014,7 @@ def companion(
     init_db(settings.db_path).close()
     app_ = Companion(settings)
     app_.start_hotkeys()
+    app_.start_league()
     for problem in app_.hotkey_problems:
         console.print(f"[yellow]{problem}[/yellow]")
     log = get_logger(__name__)
@@ -1112,6 +1113,10 @@ def _companion_panel(app_) -> Table:
         marked += f"  (last at {app_.last_marker})"
     table.add_row("Marked", marked)
     table.add_row("Keys", app_.hotkey_summary())
+    league_line = app_.league_status.text()
+    if league_line:
+        table.add_row("League", league_line if app_.league_status.state != "problem"
+                      else f"[yellow]{league_line}[/yellow]")
     if app_.status.sound_off_because:
         table.add_row("Sound", f"[dim]silent: {app_.status.sound_off_because}[/dim]")
     table.add_row("Logged", f"{app_.log.events_logged} event(s) this run")
@@ -1189,6 +1194,7 @@ EVENT_LABELS = {
     "marker": "Marker",
     "marker_short": "Marker (Short-worthy)",
     "obs_scene": "Scene",
+    "league": "League",
 }
 
 
@@ -1213,6 +1219,8 @@ def _print_session(conn, session_id: str) -> None:
             detail.append(Path(payload["path"]).name)
         if row["event_type"] == "obs_scene":
             detail.append(f"{payload.get('scene')} -> {payload.get('game') or 'not a game'}")
+        if row["event_type"] == "league":
+            detail.append(payload.get("text") or payload.get("event") or "")
         if payload.get("noticed_late"):
             detail.append("[yellow]noticed after it happened[/yellow]")
         table.add_row(
