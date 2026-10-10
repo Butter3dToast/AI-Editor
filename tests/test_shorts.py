@@ -187,9 +187,12 @@ def test_a_preview_made_earlier_is_found_again_per_layout(settings):
     assert crop.name == "shorts_wardogs_1 crop.mp4" and fit.name == "shorts_wardogs_1 fit.mp4"
     crop.parent.mkdir(parents=True, exist_ok=True)
     crop.write_bytes(b"video")
-    videos.remember_preview(crop, plan)
+    videos.remember_preview(settings, crop, plan)
     shown = videos.last_preview(settings, plan)
     assert "autoplay" not in shown and "changed since" not in shown
     assert videos.last_preview(settings, plan, layout="fit") is None  # not made for that one
+    plan.source["effects"] = ["sfx"]  # effects switched off in Review since
+    assert "changed since" in videos.last_preview(settings, plan)
+    plan.source.pop("effects")
     plan.segments[0].src_out = 135  # changed in Review since
     assert "changed since" in videos.last_preview(settings, plan)

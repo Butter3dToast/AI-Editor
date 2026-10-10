@@ -1295,6 +1295,39 @@ What's captioned:
 - **Let's Plays need your mic on its own track.** In a recording with only a mixed track, the game characters' lines are in the transcript too: EP 1 would have captioned Anca's "How about Petronius?" under the game's own subtitle. So a Let's Play recording without a separate mic track gets no captions, and the render says so. Your OBS is set up for separate tracks now (chapter 7.3), so new recordings are fine.
 - **Highlights from older streams** (before 27 Sep, one mixed track) can include a friend's words from Discord, and the odd game voice. Telling voices apart comes in a later phase.
 
+### 19.2d Effects on the big moments
+
+AI-Editor can add a few effects to the biggest moments of your highlights and Shorts by itself. Nothing to place by hand.
+
+**Off unless you tick them, for now.** In the first test their timing felt random, so they stay off by default until Phase 2E, when League's own events (kills, objectives) place them. Tick them per video in **Review** whenever you want them.
+
+| What happens | Effect |
+|---|---|
+| A sudden jump in the game's sound (a teamfight breaking out, an explosion) | A **screen shake** and a **boom** |
+| You, suddenly much louder than your normal talking | A **flash** and a **hit** |
+| Both at once | All three |
+
+**Only on the moments you marked.** Each time you press a marker key (Numpad + or −) during a stream, that moment gets one effect: on the biggest moment in the 20 seconds before your press, since you press just after something happens. A really big moment wins first: the game's sound jumping by 10 dB or more, or you *talking* clearly louder than your normal talking (a bump at the mic never counts). Clips you didn't mark get no effects until 2E, when League's own events (kills, objectives) place them too. At most 1.5 a minute in highlights (3 in Shorts).
+
+**Lined up to the instant.** Each effect starts exactly when the sound does, to the hundredth of a second, from the recording's own sound tracks.
+
+**What it looks and sounds like:**
+
+- **Flash:** the picture brightens at once and fades back over a third of a second.
+- **Screen shake:** the picture jolts about for under half a second, settling as it goes. Nothing is zoomed.
+- **Sound effects:** as loud as the moment they're on (3 dB under it), and never far under the clip's loudest moment, so a boom on a quiet game moment is still heard.
+- Captions stay still and clear on top: they never shake or flash.
+
+**Switching them on and off:**
+
+- **For one video:** in **Review**, under **Finish it**, tick or untick **Flash**, **Screen shake** and **Sound effects**. Make a quick preview to see and hear them; a kept preview says when the effects have changed since it was made.
+- **For every new video:** **Settings → Effects**, per kind of video. All off for now; Let's Plays have none unless you tick some there.
+- **How many:** **Settings → Effects**, big moments per minute.
+
+**Your own sound effects.** Until you add some, AI-Editor uses its own starter boom, hit and whoosh, made from scratch, so there's no copyright question; they're basic, and real recorded ones sound far better. A good free source made for exactly this: **YouTube Studio → Audio Library → Sound effects** (free to use in YouTube videos); Pixabay's sound effects are another. Not CapCut's: its sounds are licensed for use inside CapCut only. To use yours, click **Open my sound effects folder** in **Settings → Effects** and drop files (.wav, .mp3, .ogg or .flac) into its **boom**, **hit** or **whoosh** folder, or anywhere in it with the word in the name (`boom_02.wav`). With several of a kind, each moment gets one, and the same video always gets the same ones. Use only sounds you're allowed to use on YouTube (chapter 27).
+
+**Coming next:** 2C-3, a music bed that ducks under your voice, whoosh transitions, and a switch per effect in Review. Then 2E, League's events. Then 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on those events.
+
 ### 19.3 Exporting to DaVinci Resolve (free)
 
 The backup route, for the odd video you'd rather fine-tune by hand. Your finished videos come from **Render the finished video**; you never need Resolve for them.
@@ -1571,6 +1604,10 @@ You can change the recordings and output folders there. The cache and models fol
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
 | Render | Keep the music from your stream (`render.include_stream_music`) | Off | On: finished videos use the stream's mixed track, Spotify included (19.2). Usually gets a YouTube Content ID claim. |
+| Effects | Which are on (`effects.highlights`, `shorts`, `lets_play`) | none, until Phase 2E | Per kind of video; each video can change its own in Review (19.2d). |
+| Effects | Effects per minute (`effects.highlights_per_min`, `shorts_per_min`) | 1.5 / 3 | At most: one per moment you marked with the Stream Companion. |
+| Effects | Sound effects volume (`effects.sfx_volume_db`) | -3 dB | Against the moment they're on. |
+| Effects | Flash / shake strength (`effects.flash_strength`, `shake_strength`) | 0.35 / 0.02 | 1 would flash white; the shake's swing as a share of the picture's height. |
 | Shorts | Suggestions per stream (`shorts.per_recording`) | 5 (1–20) | Your Numpad − moments always, then the best others up to this (17.1). |
 | Shorts | Length (`shorts.min_length_sec`, `max_length_sec`) | 15–60 s | How long a Short may be. |
 | Shorts | Lead-in (`shorts.lead_in_sec`) / after (`tail_sec`) | 8 s / 3 s | How long before its moment a Short opens, and how long it runs on after. |

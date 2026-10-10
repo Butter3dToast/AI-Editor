@@ -273,3 +273,23 @@ def test_a_part_renders_with_its_title_card(conn, settings, tmp_path):
     plan = EditPlan("lp", "letsplay", "Test", None, 60, [Segment(1, 0.5, 3.0, kind="piece", part=1)])
     result = render_plan(conn, settings, plan, title="Ep 1 – Part 1")
     assert result.path.is_file() and result.captions is None
+
+
+def test_a_video_open_in_a_player_is_kept_and_the_new_one_saved_beside_it(tmp_path):
+    """10 Oct: rendering a Short again while the last one was playing stopped at 100%."""
+    import sys
+
+    from ai_editor.render.final import move_into_place
+
+    target = tmp_path / "short.mp4"
+    target.write_bytes(b"old")
+    new = tmp_path / "short (rendering).mp4"
+    new.write_bytes(b"new")
+    notes = []
+    if sys.platform == "win32":
+        with open(target, "rb"):  # playing in VLC
+            saved = move_into_place(new, target, notes, tries=2)
+        assert saved.name == "short (2).mp4" and saved.read_bytes() == b"new"
+        assert target.read_bytes() == b"old" and "open in a video player" in notes[0]
+    new.write_bytes(b"newer")
+    assert move_into_place(new, target, notes) == target and target.read_bytes() == b"newer"

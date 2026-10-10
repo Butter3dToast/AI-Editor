@@ -1,9 +1,10 @@
 """A quick watchable version of an edit plan, cut from the preview copies.
 
 For judging a recipe's choices before anything is rendered properly: which
-clips, in what order, trimmed where. It is low resolution and has no effects;
-the real render from the original footage, with burned-in captions, is Phase
-1G. Subtitles come as a file beside the video, so VLC shows them.
+clips, in what order, trimmed where, and the effects on them (effects/). It
+is low resolution; the real render comes from the original footage, with
+burned-in captions. Subtitles come as a file beside the video, so VLC shows
+them.
 
 Each segment is encoded to the same size, frame rate and sound format, so the
 pieces can be joined without encoding everything a second time.
@@ -35,14 +36,49 @@ def preview_path(settings: Settings, plan: EditPlan) -> Path:
     return settings.folders.output / FOLDER / f"{plan.plan_id}.mp4"
 
 
-def _encode(proxy: Path, start: float, length: float, target: Path, gpu: bool) -> list[str]:
+def fx_graph(picture: str, effects: list, sounds: list, seg_in: float, height: int,
+             settings: Settings, finish: list[str] | None = None) -> str:
+    """A preview's filter graph with a segment's effects. ``picture`` makes
+    [pic] from the preview copy; ``finish``: filters after the effects
+    (captions, shading). The result is [v] and [a]. The preview copy's sound
+    is the stream's mixed track."""
+    from ..effects import picture as picture_fx, sfx
+
+    moves = picture_fx.graph(effects, seg_in, height, settings.effects, "pic", "moved")
+    after = ",".join([*(finish or []), "format=yuv420p"])
+    graph = [picture, *moves, f"[{'moved' if moves else 'pic'}]{after}[v]",
+             "[0:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a0]"]
+    extra, labels = sfx.chains(sounds, 1, 48000)
+    graph += extra
+    mix = f"amix=inputs={1 + len(labels)}:normalize=0:duration=first" if labels else "anull"
+    graph.append(f"[a0]{''.join(labels)}{mix}[a]")
+    return ";".join(graph)
+
+
+def sounds_for(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, segment,
+               effects: list) -> list:
+    """Where a segment's sound effects go, and how loud (effects/sfx.py)."""
+    from ..effects import sfx
+
+    if not any(e.kind == "sfx" for e in effects):
+        return []
+    return sfx.place(settings, effects, segment.src_in, segment.src_out,
+                     sfx.tracks(conn, segment.recording_id), plan.plan_id)
+
+
+def _encode(proxy: Path, start: float, length: float, target: Path, gpu: bool,
+            graph: str | None = None, sounds: list | None = None) -> list[str]:
+    from ..effects import sfx
+
     video = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
              if gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
+    # Same shape for every piece, whichever recording it came from.
+    shape = f"scale=-2:{HEIGHT},fps={FPS},format=yuv420p"
+    picture = (["-filter_complex", graph, "-map", "[v]", "-map", "[a]"] if graph else
+               ["-map", "0:v:0", "-map", "0:a:0?", "-vf", shape])
     return [
-        "-ss", f"{start:.3f}", "-i", str(proxy), "-t", f"{length:.3f}",
-        "-map", "0:v:0", "-map", "0:a:0?",
-        # Same shape for every piece, whichever recording it came from.
-        "-vf", f"scale=-2:{HEIGHT},fps={FPS},format=yuv420p",
+        "-ss", f"{start:.3f}", "-i", str(proxy), *sfx.input_args(sounds or []),
+        "-t", f"{length:.3f}", *picture,
         *video, "-g", str(FPS),
         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
         str(target),
@@ -104,19 +140,25 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
             words, segment.src_in, segment.src_out, width=width, height=height,
             style=settings.captions, zone=zone), encoding="utf-8")
         finish.append("subtitles=filename=captions.ass")
-    finish += [*safe_zone_boxes(zone), "format=yuv420p"]
+    finish += safe_zone_boxes(zone)
+    from ..effects import for_plan, sfx
     from ..ffmpeg import probe
 
     info = probe(proxy)
-    graph = picture_graph(vertical_of(settings, plan), (info.width or 960, info.height or 540),
-                          preset, finish=finish)
+    effects = for_plan(conn, settings, plan)[0]
+    sounds = sounds_for(conn, settings, plan, segment, effects)
+    graph = fx_graph(picture_graph(vertical_of(settings, plan),
+                                   (info.width or 960, info.height or 540), preset, finish=[],
+                                   out="pic"),
+                     effects, sounds, segment.src_in, height, settings, finish)
     gpu = settings.performance.device == "gpu" and "h264_nvenc" in nvenc_encoders()
 
     def args(use_gpu: bool) -> list[str]:
         video = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
                  if use_gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
-        return ["-ss", f"{segment.src_in:.3f}", "-i", str(proxy), "-t", f"{segment.length:.3f}",
-                "-filter_complex", graph, "-map", "[v]", "-map", "0:a:0?", *video,
+        return ["-ss", f"{segment.src_in:.3f}", "-i", str(proxy), *sfx.input_args(sounds),
+                "-t", f"{segment.length:.3f}",
+                "-filter_complex", graph, "-map", "[v]", "-map", "[a]", *video,
                 "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
                 "-movflags", "+faststart", str(target)]
 
@@ -155,26 +197,34 @@ def render_preview(
     proxies = {r["id"]: Path(r["proxy_path"]) for r in conn.execute(
         f"SELECT id, proxy_path FROM recordings WHERE id IN "
         f"({','.join('?' * len(plan.recording_ids))})", plan.recording_ids)}
+    from ..effects import for_plan
+
     words: dict[int, list[Word]] = {}
     cues: list[Cue] = []
     parts: list[Path] = []
     offset = 0.0
     total = max(plan.total_sec, 1.0)
+    # The cuts reel (labels) shows where cuts are, not how the video looks.
+    effects = for_plan(conn, settings, plan) if labels is None else [[] for _ in plan.segments]
     try:
         for index, segment in enumerate(plan.segments):
             proxy = proxies.get(segment.recording_id)
             if proxy is None or not proxy.exists():
                 raise NotImported(f"The preview copy of recording #{segment.recording_id} is missing")
             part = parts_dir / f"{index:03d}.mp4"
-            args = _encode(proxy, segment.src_in, segment.length, part, gpu)
+            sounds = sounds_for(conn, settings, plan, segment, effects[index])
+            graph = (fx_graph(f"[0:v:0]scale=-2:{HEIGHT},fps={FPS},setsar=1[pic]",
+                              effects[index], sounds, segment.src_in, HEIGHT, settings)
+                     if effects[index] else None)
             try:
-                run_ffmpeg(args, what="cutting part of a video preview")
+                run_ffmpeg(_encode(proxy, segment.src_in, segment.length, part, gpu, graph,
+                                   sounds), what="cutting part of a video preview")
             except MediaProcessingFailed:
                 if not gpu:
                     raise
                 gpu = False
-                run_ffmpeg(_encode(proxy, segment.src_in, segment.length, part, False),
-                           what="cutting part of a video preview")
+                run_ffmpeg(_encode(proxy, segment.src_in, segment.length, part, False, graph,
+                                   sounds), what="cutting part of a video preview")
             parts.append(part)
 
             if labels is not None:

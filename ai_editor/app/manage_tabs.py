@@ -112,6 +112,33 @@ def build(settings: Settings, worker: Worker) -> None:
                     label="Keep the music from your stream (Spotify)",
                     info="Off: left out. Commercial music usually gets a YouTube video claimed "
                          "(muted, demonetised or blocked).")
+        with gr.Accordion("Effects", open=True):
+            gr.Markdown("On the moments you marked with the Stream Companion: a jump in the "
+                        "game's sound gets a shake and a boom, you shouting gets a flash and a "
+                        "hit. Off until League's own events place them (2E); each video can "
+                        "switch its own on in Review.")
+            fx_choices = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx")]
+            with gr.Row():
+                fx_hl = gr.CheckboxGroup(fx_choices, value=settings.effects.highlights,
+                                         label="Highlights")
+                fx_sh = gr.CheckboxGroup(fx_choices, value=settings.effects.shorts,
+                                         label="Shorts")
+                fx_lp = gr.CheckboxGroup(fx_choices, value=settings.effects.lets_play,
+                                         label="Let's Plays")
+            with gr.Row():
+                fx_hl_rate = gr.Slider(0.0, 6.0, value=settings.effects.highlights_per_min,
+                                       step=0.25, label="Highlights: effects per minute",
+                                       info="At most: one per moment you marked.")
+                fx_sh_rate = gr.Slider(0.0, 10.0, value=settings.effects.shorts_per_min,
+                                       step=0.5, label="Shorts: effects per minute")
+                fx_volume = gr.Slider(-15.0, 6.0, value=settings.effects.sfx_volume_db, step=1.0,
+                                      label="Sound effects volume (dB)",
+                                      info="Against the moment they're on. 0: as loud as it.")
+            with gr.Row():
+                fx_folder = gr.Button("Open my sound effects folder")
+                fx_msg = gr.Markdown("Put your own sounds in its **boom**, **hit** and "
+                                     "**whoosh** folders (.wav, .mp3, .ogg or .flac). Until "
+                                     "then AI-Editor uses its own.")
         with gr.Accordion("Let's Play", open=True):
             with gr.Row():
                 lp_minutes = gr.Number(value=lp.target_min, minimum=10, maximum=90,
@@ -229,8 +256,20 @@ def build(settings: Settings, worker: Worker) -> None:
 
     ai_pull.click(pull, None, ai_msg)
 
+    def open_sfx():
+        from ..effects.sfx import NAMES
+
+        root = settings.folders.assets / "sfx"
+        for name in NAMES:
+            (root / name).mkdir(parents=True, exist_ok=True)
+        _open_folder(str(root))
+        return f"Opened {root}."
+
+    fx_folder.click(open_sfx, None, fx_msg)
+
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
-             space, use_ai, model, weight, keep_music, footer, lp_title):
+             space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
+             effects_lp, rate_hl, rate_sh, sfx_db):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -255,6 +294,12 @@ def build(settings: Settings, worker: Worker) -> None:
             ("llm", "enabled"): bool(use_ai),
             ("llm", "model"): str(model or "").strip() or None,
             ("llm", "rating_weight"): round(float(weight), 2),
+            ("effects", "highlights"): list(effects_hl or []),
+            ("effects", "shorts"): list(effects_sh or []),
+            ("effects", "lets_play"): list(effects_lp or []),
+            ("effects", "highlights_per_min"): float(rate_hl),
+            ("effects", "shorts_per_min"): float(rate_sh),
+            ("effects", "sfx_volume_db"): float(sfx_db),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -275,7 +320,7 @@ def build(settings: Settings, worker: Worker) -> None:
     save_btn.click(save, [folder_boxes["raw"], folder_boxes["output"], hl_minutes, hl_bar,
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
-                          pub_lp],
+                          pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume],
                  settings_msg)
 
 

@@ -36,7 +36,15 @@ a hard rule, not a preference.
 | 1H | App window (Gradio), storage management | **Complete** |
 | **2A** | Local AI (Ollama): clip ratings and summaries; titles, descriptions, chapters, thumbnails | **Complete** |
 | **2B** | Shorts: vertical 1080x1920, per-game zoom or whole picture, word-lit captions, safe-zone previews | **Complete** |
-| 2C-2H | Effects, full Review screen, League events, story protection, style profiles, rules | Not started |
+| **2C-1** | Effects on your marked moments: flash, screen shake, sound effects (a switch for each) | **Complete** |
+| 2C-3 | Music bed that ducks under speech, a switch per effect in Review, effects in exports | Next |
+| 2E | League of Legends events from the Live Client Data API (kills, objectives) | Not started |
+| 2C-2 | Punch-in zooms, slow-motion replays, freeze frames, on real events | Not started (moved after 2E) |
+| 2D | Full Review screen: drag, trim, effect toggles, undo | Not started (moved after 2E) |
+| 2F | Dawnwalker story protection, missions, hook endings, length bar | Not started |
+| 2G | Style profiles from reference videos | Not started |
+| 2H | Plain-English rules | Not started |
+| 2 | Speaker identification for voice chat | Not started |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 
 ---

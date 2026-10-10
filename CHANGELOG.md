@@ -3,6 +3,47 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.12.0 — Phase 2C-1: Effects on your marked moments — 10 October 2026
+
+AI-Editor can now add effects to the moments you marked with the Stream
+Companion, by itself. They're **off until you tick them** in Review: in the
+first tests their timing felt random, so they stay optional until Phase 2E,
+when League's own events (kills, objectives) place them too.
+
+**New**
+
+- **Flash, screen shake and sound effects**, each with its own switch: in
+  **Review → Finish it** for one video, in **Settings → Effects** for every
+  new one.
+- **Only on your marks.** Each Numpad + or − press gets one effect, on the
+  biggest moment in the 20 seconds before it: a sudden jump in the game's
+  sound gets a shake and a boom, you shouting gets a flash and a hit. Clips
+  you didn't mark get none, and a bump at the mic never counts.
+- **Lined up to the instant** the sound starts, to the hundredth of a
+  second. Captions stay still on top of them.
+- **Sound effects at the right volume**: matched to the moment they're on,
+  never lost under it.
+- **Your own sounds**: **Settings → Effects → Open my sound effects folder**,
+  then drop files into its boom, hit or whoosh folders. YouTube Studio's
+  Audio Library has free sound effects for YouTube videos. Until then
+  AI-Editor uses simple ones it makes itself.
+- Quick previews include the effects, and a kept preview says when you've
+  changed the switches since.
+- Effects add no time to a render.
+
+**Fixed**
+
+- **Rendering a video again while the last one was open** (in VLC, or
+  playing in Review) stopped at 100% with "Access is denied". Now the old one
+  is kept and the new one is saved beside it as "(2)", so you can compare.
+
+**Changed**
+
+- The phase order: music and the Review switches (2C-3) come next, then
+  League events (2E), then zooms, slow-motion and freeze frames (2C-2) and
+  the full Review screen (2D), built on those events. Nothing is dropped:
+  the README lists every phase still to do.
+
 ## 0.11.1 — Phase 2B fix: the Stream Companion stays open — 5 October 2026
 
 **Fixed**

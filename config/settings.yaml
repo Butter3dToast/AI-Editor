@@ -255,6 +255,21 @@ render:
   # claimed (muted, demonetised or blocked).
   include_stream_music: false
 
+effects: # On the big moments, placed by AI-Editor (manual 19.2d). Each video can switch its own in Review.
+  # Which are on, per kind of video: flash, shake (screen shake), sfx (sound effects).
+  # Off until League's own events place them (Phase 2E); tick them per video in Review.
+  highlights: []
+  shorts: []
+  lets_play: []
+  # One per moment you marked with the Stream Companion; at most this many per minute.
+  highlights_per_min: 1.5
+  shorts_per_min: 3.0
+  lets_play_per_min: 0.75
+  min_gap_sec: 6.0
+  sfx_volume_db: -3.0 # Sound effects against the loud parts of their clip
+  flash_strength: 0.35 # 1 would be a white screen
+  shake_strength: 0.02 # How far the picture moves, as a share of its height
+
 captions:
   # Your words burned into finished videos (manual 19.2c). Off unless you turn
   # them on here, or for one video with: ai-editor render <plan> --captions

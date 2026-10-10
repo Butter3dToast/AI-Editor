@@ -27,7 +27,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from ..config import RenderPreset, Settings
+from ..config import Effects, RenderPreset, Settings
+from ..effects import Effect, for_plan as effects_for_plan, summary as effects_summary
+from ..effects import picture as picture_fx, sfx
 from ..errors import LowDiskSpace, MediaFileNotFound, MediaProcessingFailed
 from ..ffmpeg import measure_loudness, nvenc_encoders, run_ffmpeg
 from ..logging_setup import get_logger
@@ -54,6 +56,9 @@ MAX_LIMITING_DB = 3.0
 # players don't guess (a wrong guess looks washed out or too dark).
 COLOUR = ["-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709",
           "-color_trc", "bt709"]
+# Waiting for a video that's open in a player to be let go, before keeping both.
+REPLACE_TRIES = 6
+REPLACE_WAIT_SEC = 0.5
 # Uncompressed float sound while working: 48 kHz stereo, 4 bytes a sample.
 WORKING_AUDIO_BYTES_PER_SEC = AUDIO_RATE * 2 * 4
 
@@ -118,22 +123,31 @@ def video_codec(settings: Settings, preset: RenderPreset, encoder: str) -> list[
 def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
                  preset: RenderPreset, source_size: tuple[int, int], codec: list[str],
                  target: Path, *, gpu_decode: bool, captions: str | None = None,
-                 vertical: Vertical | None = None) -> list[str]:
+                 vertical: Vertical | None = None, effects: list[Effect] | None = None,
+                 sounds: list[sfx.Placed] | None = None, fx: Effects | None = None) -> list[str]:
     """FFmpeg arguments for one segment: picture, rebuilt sound, beeps out, soft edges.
 
     ``captions``: an ASS file's name, in the folder FFmpeg runs in. A bare name
     because a Windows path's drive colon ("C:") clashes with how filter options are written.
     ``vertical``: a Short's tall picture (render/vertical.py), made from the 16:9 one.
+    ``effects``, ``sounds``: flashes and shakes on the picture, sound effects in
+    the mix (effects/). The captions go on after, so they never shake or flash.
     """
     finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
+    moves = picture_fx.graph(effects or [], seg_in, preset.height, fx or Effects(),
+                             "pic", "moved")
+    made = "pic" if moves else "v"
     if vertical is not None:
-        graph = [picture_graph(vertical, source_size, preset, finish=finish)]
+        graph = [picture_graph(vertical, source_size, preset, finish=[] if moves else finish,
+                               out=made)]
     else:
         picture = [f"fps={preset.fps}"]
         if source_size != (preset.width, preset.height):
             picture.append(f"scale={preset.width}:{preset.height}:flags=lanczos")
-        picture += ["setsar=1", *finish]
-        graph = [f"[0:v:0]{','.join(picture)}[v]"]
+        picture += ["setsar=1", *([] if moves else finish)]
+        graph = [f"[0:v:0]{','.join(picture)}[{made}]"]
+    if moves:
+        graph += [*moves, f"[moved]{','.join(finish)}[v]"]
 
     notches = beep_filters(audio.beeps, seg_in, seg_in + length)
     for n, stream in enumerate(audio.streams):
@@ -142,14 +156,18 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
             chain += notches
         graph.append(f"[0:{stream}]{','.join(chain)}[a{n}]")
     inputs = "".join(f"[a{n}]" for n in range(len(audio.streams)))
+    extra, labels = sfx.chains(sounds or [], 1, AUDIO_RATE)
+    graph += extra
+    inputs += "".join(labels)
+    count = len(audio.streams) + len(labels)
     # normalize=0: add the tracks together the way OBS mixes them, not averaged.
-    mix = f"amix=inputs={len(audio.streams)}:normalize=0:duration=first," if len(audio.streams) > 1 else ""
+    mix = f"amix=inputs={count}:normalize=0:duration=first," if count > 1 else ""
     fade = min(FADE_SEC, length / 4)
     graph.append(f"{inputs}{mix}afade=t=in:d={fade},afade=t=out:st={length - fade:.4f}:d={fade}[a]")
 
     return [
         *(["-hwaccel", "cuda"] if gpu_decode else []),
-        "-ss", f"{seg_in:.3f}", "-i", str(source),
+        "-ss", f"{seg_in:.3f}", "-i", str(source), *sfx.input_args(sounds or []),
         "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]",
         "-t", f"{length:.4f}",
         *codec, *COLOUR,
@@ -179,6 +197,31 @@ def loudness_filter(measured_lufs: float, true_peak_db: float, target_lufs: floa
     return (f"volume={gain:.2f}dB,aresample={AUDIO_RATE * 4},"
             f"alimiter=limit={limit:.4f}:attack=10:release=200:level=0:latency=1,"
             f"aresample={AUDIO_RATE}")
+
+
+def move_into_place(unfinished: Path, target: Path, notes: list[str],
+                    tries: int = REPLACE_TRIES) -> Path:
+    """Give the finished video its real name. Where it is now.
+
+    Windows won't replace a video that's open: playing in VLC, or in Review's
+    player. On 10 Oct, rendering the same Short a third time to compare its
+    effects stopped at the very end because the second was still playing. So
+    wait a moment, then keep both: the new one is saved beside it as "(2)".
+    """
+    for attempt in range(tries):
+        try:
+            unfinished.replace(target)
+            return target
+        except PermissionError:
+            if attempt + 1 < tries:
+                time.sleep(REPLACE_WAIT_SEC)
+    n = 2
+    while (beside := target.with_name(f"{target.stem} ({n}){target.suffix}")).exists():
+        n += 1
+    unfinished.replace(beside)
+    notes.append(f"{target.name} was open in a video player, so it was kept and this one is "
+                 f"saved beside it as {beside.name}.")
+    return beside
 
 
 def _check_space(folder: Path, seconds: float, preset: RenderPreset) -> None:
@@ -245,6 +288,11 @@ def render_plan(
         attempts = [(settings.render.encoder, True), (settings.render.encoder, False)]
     attempts.append(("libx264", False))
 
+    effects = effects_for_plan(conn, settings, plan)
+    if any(effects):
+        notes.append(f"Effects: {effects_summary(effects)}.")
+    heard: dict[int, list[Path]] = {}   # the tracks each recording's sound is made from
+
     work = target.with_name(target.stem + " (rendering)")
     work.mkdir(parents=True, exist_ok=True)
     unfinished = target.with_name(target.stem + " (rendering).mp4")
@@ -280,11 +328,19 @@ def render_plan(
                                       height=preset.height, style=settings.captions, title=card,
                                       place=settings.captions.position.lets_play if lets_play
                                       else settings.captions.position.highlights).name
+            sounds = []
+            if any(e.kind == "sfx" for e in effects[index]):
+                rid = segment.recording_id
+                if rid not in heard:
+                    heard[rid] = sfx.tracks(conn, rid, audio[rid].streams)
+                sounds = sfx.place(settings, effects[index], segment.src_in,
+                                   segment.src_in + length, heard[rid], plan.plan_id)
             while True:
                 encoder, gpu_decode = attempts[0]
                 args = segment_args(source, segment.src_in, length, audio[segment.recording_id],
                                     preset, size, video_codec(settings, preset, encoder), piece,
-                                    gpu_decode=gpu_decode, captions=subtitles, vertical=vertical)
+                                    gpu_decode=gpu_decode, captions=subtitles, vertical=vertical,
+                                    effects=effects[index], sounds=sounds, fx=settings.effects)
                 try:
                     run_ffmpeg(args, duration_sec=length, what="rendering part of a video", cwd=work,
                                on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length) / total))
@@ -313,7 +369,7 @@ def render_plan(
                     "-movflags", "+faststart", str(unfinished)],
                    duration_sec=total, what="finishing a video",
                    on_progress=(lambda f: on_progress(0.9 + 0.1 * f)) if on_progress else None)
-        unfinished.replace(target)
+        target = move_into_place(unfinished, target, notes)
     finally:
         shutil.rmtree(work, ignore_errors=True)
         unfinished.unlink(missing_ok=True)

@@ -30,6 +30,7 @@ ALL_PARTS = "All parts"
 WHOLE_VIDEO = "Quick preview of the whole video"
 SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
 LAYOUTS = [("Zoomed centre", "crop"), ("Whole picture", "fit")]
+EFFECT_CHOICES = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]
 PART_WIDTHS = ["10%", "20%", "45%", "25%"]
@@ -169,6 +170,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         with gr.Row():
             captions_box = gr.Checkbox(value=settings.captions.highlights,
                                        label="Burn in captions (your words)")
+            effects_box = gr.CheckboxGroup(
+                EFFECT_CHOICES, value=settings.effects.highlights,
+                label="Effects on the big moments",
+                info="For this video. Make a quick preview to see and hear them.")
             episode_box = gr.Number(label="Episode number", precision=0, visible=False)
             part_pick = gr.Dropdown(choices=[ALL_PARTS], value=ALL_PARTS, label="Parts",
                                     visible=False)
@@ -390,6 +395,34 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 videos.player(None, note=f"No quick preview of {name} yet."))
 
     layout_pick.input(set_layout, [plan_pick, layout_pick], [review_msg, review_player])
+
+    def show_effects(plan_id):
+        from ..effects import switches
+
+        plan, _ = read(videos.get_plan, plan_id)
+        return gr.CheckboxGroup(value=[] if plan is None else switches(settings, plan))
+
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(show_effects, plan_pick, effects_box)
+
+    def set_effects(plan_id, chosen):
+        from ..effects import LABELS, set_switches
+
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None:
+                return "Pick a plan first."
+            set_switches(plan, chosen or [])
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        if not chosen:
+            return "No effects in this video."
+        names = ", ".join(LABELS[k] for k in chosen)
+        return f"Effects in this video: **{names}**. Make a quick preview to see and hear them."
+
+    effects_box.input(set_effects, [plan_pick, effects_box], review_msg)
 
     def part_preview(plan_id, part):
         plan, _ = read(videos.get_plan, plan_id)

@@ -215,23 +215,27 @@ def preview_file(settings: Settings, plan: EditPlan, part: int | None = None,
     return settings.folders.output / FOLDER / f"{name}.mp4"
 
 
-def remember_preview(path: Path, plan: EditPlan, part: int | None = None) -> None:
-    """Note beside a preview which version of the plan it shows."""
+def shown_in_preview(settings: Settings, plan: EditPlan, part: int | None = None) -> str:
+    """What a quick preview shows: the cuts, and which effects are on."""
+    from ..effects import switches
     from ..publish import fingerprint
     from ..render.parts import part_plan
 
     shown = part_plan(plan, part) if part else plan
-    path.with_suffix(".json").write_text(json.dumps({"fingerprint": fingerprint(shown)}),
-                                         encoding="utf-8")
+    return f"{fingerprint(shown)}:{','.join(switches(settings, plan))}"
+
+
+def remember_preview(settings: Settings, path: Path, plan: EditPlan,
+                     part: int | None = None) -> None:
+    """Note beside a preview which version of the plan it shows."""
+    path.with_suffix(".json").write_text(
+        json.dumps({"fingerprint": shown_in_preview(settings, plan, part)}), encoding="utf-8")
 
 
 def last_preview(settings: Settings, plan: EditPlan, part: int | None = None,
                  layout: str | None = None) -> str | None:
     """The quick preview already made for this plan (part, layout), ready to play
     -- not started, and saying if the plan has changed since. None if there isn't one."""
-    from ..publish import fingerprint
-    from ..render.parts import part_plan
-
     path = preview_file(settings, plan, part, layout)
     if not path.is_file():
         return None
@@ -239,8 +243,7 @@ def last_preview(settings: Settings, plan: EditPlan, part: int | None = None,
     note = f"Your quick preview from {made}."
     try:
         kept = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["fingerprint"]
-        shown = part_plan(plan, part) if part else plan
-        if kept != fingerprint(shown):
+        if kept != shown_in_preview(settings, plan, part):
             note += " The plan has changed since: make a new one to see the changes."
     except (OSError, ValueError, KeyError):
         pass

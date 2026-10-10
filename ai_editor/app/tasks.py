@@ -421,7 +421,7 @@ def quick_preview(settings: Settings, plan_id: str, part: int | None = None) -> 
                 path = render_short_preview(conn, settings, plan,
                                             lambda f: report.progress("Making a quick preview", f),
                                             target=target)
-                remember_preview(path, plan)
+                remember_preview(settings, path, plan)
                 report.say("Quick preview ready. The faint red areas are covered by the apps' "
                            "buttons and text; the red line marks what stays free. They aren't in "
                            "the finished Short.")
@@ -433,7 +433,7 @@ def quick_preview(settings: Settings, plan_id: str, part: int | None = None) -> 
             path = render_preview(conn, settings, plan,
                                   lambda f: report.progress("Making a quick preview", f),
                                   target=target)
-            remember_preview(path, whole, part)
+            remember_preview(settings, path, whole, part)
             report.say(f"Quick preview ready ({plan.total_sec / 60:.1f} min). It's playing in "
                        "Review.")
             report.keep(preview=str(path))

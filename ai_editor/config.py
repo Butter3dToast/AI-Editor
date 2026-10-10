@@ -472,6 +472,42 @@ class Captions(BaseModel):
         return v.upper()
 
 
+EffectKind = Literal["flash", "shake", "sfx"]
+
+
+class Effects(BaseModel):
+    """Effects on the big moments (spec 7.8), placed by AI-Editor itself.
+
+    Which ones are on, per kind of video; each video can switch them on or
+    off for itself in Review. The creator's choices: none in Let's Plays
+    (2026-10-05); and off by default in highlights and Shorts too until
+    League's own events place them (Phase 2E): after the 2C-1 test their
+    timing "seemed random" (2026-10-10). Ticked per video in Review meanwhile.
+    """
+
+    highlights: list[EffectKind] = []
+    shorts: list[EffectKind] = []
+    lets_play: list[EffectKind] = []
+    # Effects go on the moments the creator marked with the Stream Companion,
+    # one per mark (effects/placement.py); at most this many per minute.
+    highlights_per_min: float = Field(1.5, ge=0.0, le=10.0)
+    shorts_per_min: float = Field(3.0, ge=0.0, le=10.0)
+    lets_play_per_min: float = Field(0.75, ge=0.0, le=10.0)
+    min_gap_sec: float = Field(6.0, ge=1.0)
+    # Sound effects' loudness against the loud parts of the clip they're in.
+    sfx_volume_db: float = Field(-3.0, ge=-30.0, le=10.0)
+    flash_strength: float = Field(0.35, ge=0.05, le=1.0)    # 1: a white screen
+    shake_strength: float = Field(0.02, ge=0.005, le=0.08)  # how far, as a share of the height
+
+    def on_for(self, recipe: str) -> list[str]:
+        return list({"shorts": self.shorts, "letsplay": self.lets_play}.get(recipe,
+                                                                             self.highlights))
+
+    def per_min(self, recipe: str) -> float:
+        return {"shorts": self.shorts_per_min,
+                "letsplay": self.lets_play_per_min}.get(recipe, self.highlights_per_min)
+
+
 class Render(BaseModel):
     encoder: Literal["h264_nvenc", "hevc_nvenc"] = "h264_nvenc"
     nvenc_preset: str = "p5"
@@ -584,6 +620,7 @@ class Settings(BaseModel):
     highlights: Highlights = Highlights()
     shorts: Shorts = Shorts()
     render: Render = Render()
+    effects: Effects = Effects()
     captions: Captions = Captions()
     storage: Storage = Storage()
     twitch: Twitch = Twitch()

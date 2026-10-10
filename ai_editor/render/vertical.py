@@ -71,8 +71,8 @@ def _blurred(source: str, W: int, H: int) -> str:
 
 
 def picture_graph(vertical: Vertical, size: tuple[int, int], preset: RenderPreset, *,
-                  finish: list[str]) -> str:
-    """Filter graph text from [0:v:0] to [v]. ``finish``: filters for the tall
+                  finish: list[str], out: str = "v") -> str:
+    """Filter graph text from [0:v:0] to [``out``]. ``finish``: filters for the tall
     picture once it's made (captions, colour format)."""
     W, H = preset.width, preset.height
     start = f"[0:v:0]fps={preset.fps}"
@@ -82,7 +82,7 @@ def picture_graph(vertical: Vertical, size: tuple[int, int], preset: RenderPrese
             f"{start},{SPLIT_FORMAT},split=2[bgsrc][fgsrc]",
             _blurred("bgsrc", W, H),
             f"[fgsrc]scale={W}:-2:flags=lanczos[fg]",
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,{end}[v]",
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,{end}[{out}]",
         ])
     if vertical.layout == "facecam_top" and vertical.facecam is not None:
         cam_h = even(H * vertical.facecam_share)
@@ -96,7 +96,7 @@ def picture_graph(vertical: Vertical, size: tuple[int, int], preset: RenderPrese
             f"[camsrc]crop={fw}:{fh}:{fx}:{fy},scale={W}:{cam_h}:force_original_aspect_ratio="
             f"increase:flags=lanczos,crop={W}:{cam_h}[cam]",
             f"[gamesrc]crop={gw}:{gh}:{gx}:{gy},scale={W}:{game_h}:flags=lanczos[game]",
-            f"[cam][game]vstack=inputs=2,{end}[v]",
+            f"[cam][game]vstack=inputs=2,{end}[{out}]",
         ])
     if vertical.fill < 1.0:
         # Zoomed out a little: a wider slice of the game, a band of blur above and below.
@@ -106,7 +106,7 @@ def picture_graph(vertical: Vertical, size: tuple[int, int], preset: RenderPrese
             f"{start},{SPLIT_FORMAT},split=2[bgsrc][fgsrc]",
             _blurred("bgsrc", W, H),
             f"[fgsrc]crop={w}:{h}:{x}:{y},scale={W}:{game_h}:flags=lanczos[fg]",
-            f"[bg][fg]overlay=0:(H-h)/2,{end}[v]",
+            f"[bg][fg]overlay=0:(H-h)/2,{end}[{out}]",
         ])
     w, h, x, y = crop_window(size, W / H, vertical.centre)
-    return f"{start},crop={w}:{h}:{x}:{y},scale={W}:{H}:flags=lanczos,{end}[v]"
+    return f"{start},crop={w}:{h}:{x}:{y},scale={W}:{H}:flags=lanczos,{end}[{out}]"
