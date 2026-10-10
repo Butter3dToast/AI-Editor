@@ -85,31 +85,36 @@ def key_of(part: int | None) -> str:
     return f"part {part}" if part else "video"
 
 
-def placed(plan: EditPlan, fps: int,
-           slides: list[float] | None = None) -> list[tuple[float, Segment]]:
+def placed(plan: EditPlan, fps: int, slides: list[float] | None = None,
+           more: list[float] | None = None) -> list[tuple[float, Segment]]:
     """Each piece with where it starts in the finished video. Lengths are whole
     frames, exactly as the renderer cuts them (render.final.frame_exact).
-    ``slides``: each cut's slide (render/slide.py): a clip starts as it slides in."""
+    ``slides``: each cut's slide (render/slide.py): a clip starts as it slides in.
+    ``more``: how much longer each clip gets from slow-motion replays (render/replay.py)."""
     from .render.final import frame_exact
     from .render.slide import starts
 
-    lengths = [frame_exact(s.length, fps) for s in plan.segments]
+    lengths = [frame_exact(s.length, fps) + (more[i] if more else 0.0)
+               for i, s in enumerate(plan.segments)]
     return list(zip(starts(lengths, slides or []), plan.segments))
 
 
 def sections(plan: EditPlan, fps: int, every_sec: float,
-             slides: list[float] | None = None) -> list[Section]:
+             slides: list[float] | None = None, more: list[float] | None = None) -> list[Section]:
     """Where the chapters go: per clip for highlights, about every ``every_sec`` otherwise."""
     from .render.final import frame_exact
 
+    def length(i: int, segment) -> float:
+        return frame_exact(segment.length, fps) + (more[i] if more else 0.0)
+
     found: list[Section] = []
     if plan.recipe != "letsplay":
-        for start, segment in placed(plan, fps, slides):
-            found.append(Section(start, start + frame_exact(segment.length, fps), [segment]))
+        for i, (start, segment) in enumerate(placed(plan, fps, slides, more)):
+            found.append(Section(start, start + length(i, segment), [segment]))
     else:
         current: Section | None = None
-        for start, segment in placed(plan, fps, slides):
-            end = start + frame_exact(segment.length, fps)
+        for i, (start, segment) in enumerate(placed(plan, fps, slides, more)):
+            end = start + length(i, segment)
             if current is None or current.length >= every_sec:
                 current = Section(start, end, [segment])
                 found.append(current)
@@ -491,8 +496,11 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     from .render.slide import overlaps
 
     fps = settings.render.presets[settings.render.preset].fps
+    from .render.replay import extra, for_plan as replays_for
+
     slides = overlaps(settings, video, [frame_exact(s.length, fps) for s in video.segments], fps)
-    found = sections(video, fps, settings.publish.chapter_every_min * 60, slides)
+    more = extra(replays_for(conn, settings, video, fps))
+    found = sections(video, fps, settings.publish.chapter_every_min * 60, slides, more)
     describe_sections(conn, found)
     lets_play = plan.recipe == "letsplay"
 

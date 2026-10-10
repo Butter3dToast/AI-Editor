@@ -117,7 +117,8 @@ def build(settings: Settings, worker: Worker) -> None:
                         "game's sound gets a shake and a boom, you shouting gets a flash and a "
                         "hit. Off until League's own events place them (2E); each video can "
                         "switch its own on in Review.")
-            fx_choices = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx")]
+            fx_choices = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx"),
+                          ("Punch-in zoom", "zoom"), ("Slow-motion replay", "replay")]
             with gr.Row():
                 fx_hl = gr.CheckboxGroup(fx_choices, value=settings.effects.highlights,
                                          label="Highlights")

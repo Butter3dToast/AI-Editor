@@ -1,6 +1,8 @@
 """Effects on the big moments of a video (spec 7.8), placed by AI-Editor itself.
 
-Phase 2C-1: a flash, a screen shake and a sound effect. Each is its own
+Phase 2C-1: a flash, a screen shake and a sound effect; 2C-2a a punch-in
+zoom (zoom.py); 2C-2b a slow-motion replay (render/replay.py: it changes the
+video's length, so the renderer builds it). Each is its own
 module returning a piece of FFmpeg filter graph (flash.py, shake.py, sfx.py);
 placement.py decides where they go.
 
@@ -23,8 +25,9 @@ from dataclasses import dataclass
 from ..config import Settings
 from ..recipes.plan import EditPlan
 
-KINDS = ("flash", "shake", "sfx")
-LABELS = {"flash": "Flash", "shake": "Screen shake", "sfx": "Sound effects"}
+KINDS = ("flash", "shake", "sfx", "zoom", "replay")
+LABELS = {"flash": "Flash", "shake": "Screen shake", "sfx": "Sound effects",
+          "zoom": "Punch-in zoom", "replay": "Slow-motion replay"}
 
 
 @dataclass(frozen=True)
@@ -89,9 +92,16 @@ def moments(conn: sqlite3.Connection, settings: Settings,
 
     fps = settings.render.presets[settings.render.preset].fps
     found = []
+    from ..render.replay import extra, for_plan as replays_for, shift
+
     slides = overlaps(settings, plan, [frame_exact(s.length, fps) for s in plan.segments], fps)
-    begins = [start for start, _ in placed(plan, fps, slides)]
-    for index, (seg, effects) in enumerate(zip(plan.segments, _placed(conn, settings, plan))):
+    every = _placed(conn, settings, plan)
+    off = set((plan.source or {}).get("effects_off", []))
+    kept = [[e for e in fx if moment_key(seg.recording_id, e.at) not in off]
+            for seg, fx in zip(plan.segments, every)]
+    replays = replays_for(conn, settings, plan, fps, kept)   # as the video will have them
+    begins = [start for start, _ in placed(plan, fps, slides, extra(replays))]
+    for index, (seg, effects) in enumerate(zip(plan.segments, every)):
         start = begins[index]
         times = sorted({e.at for e in effects})
         for at in times:
@@ -99,7 +109,8 @@ def moments(conn: sqlite3.Connection, settings: Settings,
             what = [e.kind for e in here if e.kind != "sfx"] + [e.sound for e in here
                                                                   if e.kind == "sfx" and e.sound]
             label = next((e.label for e in here if e.label), None)
-            found.append((f"Clip {index + 1} at {clock(start + at - seg.src_in)}: "
+            later = shift(at - seg.src_in, replays[index]) - (at - seg.src_in)
+            found.append((f"Clip {index + 1} at {clock(start + at - seg.src_in + later)}: "
                           + (f"{label}: " if label else "") + " + ".join(what),
                           moment_key(seg.recording_id, at)))
     return found
@@ -114,6 +125,7 @@ def summary(effects: list[list[Effect]]) -> str:
     """'4 flashes, 3 shakes, 7 sound effects', for messages."""
     counts = {k: sum(1 for seg in effects for e in seg if e.kind == k) for k in KINDS}
     names = {"flash": ("flash", "flashes"), "shake": ("shake", "shakes"),
-             "sfx": ("sound effect", "sound effects")}
+             "sfx": ("sound effect", "sound effects"), "zoom": ("zoom", "zooms"),
+             "replay": ("slow-motion replay", "slow-motion replays")}
     parts = [f"{n} {names[k][n != 1]}" for k, n in counts.items() if n]
     return ", ".join(parts) or "no effects"

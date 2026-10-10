@@ -496,7 +496,7 @@ class Captions(BaseModel):
         return v.upper()
 
 
-EffectKind = Literal["flash", "shake", "sfx"]
+EffectKind = Literal["flash", "shake", "sfx", "zoom", "replay"]
 
 
 class Effects(BaseModel):
@@ -531,6 +531,7 @@ class Effects(BaseModel):
         return "slide" if v == "whoosh" else v   # tried first, replaced by the slide
     flash_strength: float = Field(0.35, ge=0.05, le=1.0)    # 1: a white screen
     shake_strength: float = Field(0.02, ge=0.005, le=0.08)  # how far, as a share of the height
+    zoom_strength: float = Field(0.2, ge=0.05, le=0.5)      # 0.2: pushes in to 1.2 times
 
     def on_for(self, recipe: str) -> list[str]:
         return list({"shorts": self.shorts, "letsplay": self.lets_play}.get(recipe,

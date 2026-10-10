@@ -272,8 +272,9 @@ render:
   include_stream_music: true
 
 effects: # On the big moments, placed by AI-Editor (manual 19.2d). Each video can switch its own in Review.
-  # Which are on, per kind of video: flash, shake (screen shake), sfx (sound effects).
-  # Off until League's own events place them (Phase 2E); tick them per video in Review.
+  # Which are on, per kind of video: flash, shake (screen shake), sfx (sound effects),
+  # zoom (punch-in zoom), replay (slow-motion replay). Always off by default: tick
+  # them per video in Review.
   highlights: []
   shorts: []
   lets_play: []
@@ -286,6 +287,7 @@ effects: # On the big moments, placed by AI-Editor (manual 19.2d). Each video ca
   between_clips: cut # Highlights: cut | slide (the next clip slides in over the last)
   flash_strength: 0.35 # 1 would be a white screen
   shake_strength: 0.02 # How far the picture moves, as a share of its height
+  zoom_strength: 0.2 # Punch-in zoom: 0.2 pushes in to 1.2 times the size
 
 captions:
   # Your words burned into finished videos (manual 19.2c). Off unless you turn

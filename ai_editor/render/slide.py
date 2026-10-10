@@ -71,6 +71,21 @@ class Piece:
     length: float
     cut_in: bool           # a hard cut before it (the sound fades in over a few ms)
     cut_out: bool
+    # Beside a slow-motion replay (render/replay.py): the sound fades over a few
+    # ms there too, but the music carries straight on...
+    soft_in: bool = False
+    soft_out: bool = False
+    music_skip: float = 0.0   # ...this far ahead of the picture, after the replays before it
+
+
+@dataclass(frozen=True)
+class Replay:
+    """A slow-motion replay inside a clip: ``insert`` (render/replay.py), at
+    ``length`` seconds (whole frames)."""
+    segment: int
+    insert: object
+    length: float
+    music_skip: float      # the replays before it in the clip
 
 
 @dataclass(frozen=True)
@@ -84,16 +99,27 @@ class Slide:
         return self.leaving.length
 
 
-def layout(lengths: list[float], slides: list[float]) -> list[Piece | Slide]:
-    """The pieces of the video, in order."""
-    out: list[Piece | Slide] = []
+def layout(lengths: list[float], slides: list[float],
+           replays: list[list] | None = None,
+           replay_lengths: list[list[float]] | None = None) -> list[Piece | Slide | Replay]:
+    """The pieces of the video, in order. ``replays``: each clip's slow-motion
+    replays (render/replay.py Insert, by .offset), at ``replay_lengths``."""
+    out: list[Piece | Slide | Replay] = []
     n = len(lengths)
     for i, length in enumerate(lengths):
         head = slides[i - 1] if i > 0 else 0.0
         tail = slides[i] if i < n - 1 else 0.0
-        out.append(Piece(i, head, length - head - tail, cut_in=head == 0, cut_out=tail == 0))
+        mine = list(zip((replays or [[]] * n)[i], (replay_lengths or [[]] * n)[i]))
+        start, skip, soft = head, 0.0, False
+        for insert, replay_length in mine:
+            out.append(Piece(i, start, insert.offset - start, cut_in=start == 0 and not soft,
+                             cut_out=False, soft_in=soft, soft_out=True, music_skip=skip))
+            out.append(Replay(i, insert, replay_length, skip))
+            start, skip, soft = insert.offset, skip + replay_length, True
+        out.append(Piece(i, start, length - start - tail, cut_in=start == 0 and not soft,
+                         cut_out=tail == 0, soft_in=soft, music_skip=skip))
         if tail:
-            out.append(Slide(Piece(i, length - tail, tail, False, False),
+            out.append(Slide(Piece(i, length - tail, tail, False, False, music_skip=skip),
                              Piece(i + 1, 0.0, tail, False, False)))
     return out
 

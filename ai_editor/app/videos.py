@@ -295,8 +295,13 @@ def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[l
 
     days = {r["id"]: day(r["recorded_at"] or r["imported_at"])
             for r in conn.execute("SELECT id, recorded_at, imported_at FROM recordings")}
+    from ..render.replay import extra, for_plan as replays_for
+
     lengths = [s.length for s in plan.segments]
     slides = overlaps(settings, plan, lengths, 60) if settings else []
+    if settings:    # slow-motion replays make their clips longer
+        more = extra(replays_for(conn, settings, plan, 60))
+        lengths = [n + more[i] for i, n in enumerate(lengths)]
     rows = []
     for n, (s, position) in enumerate(zip(plan.segments, starts(lengths, slides))):
         where = "Teaser" if s.kind == "teaser" else short_clock(position)

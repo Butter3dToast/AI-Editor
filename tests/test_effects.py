@@ -10,7 +10,7 @@ import soundfile as sf
 
 from ai_editor import effects
 from ai_editor.db import init_db
-from ai_editor.effects import Effect, flash, placement, sfx, shake
+from ai_editor.effects import Effect, flash, placement, sfx, shake, zoom
 from ai_editor.effects import picture as picture_fx
 from ai_editor.recipes.plan import EditPlan, Segment
 
@@ -91,6 +91,10 @@ def test_each_kind_of_moment_gets_its_own_effects():
     assert kinds(reaction) == [("flash", None), ("sfx", "hit")]
     assert kinds(both) == [("flash", None), ("shake", None), ("sfx", "boom")]
     assert [e.kind for e in placement.effects_at(both, 5.0, ["sfx"])] == ["sfx"]
+    # The zoom goes on your reactions; the shake stays on the action (2C-2a).
+    zoomed = lambda m: [e.kind for e in placement.effects_at(m, 5.0, ["shake", "zoom"])]
+    assert zoomed(impact) == ["shake"] and zoomed(reaction) == ["zoom"]
+    assert zoomed(both) == ["shake", "zoom"]
 
 
 def make_wav(path, seconds, events, level=0.01):
@@ -199,6 +203,25 @@ def test_a_shake_moves_the_picture_only_while_it_happens():
     assert "22*(" in pieces[1]  # 2% of 1080 pixels
 
 
+def test_a_zoom_pushes_in_only_while_it_happens():
+    pieces = zoom.graph([Effect("zoom", 5.0, 0.9, "reaction")], 0.0, 0.2, "in", "out")
+    assert pieces[0] == "[in]format=yuv420p,split=2[out_base][out_big]"
+    assert "scale=w='trunc(iw*(1+0.200*(between(t,5.000,5.900)" in pieces[1]
+    assert "enable='between(t,5.000,5.900)'" in pieces[2] and pieces[2].endswith("[out]")
+    assert zoom.graph([Effect("shake", 5.0, 0.45, "impact")], 0.0, 0.2, "in", "out") is None
+
+
+def test_picture_effects_chain_flash_zoom_then_shake():
+    from ai_editor.config import Effects
+
+    every = [Effect("flash", 1.0, 0.3, "reaction"), Effect("zoom", 1.0, 0.9, "reaction"),
+             Effect("shake", 1.0, 0.45, "impact")]
+    pieces = picture_fx.graph(every, 0.0, 1080, Effects(), "pic", "moved")
+    assert pieces[0].endswith("[moved_flashed]") and pieces[1].startswith("[moved_flashed]")
+    assert pieces[3].endswith("[moved_zoomed]") and pieces[4].startswith("[moved_zoomed]")
+    assert pieces[-1].endswith("[moved]")
+
+
 def test_picture_effects_chain_flash_then_shake():
     from ai_editor.config import Effects
 
@@ -282,6 +305,31 @@ def frame_at(video, seconds):
 
 
 @needs_ffmpeg
+@needs_ffmpeg
+def test_a_zoom_pushes_in_and_comes_back_out(conn, settings, tmp_path):
+    from ai_editor.ffmpeg import probe
+    from ai_editor.render.final import render_plan
+
+    video = make_video(tmp_path / "rec.mp4", width=640, height=360, fps=30, seconds=60)
+    conn.execute("UPDATE recordings SET source_file = ?, width = 640, height = 360", (str(video),))
+    conn.execute("INSERT INTO audio_tracks (recording_id, stream_index, role) VALUES (1, 1, 'mixed')")
+    conn.commit()
+    settings.performance.device = "cpu"
+    plan = EditPlan("fx_z", "highlights", "Test", None, 600, [Segment(1, 42.0, 48.0)])
+    effects.set_switches(plan, ["zoom"])
+    zoomed = render_plan(conn, settings, plan, target=tmp_path / "zoom.mp4")
+    assert zoomed.notes == ["Effects: 1 zoom."]
+    effects.set_switches(plan, [])
+    plain = render_plan(conn, settings, plan, target=tmp_path / "plain.mp4")
+    assert probe(zoomed.path).duration_sec == pytest.approx(probe(plain.path).duration_sec,
+                                                           abs=0.02)
+    at = 45.0 - 42.0 + 0.4    # held, all the way in
+    assert np.abs(frame_at(zoomed.path, at) - frame_at(plain.path, at)).mean() > 5
+    assert frame_at(zoomed.path, at).shape == frame_at(plain.path, at).shape
+    for clear in (1.0, 5.5):  # before it, and once it has eased back out
+        assert np.abs(frame_at(zoomed.path, clear) - frame_at(plain.path, clear)).mean() < 2.0
+
+
 def test_a_render_has_its_effects_and_nothing_else_changes(conn, settings, tmp_path):
     from ai_editor.ffmpeg import probe
     from ai_editor.render.final import render_plan

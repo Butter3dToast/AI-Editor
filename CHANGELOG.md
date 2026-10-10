@@ -3,6 +3,31 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.16.0 — Phase 2C-2: Punch-in zoom and slow-motion replays — 10 October 2026
+
+**New**
+
+- **Punch-in zoom**: on your reactions (you shouting or laughing at a moment
+  you marked, or at a big League moment), the picture pushes in to 1.2 times
+  towards the middle, holds and eases back out, in under a second. The shake
+  stays on the action. The video doesn't get longer.
+- **Slow-motion replays**: after your biggest moments (multikills, aces and
+  steals, or a marked moment where the game's sound jumps hard), the moment
+  plays normally, then its last 3 seconds again at half speed, and the clip
+  carries on. You hear the game slowed with its pitch kept, without voices;
+  the stream's music carries on underneath and picks up from there, so the
+  song never jumps or repeats. 1.5 seconds after the moment, never mid-word.
+  One per clip at most, one every 2 minutes, one per Short; a Short never
+  goes over 60 seconds for one. Each makes the video 6 seconds longer, and
+  chapters, Review's times and the Each effect list allow for it.
+- Both are **off by default**, like every effect: tick **Punch-in zoom** or
+  **Slow-motion replay** for a video in Review, or in Settings → Effects.
+  Let's Plays get neither.
+
+**Changed**
+
+- Freeze frames, first planned for 2C-2, are left out: your choice.
+
 ## 0.15.1 — Deleting streams once their videos are made — 10 October 2026
 
 **Fixed**

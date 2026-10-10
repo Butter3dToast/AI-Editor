@@ -92,6 +92,24 @@ def _encode(proxy: Path, start: float, length: float, target: Path, gpu: bool,
     ]
 
 
+def _replay(proxy: Path, start: float, length: float, picture: str, target: Path,
+            gpu: bool) -> list[str]:
+    """A slow-motion replay from the preview copy (render/replay.py): ``picture``
+    turns [0:v:0], slowed, into [v]. The preview copy's sound is the stream's mix,
+    so a preview's replay has the voices too, slowed; the finished video has the
+    game's sound only."""
+    from ..render import replay
+
+    return [
+        "-itsscale:v", f"{1 / replay.SPEED:g}", "-ss", f"{start:.3f}", "-i", str(proxy),
+        "-filter_complex",
+        f"{picture};[0:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+        f"atempo={replay.SPEED:g}[a]",
+        "-map", "[v]", "-map", "[a]", "-t", f"{length:.3f}", *_video(gpu), "-g", str(FPS),
+        *AUDIO, str(target),
+    ]
+
+
 SHORT_SIZE = (540, 960)
 SAFE_ZONE_SHADE = "red@0.12"
 SAFE_ZONE_EDGE = "red@0.7"
@@ -140,44 +158,76 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
     zone = settings.shorts.safe_zone()
     work = target.with_suffix("")
     work.mkdir(parents=True, exist_ok=True)
-    finish = []
-    if settings.shorts.captions and segment.captions:
-        words = realistic_timing(load_words(conn, segment.recording_id))
-        (work / "captions.ass").write_text(short_document(
-            words, segment.src_in, segment.src_out, width=width, height=height,
-            style=settings.captions, zone=zone), encoding="utf-8")
-        finish.append("subtitles=filename=captions.ass")
-    finish += safe_zone_boxes(zone)
+    words = (realistic_timing(load_words(conn, segment.recording_id))
+             if settings.shorts.captions and segment.captions else None)
     from ..effects import for_plan, sfx
     from ..ffmpeg import probe
+    from ..render import replay, slide
+    from ..render.final import frame_exact
 
     info = probe(proxy)
-    effects = for_plan(conn, settings, plan)[0]
+    size = (info.width or 960, info.height or 540)
+    vertical = vertical_of(settings, plan)
+    effects = for_plan(conn, settings, plan)
+    replays = replay.for_plan(conn, settings, plan, FPS, effects)
+    effects = effects[0]
     sounds = sounds_for(conn, settings, plan, segment, effects)
-    graph = fx_graph(picture_graph(vertical_of(settings, plan),
-                                   (info.width or 960, info.height or 540), preset, finish=[],
-                                   out="pic"),
-                     effects, sounds, segment.src_in, height, settings, finish)
     gpu = settings.performance.device == "gpu" and "h264_nvenc" in nvenc_encoders()
+    shade = safe_zone_boxes(zone)
 
-    def args(use_gpu: bool) -> list[str]:
-        video = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
-                 if use_gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
-        return ["-ss", f"{segment.src_in:.3f}", "-i", str(proxy), *sfx.input_args(sounds),
-                "-t", f"{segment.length:.3f}",
-                "-filter_complex", graph, "-map", "[v]", "-map", "[a]", *video,
-                "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
-                "-movflags", "+faststart", str(target)]
+    def window(piece: slide.Piece, name: str) -> list[str]:
+        """FFmpeg arguments for a stretch of the Short as it will look."""
+        start = segment.src_in + piece.offset
+        finish = []
+        if words is not None:
+            (work / f"{name}.ass").write_text(short_document(
+                words, start, start + piece.length, width=width, height=height,
+                style=settings.captions, zone=zone), encoding="utf-8")
+            finish.append(f"subtitles=filename={name}.ass")
+        mine = sfx.within_piece(sounds, piece.offset, piece.length)
+        graph = fx_graph(picture_graph(vertical, size, preset, finish=[], out="pic"),
+                         effects, mine, start, height, settings, finish + shade)
+        return ["-ss", f"{start:.3f}", "-i", str(proxy), *sfx.input_args(mine),
+                "-t", f"{piece.length:.3f}", "-filter_complex", graph, "-map", "[v]",
+                "-map", "[a]", *_video(gpu), *AUDIO]
 
-    try:
+    def run(make, what: str, length: float) -> None:
+        nonlocal gpu
         try:
-            run_ffmpeg(args(gpu), duration_sec=segment.length, on_progress=on_progress, cwd=work,
-                       what="making a Short's preview")
+            run_ffmpeg(make(), duration_sec=length, cwd=work, what=what)
         except MediaProcessingFailed:
             if not gpu:
                 raise
-            run_ffmpeg(args(False), duration_sec=segment.length, on_progress=on_progress,
-                       cwd=work, what="making a Short's preview")
+            gpu = False
+            run_ffmpeg(make(), duration_sec=length, cwd=work, what=what)
+
+    try:
+        lengths = [segment.length]
+        replay_lengths = [[frame_exact(r.length, FPS) for r in replays[0]]]
+        items = slide.layout(lengths, [], replays, replay_lengths)
+        if len(items) == 1:     # no replay: in one go, straight to the Short's preview
+            run(lambda: [*window(items[0], "captions"), "-movflags", "+faststart", str(target)],
+                "making a Short's preview", segment.length)
+        else:
+            parts = []
+            for n, item in enumerate(items):
+                part = work / f"{n:03d}.mp4"
+                if isinstance(item, slide.Replay):
+                    picture = picture_graph(vertical, size, preset,
+                                            finish=[*shade, "format=yuv420p"])
+                    start = segment.src_in + item.insert.window
+                    run(lambda: _replay(proxy, start, item.length, picture, part, gpu),
+                        "making a slow-motion replay for a Short's preview", item.length)
+                else:
+                    run(lambda: [*window(item, f"captions{n}"), str(part)],
+                        "making a Short's preview", item.length)
+                parts.append(part)
+            listing = work / "parts.txt"
+            listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts),
+                               encoding="utf-8")
+            run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
+                        "-movflags", "+faststart", str(target)], cwd=work,
+                       what="joining a Short's preview")
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if on_progress:
@@ -205,7 +255,8 @@ def render_preview(
         f"SELECT id, proxy_path FROM recordings WHERE id IN "
         f"({','.join('?' * len(plan.recording_ids))})", plan.recording_ids)}
     from ..effects import for_plan, sfx
-    from ..render import slide
+    from ..render import replay, slide
+    from ..render.final import frame_exact
 
     words: dict[int, list[Word]] = {}
     cues: list[Cue] = []
@@ -216,7 +267,12 @@ def render_preview(
     lengths = [s.length for s in plan.segments]
     slides = (slide.overlaps(settings, plan, lengths, FPS) if labels is None
               else [0.0] * max(0, len(lengths) - 1))
-    starts = slide.starts(lengths, slides)
+    replays = (replay.for_plan(conn, settings, plan, FPS, effects) if labels is None
+               else [[] for _ in plan.segments])
+    replay_lengths = [[frame_exact(r.length, FPS) for r in clip] for clip in replays]
+    more = [sum(clip) for clip in replay_lengths]
+    starts = slide.starts([n + more[i] for i, n in enumerate(lengths)], slides)
+    total += sum(more)
     clip_sounds = [sounds_for(conn, settings, plan, s, effects[i])
                    for i, s in enumerate(plan.segments)]
     made = 0.0
@@ -246,10 +302,29 @@ def render_preview(
         if on_progress:
             on_progress(min(0.95, made / total))
 
+    def encode_replay(item: slide.Replay, path: Path) -> None:
+        nonlocal gpu, made
+        segment = plan.segments[item.segment]
+        proxy = proxies.get(segment.recording_id)
+        start = segment.src_in + item.insert.window
+        picture = f"[0:v:0]scale=-2:{HEIGHT},fps={FPS},setsar=1,format=yuv420p[v]"
+        try:
+            run_ffmpeg(_replay(proxy, start, item.length, picture, path, gpu),
+                       what="making a slow-motion replay for a video preview")
+        except MediaProcessingFailed:
+            if not gpu:
+                raise
+            gpu = False
+            run_ffmpeg(_replay(proxy, start, item.length, picture, path, False),
+                       what="making a slow-motion replay for a video preview")
+        made += item.length
+
     try:
-        for n, item in enumerate(slide.layout(lengths, slides)):
+        for n, item in enumerate(slide.layout(lengths, slides, replays, replay_lengths)):
             part = parts_dir / f"{n:03d}.mp4"
-            if isinstance(item, slide.Piece):
+            if isinstance(item, slide.Replay):
+                encode_replay(item, part)
+            elif isinstance(item, slide.Piece):
                 encode_piece(item, part)
             else:
                 leaving, arriving = parts_dir / f"{n:03d}_leaving.mp4", parts_dir / f"{n:03d}_arriving.mp4"
@@ -268,8 +343,11 @@ def render_preview(
             elif segment.captions:
                 if segment.recording_id not in words:
                     words[segment.recording_id] = load_words(conn, segment.recording_id)
-                cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
-                         segment_cues(words[segment.recording_id], segment.src_in, segment.src_out)]
+                # After a replay in the clip, its words come that much later.
+                for c in segment_cues(words[segment.recording_id], segment.src_in,
+                                      segment.src_out):
+                    later = replay.shift(c.start, replays[index]) - c.start
+                    cues.append(Cue(c.start + offset + later, c.end + offset + later, c.text))
 
         listing = parts_dir / "parts.txt"
         listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")

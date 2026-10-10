@@ -5,7 +5,8 @@ Two kinds of big moment, each with its own effects:
 * **Impact**: a sudden jump in the game's sound (a teamfight breaking out,
   an explosion, a burst of gunfire). A screen shake and a boom.
 * **Reaction**: you, talking and suddenly louder than your normal talking.
-  A flash and a hit.
+  A flash, a hit and a punch-in zoom (2C-2a: the creator wanted the zoom on
+  their reactions, the shake staying on the action).
 
 Both at once gets all three.
 
@@ -53,6 +54,8 @@ IMPACT, REACTION = "impact", "reaction"
 SOUNDS = {IMPACT: "boom", REACTION: "hit"}
 FLASH_SEC = 0.3
 SHAKE_SEC = 0.45
+ZOOM_SEC = 0.9         # in, hold, and out again (zoom.py)
+REPLAY_EVERY_SEC = 120.0   # at most one slow-motion replay per this much video
 SFX_SEC = 1.0          # how long a sound effect is counted as (they fade out by then)
 # Not in a clip's first or last moments: a flash on a cut looks like a glitch.
 EDGE_SEC = 0.5
@@ -150,6 +153,7 @@ class Moment:
     both: bool = False     # really big both ways: all three effects
     at: float | None = None      # League's exact time, when it's on a League event
     label: str | None = None     # that event: "Triple kill"
+    replay: bool = False         # big enough for a slow-motion replay (2C-2b)
 
     @property
     def strength(self) -> float:
@@ -186,7 +190,7 @@ def marked_moment(stream: Stream, segment: int, seg_in: float, seg_out: float,
             continue
         bi, br = bool(stream.big_impact[t]), bool(stream.big_reaction[t])
         m = Moment(segment, t, float(stream.impact[t]), float(stream.reaction[t]),
-                   big=bi or br, both=bi and br)
+                   big=bi or br, both=bi and br, replay=bi)
         if best is None or m.strength > best.strength:
             best = m
     return best
@@ -209,12 +213,12 @@ def _reacting(stream: Stream, t: float) -> bool:
 def event_moment(stream: Stream, segment: int, t: float, event: dict) -> Moment:
     """An effect on a League event: an impact (shake and boom), and the flash
     too when you're reacting to it."""
-    from ..analysis.game_events import reasons
+    from ..analysis.game_events import big, reasons
 
     label = (reasons([(t, event)]) or [str(event.get("text") or "")])[0]
     both = _reacting(stream, t)
     return Moment(segment, int(t), 1.0, 1.0 if both else 0.0, big=True, both=both, at=t,
-                  label=label)
+                  label=label, replay=big(event))
 
 
 def big_events(events: list[tuple[float, dict]], seg_in: float,
@@ -328,6 +332,12 @@ def effects_at(moment: Moment, at: float, on: list[str]) -> list[Effect]:
         out.append(Effect("flash", at, FLASH_SEC, why))
     if "shake" in on and (why == IMPACT or both):
         out.append(Effect("shake", at, SHAKE_SEC, why))
+    if "zoom" in on and (why == REACTION or both):
+        out.append(Effect("zoom", at, ZOOM_SEC, why))
+    if "replay" in on and moment.replay:
+        from ..render.replay import LENGTH_SEC
+
+        out.append(Effect("replay", at, LENGTH_SEC, why))
     if "sfx" in on:
         out.append(Effect("sfx", at, SFX_SEC, why, SOUNDS[IMPACT if both else why]))
     if moment.label:
@@ -366,6 +376,15 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
         per_segment[index] = len(moments)
     chosen = pick(found, how_many(fx.per_min(plan.recipe), plan.total_sec, bool(found)),
                   fx.min_gap_sec, per_segment)
+    # Slow-motion replays: the biggest moments only, one per clip, and no more
+    # than one every REPLAY_EVERY_SEC of video (one in a Short).
+    allowed = 1 if plan.recipe == "shorts" else max(1, int(plan.total_sec // REPLAY_EVERY_SEC))
+    replayed: set[int] = set()   # segments with one
+    for m in sorted((m for m in chosen if m.replay), key=lambda m: -m.strength):
+        if len(replayed) < allowed and m.segment not in replayed:
+            replayed.add(m.segment)
+        else:
+            m.replay = False
 
     placed: list[list[Effect]] = [[] for _ in plan.segments]
     tracks: dict[tuple[int, str], Path | None] = {}
@@ -379,6 +398,7 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
                 tracks[key] = track_path(conn, seg.recording_id, m.why)
             at = onset(tracks[key], m.second) if tracks[key] else None
             at = float(m.second) if at is None else at
-        at = min(max(at, seg.src_in + EDGE_SEC), seg.src_out - EDGE_SEC - SHAKE_SEC)
+        longest = ZOOM_SEC if "zoom" in on else SHAKE_SEC   # all of it inside the clip
+        at = min(max(at, seg.src_in + EDGE_SEC), seg.src_out - EDGE_SEC - longest)
         placed[m.segment] += effects_at(m, at, on)
     return placed

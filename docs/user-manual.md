@@ -1347,7 +1347,7 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 | What happens | Effect |
 |---|---|
 | A sudden jump in the game's sound (a teamfight breaking out, an explosion) | A **screen shake** and a **boom** |
-| You, suddenly much louder than your normal talking | A **flash** and a **hit** |
+| You, suddenly much louder than your normal talking | A **flash**, a **hit** and a **punch-in zoom** |
 | Both at once | All three |
 
 **Only on the moments you marked.** Each time you press a marker key (Numpad + or −) during a stream, that moment gets one effect: on the biggest moment in the 20 seconds before your press, since you press just after something happens. A really big moment wins first: the game's sound jumping by 10 dB or more, or you *talking* clearly louder than your normal talking (a bump at the mic never counts). At most 1.5 a minute in highlights (3 in Shorts).
@@ -1360,12 +1360,13 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 
 - **Flash:** the picture brightens at once and fades back over a third of a second.
 - **Screen shake:** the picture jolts about for under half a second, settling as it goes. Nothing is zoomed.
+- **Punch-in zoom:** on your reactions only (the shake stays on the action): the picture pushes in quickly to 1.2 times its size towards the middle of the screen, holds a moment and eases back out, in under a second. The video doesn't get longer. How far it pushes in is `effects.zoom_strength` (0.2).
 - **Sound effects:** as loud as the moment they're on (3 dB under it), and never far under the clip's loudest moment, so a boom on a quiet game moment is still heard.
 - Captions stay still and clear on top: they never shake or flash.
 
 **Switching them on and off:**
 
-- **For one video:** in **Review**, under **Finish it**, tick or untick **Flash**, **Screen shake** and **Sound effects**. Make a quick preview to see and hear them; a kept preview says when the effects have changed since it was made.
+- **For one video:** in **Review**, under **Finish it**, tick or untick **Flash**, **Screen shake**, **Sound effects**, **Punch-in zoom** and **Slow-motion replay**. Make a quick preview to see and hear them; a kept preview says when the effects have changed since it was made.
 - **One moment at a time:** **Each effect**, under **Finish it**, lists every moment with effects, like "Clip 5 at 2:48: shake + boom" (the time is where it is in the video). Untick one to leave just that moment out. It stays off even if you move or trim its clip.
 - **For every new video:** **Settings → Effects**, per kind of video. All off for now; Let's Plays have none unless you tick some there.
 - **How many:** **Settings → Effects**, big moments per minute.
@@ -1374,7 +1375,14 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 
 **Between clips.** Highlights cut straight from one clip to the next. To slide instead, pick **Slide** under **Between clips** in **Review** (for one video) or **Settings → Effects** (for every new one): like a sliding door, the next clip slides in over the last one from the right, easing in and settling, over 0.8 seconds, while the sound crossfades. Both clips play during the slide, so each one makes the video 0.8 seconds shorter (the chapters and the times in Review allow for it). A clip too short to lose 0.8 seconds at each end keeps hard cuts.
 
-**Coming next:** Phase 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on League's events.
+**Slow-motion replays.** After your biggest moments, the moment plays at normal speed first; then its last 3 seconds play again at half speed (6 seconds), and the clip carries on where it left off. "Biggest" means your multikills, your team's aces and steals, or, in games without League's events, a marked moment where the game's sound jumps hard.
+
+- **What you hear:** the game's sound, slowed with its pitch kept natural, and no voices (yours and Discord's are left out, so nobody comes out slow and deep). The music from your stream carries on underneath at normal speed, as if nothing had paused, and picks up from there when the clip resumes: the song never jumps or repeats. Quick previews have the stream's sound as it was, so a preview's replay has the voices in it too, slowed; the finished video doesn't.
+- **Where:** 1.5 seconds after the moment, so it lands and you start reacting first, moved to a gap between your words so you're never cut off. Never in a clip's last half second or inside a slide.
+- **How many:** one per clip at most, and no more than one every 2 minutes of video; one in a Short. A Short never goes over 60 seconds for one: if it would, it's left out (and the render says so).
+- **Each one makes the video 6 seconds longer.** The chapters, the times in Review and the **Each effect** list all allow for it ("Clip 5 at 2:48: shake + replay").
+
+(Freeze frames were left out: your choice.)
 
 ### 19.2e The music from your stream
 

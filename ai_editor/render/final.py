@@ -38,7 +38,7 @@ from ..analysis.captions import Cue, realistic_timing, segment_cues
 from ..analysis.clips import load_words
 from .audio import AudioChoice, beep_filters, plan_audio
 from .captions import short_document, write_ass
-from . import slide
+from . import replay, slide
 from .music import graph as music_graph, levels as music_levels, lowering, stretches
 from .vertical import Vertical, picture_graph
 
@@ -131,7 +131,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
                  sounds: list[sfx.Placed] | None = None, fx: Effects | None = None,
                  music_fades: tuple[bool, bool] = (True, True),
                  lowered: list[tuple[float, float, float]] | None = None,
-                 edge_fades: tuple[bool, bool] = (True, True)) -> list[str]:
+                 edge_fades: tuple[bool, bool] = (True, True),
+                 music_skip: float = 0.0) -> list[str]:
     """FFmpeg arguments for one segment: picture, rebuilt sound, beeps out, soft edges.
 
     ``captions``: an ASS file's name, in the folder FFmpeg runs in. A bare name
@@ -143,6 +144,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     piece's edges; ``lowered``: where to keep it under the talking (render/music.py).
     ``edge_fades``: the few-millisecond fades against clicks, in and out; off where
     the piece carries straight on into the next (render/slide.py).
+    ``music_skip``: the music runs this far ahead, after a slow-motion replay
+    earlier in the clip (render/replay.py).
     """
     finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
     moves = picture_fx.graph(effects or [], seg_in, preset.height, fx or Effects(),
@@ -169,7 +172,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     inputs = "".join(f"[a{n}]" for n in range(len(audio.streams)))
     if audio.music is not None:
         pieces, label = music_graph(audio.music, lowered or [], length, AUDIO_RATE,
-                                    fade_in=music_fades[0], fade_out=music_fades[1])
+                                    fade_in=music_fades[0], fade_out=music_fades[1],
+                                    skip=music_skip)
         graph += pieces
         inputs += label
     extra, labels = sfx.chains(sounds or [], 1, AUDIO_RATE)
@@ -186,6 +190,62 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     return [
         *(["-hwaccel", "cuda"] if gpu_decode else []),
         "-ss", f"{seg_in:.3f}", "-i", str(source), *sfx.input_args(sounds or []),
+        "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]",
+        "-t", f"{length:.4f}",
+        *codec, *COLOUR,
+        "-c:a", "pcm_f32le", "-ar", str(AUDIO_RATE),
+        str(target),
+    ]
+
+
+def game_streams(conn: sqlite3.Connection, recording_id: int, audio: AudioChoice) -> list[int]:
+    """The game's own sound, for a slow-motion replay: no voices. All of the sound
+    when the recording has only a mixed track (the voices can't be left out then)."""
+    rows = conn.execute("SELECT stream_index FROM audio_tracks WHERE recording_id = ? AND "
+                        "role = 'game'", (recording_id,)).fetchall()
+    game = [r[0] for r in rows if r[0] in audio.streams]
+    return game or list(audio.streams)
+
+
+def replay_args(source: Path, window_in: float, length: float, insert_at: float,
+                audio: AudioChoice, game: list[int], preset: RenderPreset,
+                source_size: tuple[int, int], codec: list[str], target: Path, *,
+                gpu_decode: bool, vertical: Vertical | None = None,
+                music_skip: float = 0.0) -> list[str]:
+    """FFmpeg arguments for a slow-motion replay (render/replay.py): ``length``
+    seconds of video from the recording at ``window_in``, at half speed. The
+    game's sound slowed, its pitch kept; no voices; the stream's music carrying
+    on at normal speed from where the clip paused (``insert_at``)."""
+    speed = replay.SPEED
+    if vertical is not None:
+        graph = [picture_graph(vertical, source_size, preset, finish=["format=yuv420p"])]
+    else:
+        picture = [f"fps={preset.fps}"]
+        if source_size != (preset.width, preset.height):
+            picture.append(f"scale={preset.width}:{preset.height}:flags=lanczos")
+        graph = [f"[0:v:0]{','.join([*picture, 'setsar=1', 'format=yuv420p'])}[v]"]
+    fmt = f"aresample={AUDIO_RATE},aformat=sample_fmts=fltp:channel_layouts=stereo"
+    for n, stream in enumerate(game):
+        graph.append(f"[0:{stream}]{fmt},atempo={speed:g}[g{n}]")
+    inputs = "".join(f"[g{n}]" for n in range(len(game)))
+    count = len(game)
+    music_input = []
+    if audio.music is not None:
+        pieces, label = music_graph(audio.music, [], length, AUDIO_RATE, fade_in=False,
+                                    fade_out=False, input=1, skip=music_skip)
+        graph += pieces
+        inputs += label
+        count += 1
+        music_input = ["-ss", f"{insert_at:.3f}", "-i", str(source)]
+    mix = f"amix=inputs={count}:normalize=0:duration=first," if count > 1 else ""
+    fade = min(FADE_SEC, length / 4)
+    graph.append(f"{inputs}{mix}afade=t=in:d={fade},"
+                 f"afade=t=out:st={length - fade:.4f}:d={fade}[a]")
+    return [
+        *(["-hwaccel", "cuda"] if gpu_decode else []),
+        # The picture's timestamps stretched: half speed from the right moment.
+        "-itsscale:v", f"{1 / speed:g}", "-ss", f"{window_in:.3f}", "-i", str(source),
+        *music_input,
         "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]",
         "-t", f"{length:.4f}",
         *codec, *COLOUR,
@@ -286,7 +346,11 @@ def render_plan(
     target.parent.mkdir(parents=True, exist_ok=True)
     lengths = [frame_exact(s.length, preset.fps) for s in plan.segments]
     slides = slide.overlaps(settings, plan, lengths, preset.fps)
-    total = sum(lengths) - sum(slides)
+    effects = effects_for_plan(conn, settings, plan)
+    replays = replay.for_plan(conn, settings, plan, preset.fps, effects)
+    replay_lengths = [[frame_exact(r.length, preset.fps) for r in clip] for clip in replays]
+    replayed = sum(sum(clip) for clip in replay_lengths)
+    total = sum(lengths) - sum(slides) + replayed
     _check_space(target.parent, total, preset)
 
     sources = {}
@@ -320,9 +384,14 @@ def render_plan(
     attempts.append(("libx264", False))
 
     fades = music_fades(plan)
-    effects = effects_for_plan(conn, settings, plan)
     if any(effects):
         notes.append(f"Effects: {effects_summary(effects)}.")
+    asked = sum(1 for clip in effects for e in clip if e.kind == "replay")
+    made = sum(len(clip) for clip in replays)
+    if asked > made:
+        notes.append(f"{asked - made} slow-motion replay{'s' if asked - made != 1 else ''} "
+                     "left out: too close to a clip's edge"
+                     + (", or the Short would go over its length limit." if short else "."))
     if any(slides):
         notes.append(f"Slides between clips: {sum(1 for s in slides if s)}.")
     heard: dict[int, list[Path]] = {}   # the tracks each recording's sound is made from
@@ -345,7 +414,7 @@ def render_plan(
     words: dict[int, list] = {}
     caption_count = 0
     done = 0.0
-    work_sec = sum(lengths) + sum(slides)   # each slide's two ends are rendered on their own
+    work_sec = sum(lengths) + sum(slides) + replayed   # each slide's ends are rendered alone
 
     def render_piece(piece: slide.Piece, path: Path) -> None:
         nonlocal caption_count, done
@@ -390,7 +459,9 @@ def render_plan(
                                 gpu_decode=gpu_decode, captions=subtitles, vertical=vertical,
                                 effects=effects[index], sounds=sounds, fx=settings.effects,
                                 music_fades=music_edges, lowered=lowered,
-                                edge_fades=(piece.cut_in, piece.cut_out))
+                                edge_fades=(piece.cut_in or piece.soft_in,
+                                            piece.cut_out or piece.soft_out),
+                                music_skip=piece.music_skip)
             try:
                 run_ffmpeg(args, duration_sec=length, what="rendering part of a video", cwd=work,
                            on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length)
@@ -405,10 +476,38 @@ def render_plan(
                 attempts.pop(0)
         done += length
 
+    def render_replay(item: slide.Replay, path: Path) -> None:
+        nonlocal done
+        segment = plan.segments[item.segment]
+        source, size = sources[segment.recording_id]
+        rid = segment.recording_id
+        window_in = segment.src_in + item.insert.window
+        while True:
+            encoder, gpu_decode = attempts[0]
+            args = replay_args(source, window_in, item.length,
+                               segment.src_in + item.insert.offset, audio[rid],
+                               game_streams(conn, rid, audio[rid]), preset, size,
+                               video_codec(settings, preset, encoder), path,
+                               gpu_decode=gpu_decode, vertical=vertical,
+                               music_skip=item.music_skip)
+            try:
+                run_ffmpeg(args, duration_sec=item.length, what="making a slow-motion replay",
+                           cwd=work)
+                break
+            except MediaProcessingFailed:
+                if len(attempts) == 1:
+                    raise
+                attempts.pop(0)
+        done += item.length
+        if on_progress:
+            on_progress(0.85 * done / work_sec)
+
     try:
-        for n, item in enumerate(slide.layout(lengths, slides)):
+        for n, item in enumerate(slide.layout(lengths, slides, replays, replay_lengths)):
             path = work / f"{n:03d}.mkv"
-            if isinstance(item, slide.Piece):
+            if isinstance(item, slide.Replay):
+                render_replay(item, path)
+            elif isinstance(item, slide.Piece):
                 render_piece(item, path)
             else:
                 leaving, arriving = work / f"{n:03d}_leaving.mkv", work / f"{n:03d}_arriving.mkv"

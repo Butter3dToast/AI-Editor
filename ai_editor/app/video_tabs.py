@@ -30,7 +30,8 @@ ALL_PARTS = "All parts"
 WHOLE_VIDEO = "Quick preview of the whole video"
 SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
 LAYOUTS = [("Zoomed centre", "crop"), ("Whole picture", "fit")]
-EFFECT_CHOICES = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx")]
+EFFECT_CHOICES = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx"),
+                  ("Punch-in zoom", "zoom"), ("Slow-motion replay", "replay")]
 BETWEEN_CHOICES = [("Hard cut", "cut"), ("Slide", "slide")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]

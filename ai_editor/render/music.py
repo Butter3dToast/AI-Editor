@@ -202,11 +202,17 @@ def volume_text(lowered: list[tuple[float, float, float]]) -> str | None:
 
 
 def graph(source: MusicSource, lowered: list[tuple[float, float, float]], length: float,
-          rate: int, *, fade_in: bool, fade_out: bool) -> tuple[list[str], str]:
-    """Graph pieces making the music layer from the segment's input (0), and its label."""
+          rate: int, *, fade_in: bool, fade_out: bool, input: int = 0,
+          skip: float = 0.0) -> tuple[list[str], str]:
+    """Graph pieces making the music layer from the segment's input (``input``), and its
+    label. ``skip``: start this far into it -- after a slow-motion replay, where
+    the music carried on while the clip waited (render/replay.py)."""
     fmt = f"aresample={rate},aformat=sample_fmts=fltp:channel_layouts=stereo"
-    pieces = [f"[0:{i}]{fmt}[mus_add{n}]" for n, i in enumerate(source.added)]
-    pieces += [f"[0:{i}]{fmt},volume=-1[mus_sub{n}]" for n, i in enumerate(source.taken_away)]
+    if skip > 0:
+        fmt = f"atrim=start={skip:.4f},asetpts=PTS-STARTPTS,{fmt}"
+    pieces = [f"[{input}:{i}]{fmt}[mus_add{n}]" for n, i in enumerate(source.added)]
+    pieces += [f"[{input}:{i}]{fmt},volume=-1[mus_sub{n}]"
+               for n, i in enumerate(source.taken_away)]
     inputs = "".join(f"[mus_add{n}]" for n in range(len(source.added))) + "".join(
         f"[mus_sub{n}]" for n in range(len(source.taken_away)))
     count = len(source.added) + len(source.taken_away)
