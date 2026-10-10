@@ -1,8 +1,8 @@
-"""Sound effects: a boom, a hit or a whoosh on a big moment.
+"""Sound effects: a boom or a hit on a big moment.
 
-**Which sound.** Yours first: put files in ``assets/sfx/boom``, ``assets/sfx/hit``
-or ``assets/sfx/whoosh`` (or anywhere in ``assets/sfx`` with the word in the
-name, like ``boom_01.wav``). Until there are any, AI-Editor uses a starter
+**Which sound.** Yours first: put files in ``assets/sfx/boom`` or
+``assets/sfx/hit`` (or anywhere in ``assets/sfx`` with the word in the name,
+like ``boom_01.wav``). Until there are any, AI-Editor uses a starter
 set it makes itself, from scratch, the way the Companion's click is made:
 no one else's sound, so no copyright question. With several, each moment
 gets one picked by when it happens, so the same video always sounds the same.
@@ -29,7 +29,7 @@ import numpy as np
 from ..config import Settings
 from . import Effect
 
-NAMES = ("boom", "hit", "whoosh")
+NAMES = ("boom", "hit")
 AUDIO_TYPES = {".wav", ".mp3", ".ogg", ".flac"}
 RATE = 48000
 STARTER_VERSION = 1
@@ -86,29 +86,7 @@ def make_hit(rng: np.random.Generator) -> np.ndarray:
     return np.tanh(2.2 * (body + smack) * _attack(t, 0.002))
 
 
-def make_whoosh(rng: np.random.Generator) -> np.ndarray:
-    """Air rushing past: noise whose pitch rises then falls, swelling and fading."""
-    from scipy.signal import butter, sosfilt_zi, sosfilt
-
-    length = int(0.8 * RATE)
-    noise = rng.standard_normal(length)
-    out = np.zeros(length)
-    block = 512
-    zi = None
-    for start in range(0, length, block):
-        where = start / length
-        centre = 350.0 + 2600.0 * np.sin(np.pi * where) ** 2
-        sos = butter(2, [centre * 0.6, centre * 1.6], "bandpass", fs=RATE, output="sos")
-        if zi is None:
-            zi = sosfilt_zi(sos) * 0.0
-        out[start:start + block], zi = sosfilt(sos, noise[start:start + block], zi=zi)
-    t = np.linspace(0.0, 1.0, length)
-    swell = np.sin(np.pi * np.clip(t / 0.62, 0, 1) / 2) ** 2 * np.cos(
-        np.pi / 2 * np.clip((t - 0.62) / 0.38, 0, 1)) ** 2
-    return out * swell
-
-
-MAKERS = {"boom": make_boom, "hit": make_hit, "whoosh": make_whoosh}
+MAKERS = {"boom": make_boom, "hit": make_hit}
 
 
 def starter(folder: Path, name: str) -> Path:
@@ -121,11 +99,7 @@ def starter(folder: Path, name: str) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(sum(map(ord, name)))
     mono = MAKERS[name](rng)
-    if name == "whoosh":   # it passes from left to right
-        pan = np.linspace(0.25, 0.75, mono.size)
-        stereo = np.column_stack([mono * np.sqrt(1 - pan), mono * np.sqrt(pan)])
-    else:
-        stereo = np.column_stack([mono, mono])
+    stereo = np.column_stack([mono, mono])
     stereo = stereo / (np.max(np.abs(stereo)) + 1e-9) * 10 ** (PEAK_DB / 20)
     temporary = path.with_suffix(".tmp.wav")
     sf.write(str(temporary), stereo.astype(np.float32), RATE, subtype="PCM_16")
@@ -227,6 +201,7 @@ class Placed:
     path: Path
     at: float        # seconds into the segment
     gain_db: float
+    skip: float = 0.0   # start this far into the sound (one carrying on into the next piece)
 
 
 def place(settings: Settings, effects: list[Effect], seg_in: float, seg_out: float,
@@ -251,6 +226,26 @@ def place(settings: Settings, effects: list[Effect], seg_in: float, seg_out: flo
     return out
 
 
+def _seconds(path: Path, known: dict[Path, float] = {}) -> float:  # noqa: B006 -- a cache
+    import soundfile as sf
+
+    if path not in known:
+        known[path] = sf.info(str(path)).duration
+    return known[path]
+
+
+def within_piece(placed: list[Placed], offset: float, length: float) -> list[Placed]:
+    """A clip's sound effects for one piece of it, starting ``offset`` into the
+    clip: those heard during it, one already playing carrying on where it was."""
+    out = []
+    for p in placed:
+        start = p.at - offset
+        if start >= length or start + _seconds(p.path) - p.skip <= 0:
+            continue
+        out.append(Placed(p.path, max(0.0, start), p.gain_db, p.skip + max(0.0, -start)))
+    return out
+
+
 def input_args(placed: list[Placed]) -> list[str]:
     return [arg for p in placed for arg in ("-i", str(p.path))]
 
@@ -261,8 +256,9 @@ def chains(placed: list[Placed], first_input: int, rate: int) -> tuple[list[str]
     for n, p in enumerate(placed):
         label = f"sfx{n}"
         delay = int(round(p.at * 1000))
+        trim = f"atrim=start={p.skip:.4f},asetpts=PTS-STARTPTS," if p.skip > 0 else ""
         pieces.append(f"[{first_input + n}:a:0]aresample={rate},"
-                      f"aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                      f"aformat=sample_fmts=fltp:channel_layouts=stereo,{trim}"
                       f"volume={p.gain_db:.2f}dB,adelay={delay}:all=1[{label}]")
         labels.append(f"[{label}]")
     return pieces, labels

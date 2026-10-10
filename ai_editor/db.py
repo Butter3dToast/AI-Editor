@@ -52,7 +52,7 @@ CREATE TABLE audio_tracks (
     id              INTEGER PRIMARY KEY,
     recording_id    INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
     stream_index    INTEGER NOT NULL,
-    role            TEXT    NOT NULL DEFAULT 'unknown',  -- mixed|mic|game|voice_chat|unknown
+    role            TEXT    NOT NULL DEFAULT 'unknown',  -- mixed|mic|game|voice_chat|music|unknown
     codec           TEXT,
     channels        INTEGER,
     sample_rate     INTEGER,

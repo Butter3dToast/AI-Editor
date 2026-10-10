@@ -73,12 +73,16 @@ def add_tracks(conn, tmp_path, sounds: dict[str, np.ndarray]):
     conn.commit()
 
 
-def test_separate_tracks_leave_the_stream_music_out(conn, settings, tmp_path):
+def test_separate_tracks_with_the_stream_music_as_its_own_layer(conn, settings, tmp_path):
     mic, game, discord, music = (noise(60, seed=n) for n in range(4))
     add_tracks(conn, tmp_path, {"mixed": mic + game + discord + music, "mic": mic, "game": game,
                                 "voice_chat": discord})
     choice = choose_tracks(conn, settings, 1)
     assert choice.separate and choice.streams == [2, 3, 4] and choice.voice == 2
+    # The music: the mix with every separate track taken away (render/music.py).
+    assert choice.music.added == [1] and choice.music.taken_away == [2, 3, 4]
+    assert "music from your stream" in choice.describe()
+    assert choose_tracks(conn, settings, 1, music=False).music is None
 
 
 def test_copied_tracks_use_the_mix_as_the_stream_sounded(conn, settings, tmp_path):
@@ -87,7 +91,8 @@ def test_copied_tracks_use_the_mix_as_the_stream_sounded(conn, settings, tmp_pat
     add_tracks(conn, tmp_path, {"mixed": everything, "mic": everything.copy(), "game": rest,
                                 "voice_chat": rest.copy()})
     choice = choose_tracks(conn, settings, 1)
-    assert not choice.separate and choice.streams == [1]
+    assert not choice.separate and choice.streams == [1] and choice.music is None
+    assert "music and all" in choice.describe()
 
 
 def test_discord_can_be_left_out(conn, settings, tmp_path):
@@ -95,17 +100,18 @@ def test_discord_can_be_left_out(conn, settings, tmp_path):
     add_tracks(conn, tmp_path, {"mixed": mic + game + discord, "mic": mic, "game": game,
                                 "voice_chat": discord})
     settings.render.include_voice_chat = False
-    assert choose_tracks(conn, settings, 1).streams == [2, 3]
+    choice = choose_tracks(conn, settings, 1)
+    assert choice.streams == [2, 3]
+    assert choice.music.taken_away == [2, 3, 4]  # Discord is in the mix all the same
 
 
-def test_the_stream_music_can_be_kept_by_choice(conn, settings, tmp_path):
-    """The creator asked for the switch (2026-10-04): the mix as viewers heard it."""
+def test_a_spotify_track_of_its_own_is_used_as_it_is(conn, settings, tmp_path):
+    """OBS track 5 (manual 7.3): nothing to take away."""
     mic, game, discord, music = (noise(60, seed=n) for n in range(4))
     add_tracks(conn, tmp_path, {"mixed": mic + game + discord + music, "mic": mic, "game": game,
-                                "voice_chat": discord})
-    settings.render.include_stream_music = True
+                                "voice_chat": discord, "music": music})
     choice = choose_tracks(conn, settings, 1)
-    assert not choice.separate and choice.streams == [1] and "music included" in choice.describe()
+    assert choice.streams == [2, 3, 4] and choice.music.added == [5] and choice.music.own_track
 
 
 # --- The render -------------------------------------------------------------------------

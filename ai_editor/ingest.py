@@ -41,7 +41,7 @@ from .logging_setup import get_logger
 
 log = get_logger(__name__)
 
-TRACK_ROLES = ("mixed", "mic", "game", "voice_chat", "unknown")
+TRACK_ROLES = ("mixed", "mic", "game", "voice_chat", "music", "unknown")
 
 # Bump these when the way a proxy or audio file is made changes meaning, so
 # files made the old way are regenerated instead of silently reused.

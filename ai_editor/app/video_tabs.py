@@ -31,6 +31,7 @@ WHOLE_VIDEO = "Quick preview of the whole video"
 SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
 LAYOUTS = [("Zoomed centre", "crop"), ("Whole picture", "fit")]
 EFFECT_CHOICES = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects", "sfx")]
+BETWEEN_CHOICES = [("Hard cut", "cut"), ("Slide", "slide")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]
 PART_WIDTHS = ["10%", "20%", "45%", "25%"]
@@ -170,6 +171,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         with gr.Row():
             captions_box = gr.Checkbox(value=settings.captions.highlights,
                                        label="Burn in captions (your words)")
+            music_box = gr.Checkbox(value=settings.render.include_stream_music,
+                                    label="Music from your stream",
+                                    info="Kept under the talking. Quick previews have the "
+                                         "stream's sound as it was.")
             effects_box = gr.CheckboxGroup(
                 EFFECT_CHOICES, value=settings.effects.highlights,
                 label="Effects on the big moments",
@@ -177,6 +182,12 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             episode_box = gr.Number(label="Episode number", precision=0, visible=False)
             part_pick = gr.Dropdown(choices=[ALL_PARTS], value=ALL_PARTS, label="Parts",
                                     visible=False)
+        with gr.Row():
+            between_pick = gr.Radio(BETWEEN_CHOICES, value=settings.effects.between_clips,
+                                    label="Between clips", visible=False,
+                                    info="Slide: the next clip slides in over the last.")
+            moments_box = gr.CheckboxGroup([], value=[], label="Each effect", visible=False,
+                                           info="Untick one to leave just that moment out.")
         with gr.Row():
             render_btn = gr.Button("Render the finished video", variant="primary")
             open_btn = gr.Button("Open the finished video")
@@ -311,7 +322,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     def table_for(plan):
         if plan.recipe == "letsplay":
             return pd.DataFrame(videos.part_table(plan), columns=videos.PART_COLUMNS)
-        return pd.DataFrame(read(videos.plan_table, plan), columns=videos.PLAN_COLUMNS)
+        return pd.DataFrame(read(videos.plan_table, plan, settings), columns=videos.PLAN_COLUMNS)
 
     def shaped_table(plan):
         widths = PART_WIDTHS if plan is not None and plan.recipe == "letsplay" else PLAN_WIDTHS
@@ -422,7 +433,96 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         names = ", ".join(LABELS[k] for k in chosen)
         return f"Effects in this video: **{names}**. Make a quick preview to see and hear them."
 
-    effects_box.input(set_effects, [plan_pick, effects_box], review_msg)
+    effects_changed = effects_box.input(set_effects, [plan_pick, effects_box], review_msg)
+
+    def show_moments(plan_id):
+        """Each moment with effects, ticked unless switched off; hidden when there are none."""
+        from ..effects import moments
+
+        conn = init_db(settings.db_path)
+        try:
+            plan, _ = videos.get_plan(conn, plan_id)
+            found = [] if plan is None else moments(conn, settings, plan)
+        finally:
+            conn.close()
+        if not found:
+            return gr.CheckboxGroup(choices=[], value=[], visible=False)
+        off = set((plan.source or {}).get("effects_off", []))
+        return gr.CheckboxGroup(choices=found, value=[k for _, k in found if k not in off],
+                                visible=True)
+
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(show_moments, plan_pick, moments_box)
+    effects_changed.then(show_moments, plan_pick, moments_box)  # once the switches are saved
+
+    def set_moments(plan_id, kept):
+        from ..effects import moments, set_moments_on
+
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None:
+                return "Pick a plan first."
+            every = [k for _, k in moments(conn, settings, plan)]
+            set_moments_on(plan, every, kept or [])
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        left_out = len(every) - len(set(kept or []) & set(every))
+        return (f"{len(every) - left_out} of {len(every)} moments keep their effects. Make a quick "
+                "preview to see and hear them.")
+
+    moments_box.input(set_moments, [plan_pick, moments_box], review_msg)
+
+    def show_between(plan_id):
+        from ..render.slide import between
+
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe != "highlights":
+            return gr.Radio(visible=False)
+        return gr.Radio(visible=True, value=between(settings, plan))
+
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(show_between, plan_pick, between_pick)
+
+    def set_between(plan_id, choice):
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None:
+                return "Pick a plan first."
+            plan.source["between"] = choice
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        return ("Each clip slides in over the last. Make a quick preview to see it."
+                if choice == "slide" else "Hard cuts between clips.")
+
+    between_pick.input(set_between, [plan_pick, between_pick], review_msg)
+
+    def show_music(plan_id):
+        plan, _ = read(videos.get_plan, plan_id)
+        on = settings.render.include_stream_music if plan is None else \
+            (plan.source or {}).get("music", settings.render.include_stream_music)
+        return gr.Checkbox(value=bool(on))
+
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(show_music, plan_pick, music_box)
+
+    def set_music(plan_id, on):
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None:
+                return "Pick a plan first."
+            plan.source["music"] = bool(on)
+            save_plan(conn, plan, status)
+        finally:
+            conn.close()
+        return ("The music from your stream will be in this video, kept under the talking."
+                if on else "No music from your stream in this video.")
+
+    music_box.input(set_music, [plan_pick, music_box], review_msg)
 
     def part_preview(plan_id, part):
         plan, _ = read(videos.get_plan, plan_id)

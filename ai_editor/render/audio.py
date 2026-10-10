@@ -3,11 +3,13 @@
 **Which tracks.** OBS records a mixed track (what the stream heard) and, set
 up as in manual chapter 7, separate tracks for the mic, the game and Discord.
 A finished video is rebuilt from the separate ones where they really are
-separate: the music playing on stream (Spotify) is only on the mixed track,
-and music on YouTube gets videos claimed. Until 27 Sep the creator's OBS put
-the same sound on several tracks -- the "mic" track was a copy of the mixed
-one -- so every recording is checked, and one without real separate tracks
-uses the mixed track, exactly as the stream sounded.
+separate, so each can be handled on its own. The music playing on stream
+(Spotify, DMCA-free) is added back as a layer of its own, kept out of the
+way of talking (render/music.py), unless it's switched off. Until 27 Sep
+the creator's OBS put the same sound on several tracks -- the "mic" track
+was a copy of the mixed one -- so every recording is checked, and one
+without real separate tracks uses the mixed track, exactly as the stream
+sounded, music and all.
 
 **Beeps.** On the 26 Sep League stream the Companion's confirmation click
 reached the microphone (a stand-up mic hears the headphones) at all 8
@@ -26,6 +28,7 @@ import numpy as np
 
 from ..config import Settings
 from ..logging_setup import get_logger
+from .music import MusicSource, source_of
 
 log = get_logger(__name__)
 
@@ -53,17 +56,18 @@ NOTCH_WIDTH_HZ = 150
 class AudioChoice:
     streams: list[int]                 # stream indexes mixed together
     voice: int                         # the stream the creator's voice (and any beep) is on
-    separate: bool                     # rebuilt from separate tracks (stream music left out)
+    separate: bool                     # rebuilt from separate tracks
     beeps: list[tuple[float, float]] = field(default_factory=list)  # recording time
-
-    music_by_choice: bool = False      # the mixed track because Settings asked for the music
+    music: MusicSource | None = None   # the stream's music, as a layer of its own
 
     def describe(self) -> str:
+        if self.separate and self.music is not None:
+            where = "its own track" if self.music.own_track else "the stream's mix"
+            return (f"your separate mic, game and Discord tracks, with the music from your stream "
+                    f"(from {where}) kept under the talking")
         if self.separate:
             return "your separate mic, game and Discord tracks (music on stream left out)"
-        if self.music_by_choice:
-            return "the stream's mixed track, music included (Settings: keep the stream's music)"
-        return "the stream's mixed track, as viewers heard it"
+        return "the stream's mixed track, as viewers heard it, music and all"
 
 
 def _read(path: Path, start_sec: float, seconds: float):
@@ -92,7 +96,9 @@ def is_copy(a: Path, b: Path) -> bool:
     return there > 0 and differs <= COPY_LEVEL * there
 
 
-def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: int) -> AudioChoice:
+def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: int,
+                  music: bool | None = None) -> AudioChoice:
+    """``music``: the stream's music in the video; None = as Settings say."""
     rows = conn.execute("SELECT stream_index, role, extracted_path FROM audio_tracks "
                         "WHERE recording_id = ? ORDER BY stream_index", (recording_id,)).fetchall()
     if not rows:
@@ -100,15 +106,13 @@ def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: in
     by_role = {r["role"]: r for r in rows}
     mixed = by_role.get("mixed") or rows[0]
     fallback = AudioChoice([mixed["stream_index"]], mixed["stream_index"], False)
-    if settings.render.include_stream_music:
-        fallback.music_by_choice = True
-        return fallback
+    if music is None:
+        music = settings.render.include_stream_music
 
-    wanted = [role for role in SEPARATE_ROLES
-              if role in by_role and (role != "voice_chat" or settings.render.include_voice_chat)]
-    if "mic" not in wanted or "game" not in wanted:
+    present = [role for role in SEPARATE_ROLES if role in by_role]
+    if "mic" not in present or "game" not in present:
         return fallback
-    paths = {role: Path(by_role[role]["extracted_path"] or "") for role in wanted}
+    paths = {role: Path(by_role[role]["extracted_path"] or "") for role in present}
     paths["mixed"] = Path(mixed["extracted_path"] or "")
     if not all(p.is_file() for p in paths.values()):
         log.warning("Recording #%s: its extracted tracks are missing, so the mixed track is used",
@@ -119,12 +123,20 @@ def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: in
     if is_copy(paths["mic"], paths["mixed"]) or is_copy(paths["game"], paths["mixed"]) \
             or is_copy(paths["mic"], paths["game"]):
         return fallback
-    if "voice_chat" in wanted and (is_copy(paths["voice_chat"], paths["game"])
-                                   or is_copy(paths["voice_chat"], paths["mic"])
-                                   or is_copy(paths["voice_chat"], paths["mixed"])):
-        wanted.remove("voice_chat")
+    if "voice_chat" in present and (is_copy(paths["voice_chat"], paths["game"])
+                                    or is_copy(paths["voice_chat"], paths["mic"])
+                                    or is_copy(paths["voice_chat"], paths["mixed"])):
+        present.remove("voice_chat")
+    # Everything really in the mix, whether or not the video uses it: the
+    # music is what's left of the mix without all of them.
+    parts = [by_role[role]["stream_index"] for role in present]
+    wanted = [role for role in present
+              if role != "voice_chat" or settings.render.include_voice_chat]
     mic = by_role["mic"]["stream_index"]
-    return AudioChoice([by_role[role]["stream_index"] for role in wanted], mic, True)
+    choice = AudioChoice([by_role[role]["stream_index"] for role in wanted], mic, True)
+    if music:
+        choice.music = source_of(conn, recording_id, parts)
+    return choice
 
 
 def beep_match(x: np.ndarray, rate: int, hz: float) -> np.ndarray:
@@ -159,9 +171,10 @@ def markers_of(conn: sqlite3.Connection, recording_id: int) -> list[float]:
         "ORDER BY recording_time_sec", (recording_id,))]
 
 
-def plan_audio(conn: sqlite3.Connection, settings: Settings, recording_id: int) -> AudioChoice:
+def plan_audio(conn: sqlite3.Connection, settings: Settings, recording_id: int,
+               music: bool | None = None) -> AudioChoice:
     """Everything the renderer needs to know about one recording's sound."""
-    choice = choose_tracks(conn, settings, recording_id)
+    choice = choose_tracks(conn, settings, recording_id, music)
     markers = markers_of(conn, recording_id)
     if markers:
         row = conn.execute("SELECT extracted_path FROM audio_tracks WHERE recording_id = ? AND "

@@ -221,8 +221,15 @@ def shown_in_preview(settings: Settings, plan: EditPlan, part: int | None = None
     from ..publish import fingerprint
     from ..render.parts import part_plan
 
+    from ..render.slide import between
+
     shown = part_plan(plan, part) if part else plan
-    return f"{fingerprint(shown)}:{','.join(switches(settings, plan))}"
+    key = f"{fingerprint(shown)}:{','.join(switches(settings, plan))}"
+    off = ",".join(sorted((plan.source or {}).get("effects_off", [])))
+    # Added in 2C-3b, only when used, so previews made before still match.
+    if between(settings, plan) != "cut" or off:
+        key += f":{between(settings, plan)}:{off}"
+    return key
 
 
 def remember_preview(settings: Settings, path: Path, plan: EditPlan,
@@ -269,8 +276,10 @@ def plan_choices(conn) -> list[tuple[str, str]]:
     return out
 
 
-def plan_table(conn, plan: EditPlan) -> list[list]:
-    """A highlight plan's pieces in order, PLAN_COLUMNS."""
+def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[list]:
+    """A highlight plan's pieces in order, PLAN_COLUMNS. With ``settings``, the
+    times allow for slides between clips (render/slide.py)."""
+    from ..render.slide import overlaps, starts
     def day(iso: str | None) -> str:
         try:
             return datetime.fromisoformat(iso).astimezone().strftime("%d %b").lstrip("0")
@@ -279,13 +288,14 @@ def plan_table(conn, plan: EditPlan) -> list[list]:
 
     days = {r["id"]: day(r["recorded_at"] or r["imported_at"])
             for r in conn.execute("SELECT id, recorded_at, imported_at FROM recordings")}
-    rows, position = [], 0.0
-    for n, s in enumerate(plan.segments):
+    lengths = [s.length for s in plan.segments]
+    slides = overlaps(settings, plan, lengths, 60) if settings else []
+    rows = []
+    for n, (s, position) in enumerate(zip(plan.segments, starts(lengths, slides))):
         where = "Teaser" if s.kind == "teaser" else short_clock(position)
         rows.append([n + 1, where, f"#{s.recording_id} · {days.get(s.recording_id, '')}",
                      clock(s.src_in), f"{s.length:.0f}s",
                      f"{s.score:.2f}" if s.score is not None else "-", why(s.reasons)])
-        position += s.length
     return rows
 
 

@@ -85,29 +85,30 @@ def key_of(part: int | None) -> str:
     return f"part {part}" if part else "video"
 
 
-def placed(plan: EditPlan, fps: int) -> list[tuple[float, Segment]]:
+def placed(plan: EditPlan, fps: int,
+           slides: list[float] | None = None) -> list[tuple[float, Segment]]:
     """Each piece with where it starts in the finished video. Lengths are whole
-    frames, exactly as the renderer cuts them (render.final.frame_exact)."""
+    frames, exactly as the renderer cuts them (render.final.frame_exact).
+    ``slides``: each cut's slide (render/slide.py): a clip starts as it slides in."""
     from .render.final import frame_exact
+    from .render.slide import starts
 
-    out, t = [], 0.0
-    for segment in plan.segments:
-        out.append((t, segment))
-        t += frame_exact(segment.length, fps)
-    return out
+    lengths = [frame_exact(s.length, fps) for s in plan.segments]
+    return list(zip(starts(lengths, slides or []), plan.segments))
 
 
-def sections(plan: EditPlan, fps: int, every_sec: float) -> list[Section]:
+def sections(plan: EditPlan, fps: int, every_sec: float,
+             slides: list[float] | None = None) -> list[Section]:
     """Where the chapters go: per clip for highlights, about every ``every_sec`` otherwise."""
     from .render.final import frame_exact
 
     found: list[Section] = []
     if plan.recipe != "letsplay":
-        for start, segment in placed(plan, fps):
+        for start, segment in placed(plan, fps, slides):
             found.append(Section(start, start + frame_exact(segment.length, fps), [segment]))
     else:
         current: Section | None = None
-        for start, segment in placed(plan, fps):
+        for start, segment in placed(plan, fps, slides):
             end = start + frame_exact(segment.length, fps)
             if current is None or current.length >= every_sec:
                 current = Section(start, end, [segment])
@@ -476,8 +477,12 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     from .render import parts as lp
 
     video = lp.part_plan(plan, part) if part else plan
+    from .render.final import frame_exact
+    from .render.slide import overlaps
+
     fps = settings.render.presets[settings.render.preset].fps
-    found = sections(video, fps, settings.publish.chapter_every_min * 60)
+    slides = overlaps(settings, video, [frame_exact(s.length, fps) for s in video.segments], fps)
+    found = sections(video, fps, settings.publish.chapter_every_min * 60, slides)
     describe_sections(conn, found)
     lets_play = plan.recipe == "letsplay"
 

@@ -287,10 +287,11 @@ class MediaInfo:
     def track_roles_guess(self) -> dict[int, str]:
         """Best guess at which track is which, by the OBS convention in the manual.
 
-        Tracks are 1 mixed, 2 mic, 3 game, 4 voice chat. This is only a
-        suggestion: import asks the creator to confirm, then remembers it.
+        Tracks are 1 mixed, 2 mic, 3 game, 4 voice chat, 5 music (Spotify).
+        This is only a suggestion: import asks the creator to confirm, then
+        remembers it.
         """
-        convention = ["mixed", "mic", "game", "voice_chat"]
+        convention = ["mixed", "mic", "game", "voice_chat", "music"]
         if len(self.audio) == 1:
             return {self.audio[0].index: "mixed"}
         return {

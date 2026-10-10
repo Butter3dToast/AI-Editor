@@ -266,7 +266,7 @@ If you move your facecam later, edit the layout.
 Put these in your Assets folder:
 
 - `music/` — background music that's licensed for YouTube (for example from the YouTube Audio Library).
-- `sfx/` — sound effects (whoosh, boom, etc.).
+- `sfx/` — sound effects (boom, hit).
 - `fonts/` — fonts for captions.
 - `overlays/` — images such as emojis or memes you own or are allowed to use.
 
@@ -314,12 +314,14 @@ Our standard track setup:
 | Microphone | 1 and 2 |
 | Desktop Audio or Game Capture audio | 1 and 3 |
 | Discord (use an **Application Audio Capture** source set to Discord) | 1 and 4 |
+| Spotify (or whatever plays your music) | 1 and 5 |
 
 3. Close the window.
+4. **Settings → Output → Recording**: under **Audio Track**, tick **1 to 5**, so all five are recorded.
 
 **Tip:** Using **Application Audio Capture** for the game and for Discord (instead of Desktop Audio) keeps them properly separated. Notification sounds and music players then won't leak into the game track.
 
-**Music (Spotify) goes on track 1 only.** Viewers still hear it on stream, but finished videos are built from tracks 2–4, so the music stays out of them and your YouTube uploads don't get claimed. Each source ticks only its own track besides 1: if the microphone were also on track 3, say, the finished video would have your voice in it twice.
+**Music (Spotify) on track 5.** Finished videos are rebuilt from tracks 2–5, so each sound can be handled on its own: your music is added back underneath, kept out of the way of talking (19.2e). Recordings from before you added track 5 still work: AI-Editor takes the music out of track 1 instead. Only play DMCA-free music if it goes in your videos. Each source ticks only its own track besides 1: if the microphone were also on track 3, say, the finished video would have your voice in it twice.
 
 ### 7.4 Enable the OBS WebSocket (for Stream Companion)
 
@@ -1247,8 +1249,7 @@ What the render does:
 - **Full quality from your original recording**, not the preview copy: 1920×1080 at 60 fps, encoded on your graphics card. The picture and sound are exact to the frame at every join.
 - **Clean joins.** The sound fades over a few thousandths of a second at every cut, too short to hear as a dip but enough to stop a click.
 - **YouTube loudness, without squashing.** The whole video is turned up or down in one go toward about −14 LUFS (YouTube's level), so a quiet moment stays quieter than a loud one, the way it was. Only the loudest peaks are held down, by 3 dB at most, which you can't hear. A recording made very quiet (EP 1 was −25 LUFS) is raised only as far as that allows, so it ends up a little under YouTube's level, but never distorted. Turn it up in your player if it's too quiet.
-- **Music on stream is left out** when the recording has separate tracks (chapter 7.3). The finished sound is rebuilt from your mic, game and Discord tracks. Spotify is only on track 1, so it isn't included, and music in a YouTube video gets it claimed. A recording without real separate tracks (a Twitch VOD, or an OBS recording from before your tracks were set up) uses the mixed track, exactly as the stream sounded. The render says which it used.
-  - **Want the music anyway?** Tick **Settings → Captions and sound → Keep the music from your stream (Spotify)**. Finished videos then use the mixed track, exactly as viewers heard it, music included. Expect a Content ID claim on YouTube for most commercial songs: the video may be muted, earn nothing for you, or be blocked in some countries. With it ticked, Discord is always in, because it's part of the mix.
+- **Rebuilt from your separate tracks** when the recording has them (chapter 7.3): your mic, the game and Discord, each handled on its own, with **the music from your stream** added back underneath (19.2e). A recording without real separate tracks (a Twitch VOD, or an OBS recording from before your tracks were set up) uses the mixed track, exactly as the stream sounded, music and all. The render says which it used.
 - **Marker beeps are taken out.** On the 26 Sep stream the Companion's click reached your microphone. Each click is found by its sound, only near a marker you pressed, and that one pitch is filtered out for half a second, leaving your voice and the game around it untouched. The click is off now (chapter 24), so new recordings don't have any.
 
 A 10-minute highlight takes about 3 minutes.
@@ -1321,12 +1322,27 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 **Switching them on and off:**
 
 - **For one video:** in **Review**, under **Finish it**, tick or untick **Flash**, **Screen shake** and **Sound effects**. Make a quick preview to see and hear them; a kept preview says when the effects have changed since it was made.
+- **One moment at a time:** **Each effect**, under **Finish it**, lists every moment with effects, like "Clip 5 at 2:48: shake + boom" (the time is where it is in the video). Untick one to leave just that moment out. It stays off even if you move or trim its clip.
 - **For every new video:** **Settings → Effects**, per kind of video. All off for now; Let's Plays have none unless you tick some there.
 - **How many:** **Settings → Effects**, big moments per minute.
 
-**Your own sound effects.** Until you add some, AI-Editor uses its own starter boom, hit and whoosh, made from scratch, so there's no copyright question; they're basic, and real recorded ones sound far better. A good free source made for exactly this: **YouTube Studio → Audio Library → Sound effects** (free to use in YouTube videos); Pixabay's sound effects are another. Not CapCut's: its sounds are licensed for use inside CapCut only. To use yours, click **Open my sound effects folder** in **Settings → Effects** and drop files (.wav, .mp3, .ogg or .flac) into its **boom**, **hit** or **whoosh** folder, or anywhere in it with the word in the name (`boom_02.wav`). With several of a kind, each moment gets one, and the same video always gets the same ones. Use only sounds you're allowed to use on YouTube (chapter 27).
+**Your own sound effects.** Until you add some, AI-Editor uses its own starter boom and hit, made from scratch, so there's no copyright question; they're basic, and real recorded ones sound far better. A good free source made for exactly this: **YouTube Studio → Audio Library → Sound effects** (free to use in YouTube videos); Pixabay's sound effects are another. Not CapCut's: its sounds are licensed for use inside CapCut only. To use yours, click **Open my sound effects folder** in **Settings → Effects** and drop files (.wav, .mp3, .ogg or .flac) into its **boom** or **hit** folder, or anywhere in it with the word in the name (`boom_02.wav`). With several of a kind, each moment gets one, and the same video always gets the same ones. Use only sounds you're allowed to use on YouTube (chapter 27).
 
-**Coming next:** 2C-3, a music bed that ducks under your voice, whoosh transitions, and a switch per effect in Review. Then 2E, League's events. Then 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on those events.
+**Between clips.** Highlights cut straight from one clip to the next. To slide instead, pick **Slide** under **Between clips** in **Review** (for one video) or **Settings → Effects** (for every new one): like a sliding door, the next clip slides in over the last one from the right, easing in and settling, over 0.8 seconds, while the sound crossfades. Both clips play during the slide, so each one makes the video 0.8 seconds shorter (the chapters and the times in Review allow for it). A clip too short to lose 0.8 seconds at each end keeps hard cuts.
+
+**Coming next:** Phase 2E, League's events. Then 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on those events.
+
+### 19.2e The music from your stream
+
+The DMCA-free music you play on stream goes in your finished videos, as viewers heard it: highlights, Shorts and Let's Plays.
+
+- **Out of the way of talking.** While you or a Discord friend talks, the music is kept at least 15 dB under the voice, lowered only as much as that needs and only there (never more than 12 dB), easing down and back up. Your music usually sits about 17 dB under your voice already, so mostly it plays exactly as on stream. A blip at the mic with nothing said never dips it.
+- **Smooth at cuts.** Each clip of a highlight video comes from a different point in the song, so the music alone fades in and out over a third of a second at each cut, while your voice and the game still cut cleanly.
+- **Where it comes from.** From track 5 when your recording has one (7.3). Older recordings: AI-Editor takes everything else out of the mixed track, which leaves just the music. Recordings with only one track keep it exactly as recorded.
+- **Switching it off:** for one video, untick **Music from your stream** in **Review → Finish it**; for every video, **Settings → Captions and sound**.
+- **Quick previews** have the stream's sound as it was (the preview copy has only the mixed track), so the lowering and the cut fades are in the finished video only.
+
+Only use music you're allowed to use on YouTube: commercial songs usually get a video claimed (chapter 27).
 
 ### 19.3 Exporting to DaVinci Resolve (free)
 
@@ -1603,10 +1619,11 @@ You can change the recordings and output folders there. The cache and models fol
 | Storage | Low space warning | 100 GB | When to warn. |
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
-| Render | Keep the music from your stream (`render.include_stream_music`) | Off | On: finished videos use the stream's mixed track, Spotify included (19.2). Usually gets a YouTube Content ID claim. |
+| Render | Music from your stream in videos (`render.include_stream_music`) | On | Your stream's music under the talking (19.2e). Only for DMCA-free music. |
 | Effects | Which are on (`effects.highlights`, `shorts`, `lets_play`) | none, until Phase 2E | Per kind of video; each video can change its own in Review (19.2d). |
 | Effects | Effects per minute (`effects.highlights_per_min`, `shorts_per_min`) | 1.5 / 3 | At most: one per moment you marked with the Stream Companion. |
 | Effects | Sound effects volume (`effects.sfx_volume_db`) | -3 dB | Against the moment they're on. |
+| Effects | Between clips (`effects.between_clips`) | `cut` | Highlights: `cut`, or `slide` (the next clip slides in over the last, 19.2d). |
 | Effects | Flash / shake strength (`effects.flash_strength`, `shake_strength`) | 0.35 / 0.02 | 1 would flash white; the shake's swing as a share of the picture's height. |
 | Shorts | Suggestions per stream (`shorts.per_recording`) | 5 (1–20) | Your Numpad − moments always, then the best others up to this (17.1). |
 | Shorts | Length (`shorts.min_length_sec`, `max_length_sec`) | 15–60 s | How long a Short may be. |

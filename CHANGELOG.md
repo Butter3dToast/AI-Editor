@@ -3,6 +3,35 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.13.0 — Phase 2C-3: Your stream's music, and sliding between clips — 10 October 2026
+
+**New**
+
+- **The music from your stream is in your videos**: the DMCA-free music you
+  play on Spotify, as viewers heard it, in highlights, Shorts and Let's
+  Plays. It's lowered only where it would cover you or a Discord friend
+  talking, and fades in and out at each cut so the song doesn't jump
+  between clips. Your separate mic, game and Discord tracks are still used,
+  so the marker-click removal and the Discord switch work as before. Switch
+  it off for one video in **Review → Finish it**, or for every video in
+  **Settings → Captions and sound**.
+- **Spotify on its own track (OBS track 5).** Recordings made since you set
+  it up use it directly; older ones get the music by taking everything else
+  out of the mixed track (you listened: "sounds good"). Manual 7.3.
+- **Sliding between clips**, like a sliding door: the next clip slides in
+  over the last one from the right, easing in and settling, while the sound
+  crossfades. Pick **Slide** under **Between clips** in Review, or as the
+  default in **Settings → Effects**. Hard cuts stay the default. Each slide
+  makes the video 0.8 seconds shorter; chapter times allow for it.
+- **A switch for every effect moment**: once effects are ticked for a video,
+  **Each effect** in Review lists each moment ("Clip 5 at 2:48: shake +
+  boom"). Untick one to leave just that moment out.
+
+**Changed**
+
+- The whoosh between clips, tried first, is gone: you preferred the slide.
+- The import guesses track 5 is your music.
+
 ## 0.12.0 — Phase 2C-1: Effects on your marked moments — 10 October 2026
 
 AI-Editor can now add effects to the moments you marked with the Stream

@@ -496,6 +496,15 @@ class Effects(BaseModel):
     min_gap_sec: float = Field(6.0, ge=1.0)
     # Sound effects' loudness against the loud parts of the clip they're in.
     sfx_volume_db: float = Field(-3.0, ge=-30.0, le=10.0)
+    # Between the clips of a highlight video: a hard cut, or the new clip
+    # sliding in over the old one (render/slide.py). The creator's choice
+    # (2026-10-10): hard cut, slide optional.
+    between_clips: Literal["cut", "slide"] = "cut"
+
+    @field_validator("between_clips", mode="before")
+    @classmethod
+    def _was_whoosh(cls, v):
+        return "slide" if v == "whoosh" else v   # tried first, replaced by the slide
     flash_strength: float = Field(0.35, ge=0.05, le=1.0)    # 1: a white screen
     shake_strength: float = Field(0.02, ge=0.005, le=0.08)  # how far, as a share of the height
 
@@ -522,10 +531,10 @@ class Render(BaseModel):
     preset: str = "youtube_1080p60"
     # Friends on Discord in finished videos (only possible with a separate Discord track).
     include_voice_chat: bool = True
-    # The music playing on stream (Spotify) in finished videos: the mixed track,
-    # as viewers heard it. Off by default, because commercial music gets
-    # YouTube videos claimed; the creator asked for the switch (2026-10-04).
-    include_stream_music: bool = False
+    # The music playing on stream (Spotify) in finished videos, kept under the
+    # talking (render/music.py). The creator plays DMCA-free music and wants
+    # it in every video (2026-10-10); each video can switch it off in Review.
+    include_stream_music: bool = True
 
     @model_validator(mode="after")
     def _known_preset(self) -> "Render":

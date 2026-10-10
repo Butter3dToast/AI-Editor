@@ -109,9 +109,9 @@ def build(settings: Settings, worker: Worker) -> None:
                 cap_lp = gr.Checkbox(value=c.lets_play, label="Burn in captions on Let's Plays")
                 music = gr.Checkbox(
                     value=settings.render.include_stream_music,
-                    label="Keep the music from your stream (Spotify)",
-                    info="Off: left out. Commercial music usually gets a YouTube video claimed "
-                         "(muted, demonetised or blocked).")
+                    label="Music from your stream in videos",
+                    info="Lowered where it would cover talking. Only for DMCA-free music: "
+                         "commercial music gets YouTube videos claimed.")
         with gr.Accordion("Effects", open=True):
             gr.Markdown("On the moments you marked with the Stream Companion: a jump in the "
                         "game's sound gets a shake and a boom, you shouting gets a flash and a "
@@ -134,11 +134,16 @@ def build(settings: Settings, worker: Worker) -> None:
                 fx_volume = gr.Slider(-15.0, 6.0, value=settings.effects.sfx_volume_db, step=1.0,
                                       label="Sound effects volume (dB)",
                                       info="Against the moment they're on. 0: as loud as it.")
+            fx_between = gr.Radio([("Hard cut", "cut"), ("Slide", "slide")],
+                                  value=settings.effects.between_clips,
+                                  label="Highlights: between clips",
+                                  info="Slide: the next clip slides in over the last, like a "
+                                       "sliding door.")
             with gr.Row():
                 fx_folder = gr.Button("Open my sound effects folder")
-                fx_msg = gr.Markdown("Put your own sounds in its **boom**, **hit** and "
-                                     "**whoosh** folders (.wav, .mp3, .ogg or .flac). Until "
-                                     "then AI-Editor uses its own.")
+                fx_msg = gr.Markdown("Put your own sounds in its **boom** and **hit** folders "
+                                     "(.wav, .mp3, .ogg or .flac). Until then AI-Editor uses "
+                                     "its own.")
         with gr.Accordion("Let's Play", open=True):
             with gr.Row():
                 lp_minutes = gr.Number(value=lp.target_min, minimum=10, maximum=90,
@@ -269,7 +274,7 @@ def build(settings: Settings, worker: Worker) -> None:
 
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
-             effects_lp, rate_hl, rate_sh, sfx_db):
+             effects_lp, rate_hl, rate_sh, sfx_db, between):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -300,6 +305,7 @@ def build(settings: Settings, worker: Worker) -> None:
             ("effects", "highlights_per_min"): float(rate_hl),
             ("effects", "shorts_per_min"): float(rate_sh),
             ("effects", "sfx_volume_db"): float(sfx_db),
+            ("effects", "between_clips"): between or "cut",
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -320,7 +326,8 @@ def build(settings: Settings, worker: Worker) -> None:
     save_btn.click(save, [folder_boxes["raw"], folder_boxes["output"], hl_minutes, hl_bar,
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
-                          pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume],
+                          pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume,
+                          fx_between],
                  settings_msg)
 
 

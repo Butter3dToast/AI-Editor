@@ -66,12 +66,19 @@ def sounds_for(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, seg
                      sfx.tracks(conn, segment.recording_id), plan.plan_id)
 
 
+AUDIO = ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+
+
+def _video(gpu: bool) -> list[str]:
+    return (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
+            if gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
+
+
 def _encode(proxy: Path, start: float, length: float, target: Path, gpu: bool,
             graph: str | None = None, sounds: list | None = None) -> list[str]:
     from ..effects import sfx
 
-    video = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26", "-b:v", "0"]
-             if gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
+    video = _video(gpu)
     # Same shape for every piece, whichever recording it came from.
     shape = f"scale=-2:{HEIGHT},fps={FPS},format=yuv420p"
     picture = (["-filter_complex", graph, "-map", "[v]", "-map", "[a]"] if graph else
@@ -197,36 +204,64 @@ def render_preview(
     proxies = {r["id"]: Path(r["proxy_path"]) for r in conn.execute(
         f"SELECT id, proxy_path FROM recordings WHERE id IN "
         f"({','.join('?' * len(plan.recording_ids))})", plan.recording_ids)}
-    from ..effects import for_plan
+    from ..effects import for_plan, sfx
+    from ..render import slide
 
     words: dict[int, list[Word]] = {}
     cues: list[Cue] = []
     parts: list[Path] = []
-    offset = 0.0
     total = max(plan.total_sec, 1.0)
     # The cuts reel (labels) shows where cuts are, not how the video looks.
     effects = for_plan(conn, settings, plan) if labels is None else [[] for _ in plan.segments]
+    lengths = [s.length for s in plan.segments]
+    slides = (slide.overlaps(settings, plan, lengths, FPS) if labels is None
+              else [0.0] * max(0, len(lengths) - 1))
+    starts = slide.starts(lengths, slides)
+    clip_sounds = [sounds_for(conn, settings, plan, s, effects[i])
+                   for i, s in enumerate(plan.segments)]
+    made = 0.0
+
+    def encode_piece(piece: slide.Piece, path: Path) -> None:
+        nonlocal gpu, made
+        segment = plan.segments[piece.segment]
+        proxy = proxies.get(segment.recording_id)
+        if proxy is None or not proxy.exists():
+            raise NotImported(f"The preview copy of recording #{segment.recording_id} is missing")
+        seg_in = segment.src_in + piece.offset
+        sounds = sfx.within_piece(clip_sounds[piece.segment], piece.offset, piece.length)
+        mine = effects[piece.segment]
+        graph = (fx_graph(f"[0:v:0]scale=-2:{HEIGHT},fps={FPS},setsar=1[pic]",
+                          mine, sounds, seg_in, HEIGHT, settings)
+                 if mine or sounds else None)
+        try:
+            run_ffmpeg(_encode(proxy, seg_in, piece.length, path, gpu, graph, sounds),
+                       what="cutting part of a video preview")
+        except MediaProcessingFailed:
+            if not gpu:
+                raise
+            gpu = False
+            run_ffmpeg(_encode(proxy, seg_in, piece.length, path, False, graph, sounds),
+                       what="cutting part of a video preview")
+        made += piece.length
+        if on_progress:
+            on_progress(min(0.95, made / total))
+
     try:
-        for index, segment in enumerate(plan.segments):
-            proxy = proxies.get(segment.recording_id)
-            if proxy is None or not proxy.exists():
-                raise NotImported(f"The preview copy of recording #{segment.recording_id} is missing")
-            part = parts_dir / f"{index:03d}.mp4"
-            sounds = sounds_for(conn, settings, plan, segment, effects[index])
-            graph = (fx_graph(f"[0:v:0]scale=-2:{HEIGHT},fps={FPS},setsar=1[pic]",
-                              effects[index], sounds, segment.src_in, HEIGHT, settings)
-                     if effects[index] else None)
-            try:
-                run_ffmpeg(_encode(proxy, segment.src_in, segment.length, part, gpu, graph,
-                                   sounds), what="cutting part of a video preview")
-            except MediaProcessingFailed:
-                if not gpu:
-                    raise
-                gpu = False
-                run_ffmpeg(_encode(proxy, segment.src_in, segment.length, part, False, graph,
-                                   sounds), what="cutting part of a video preview")
+        for n, item in enumerate(slide.layout(lengths, slides)):
+            part = parts_dir / f"{n:03d}.mp4"
+            if isinstance(item, slide.Piece):
+                encode_piece(item, part)
+            else:
+                leaving, arriving = parts_dir / f"{n:03d}_leaving.mp4", parts_dir / f"{n:03d}_arriving.mp4"
+                encode_piece(item.leaving, leaving)
+                encode_piece(item.arriving, arriving)
+                run_ffmpeg(slide.compose_args(leaving, arriving, item.length, _video(gpu), part,
+                                              ["-g", str(FPS), *AUDIO]),
+                           what="sliding to the next clip in a video preview")
             parts.append(part)
 
+        for index, segment in enumerate(plan.segments):
+            offset = starts[index]
             if labels is not None:
                 if labels[index]:
                     cues.append(Cue(offset, offset + segment.length, labels[index]))
@@ -235,9 +270,6 @@ def render_preview(
                     words[segment.recording_id] = load_words(conn, segment.recording_id)
                 cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
                          segment_cues(words[segment.recording_id], segment.src_in, segment.src_out)]
-            offset += segment.length
-            if on_progress:
-                on_progress(min(0.95, offset / total))
 
         listing = parts_dir / "parts.txt"
         listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
