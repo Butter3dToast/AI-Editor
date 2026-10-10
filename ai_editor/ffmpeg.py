@@ -32,6 +32,12 @@ log = get_logger(__name__)
 
 # Windows: stop a console window flashing up for every probe.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# The heavy work (cutting, rendering, measuring) runs below normal priority:
+# Windows serves the desktop, browser, OBS and games first, and FFmpeg takes
+# what's left, which is nearly everything when nothing else is busy. At
+# normal priority on all 28 threads it competed with the desktop as an
+# equal, and the creator's desktop froze while doing several things (10 Oct).
+_BACKGROUND = _NO_WINDOW | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
 
 # Folders searched when ffmpeg is not on PATH. Set from settings at startup.
@@ -179,7 +185,7 @@ def run_ffmpeg(
         text=True,
         encoding="utf-8",
         errors="replace",
-        creationflags=_NO_WINDOW,
+        creationflags=_BACKGROUND,
         cwd=cwd,
     )
     keep_with_us(process)
@@ -231,7 +237,7 @@ def measure_loudness(inputs: list[str], *, target_lufs: float, true_peak: float)
     ]
     log.debug("FFmpeg (measuring loudness): %s", subprocess.list2cmdline(command))
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
-                            errors="replace", creationflags=_NO_WINDOW)
+                            errors="replace", creationflags=_BACKGROUND)
     if result.returncode != 0:
         log.error("FFmpeg failed while measuring loudness (exit %s):\n%s", result.returncode,
                   result.stderr[-4000:], extra=FILE_ONLY)

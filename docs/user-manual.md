@@ -464,7 +464,16 @@ You don't need to do anything, set up an account, or get a key. The times come f
 
 **After you import the recording**, the import message adds a line like *"League events: 2 matches (1 won), 9/4/12, triple kill, 3 objectives"*. In the **Library**, pick the recording and open **Every League event** under its details: each one with its time in the recording (`1:02:13 · Triple kill`), so you can jump there in a video player and check. Turrets your teammates take aren't listed, to keep it short, but they're still logged.
 
-**What uses them:** from Phase 2E-2 (the next update), these events pick clips and place effects. Recordings made before version 0.14 have no League events; they keep working as before.
+**What uses them** (Phase 2E-2, version 0.15):
+
+- **Picking clips.** Every kill of yours lifts the fight leading up to it (12 seconds before, 3 after), and multikills, aces and your team's objectives more. Champions dying close together count as a **team fight**. Your **deaths** only count when you react: laughing, shouting, or clearly louder than usual. A quiet death isn't a highlight; a loud one often is.
+- **Clean edges.** A clip doesn't end while champions are still dying, so the kill that pays the fight off stays in. A match starting or ending works like a scene change: a clip never runs across it.
+- **Downtime.** Queue, champion select, loading and the post-game lobby (League time outside a match) are never picked, unless you marked a moment there. A gap of more than 12 minutes between logged matches is left alone: that's more likely a match the Companion didn't see.
+- **Reasons you can read.** The **Why** column in Review and the Clips tab say what happened: **Kill**, **2 kills**, **Triple kill**, **Penta kill**, **Ace**, **Baron steal**, **Victory**. A clip's details in the Clips tab list its League events with their times.
+- **Effects** (19.2d) and **Shorts** (17): your multikills, aces and steals.
+- **Titles and chapters.** The local AI is told the clip's League events, so a chapter can be called "Triple kill in bot lane" when it really was one.
+
+Recordings made before version 0.14 have no League events; they keep working as before.
 
 **Switching it off:** `companion.league_events: false` in `config/settings.yaml`.
 
@@ -1135,11 +1144,12 @@ Vertical clips are built entirely inside AI-Editor and rendered here. The finish
 1. Analyse the recording, and ideally **Rate with AI** (12.3): the AI's "makes sense on its own" check is what picks good Shorts.
 2. **Create video → Shorts**, pick the stream or recording, and click **Make the plan**. A couple of seconds later Jobs lists up to five suggestions, and why each was picked:
    - every moment you marked as Short-worthy while live (**Numpad −**), always, even past five;
+   - then League's big moments: your multikills, your team's aces, and steals (8.3);
    - then clips you gave a 👍 that make sense on their own;
    - then the AI's best clips that make sense on their own.
 
    Never a 👎 moment, a "BRB" screen, or a moment that's already a Short. Being in a highlight video doesn't count: Shorts are how viewers find your long videos.
-3. In **Review**, each suggestion is its own plan (**Video plan** → *Short: ...*). Choose **How the game fills the tall frame**, then **Quick preview** to watch it as it will look, in a few seconds. In the preview, the faint red areas are what the apps' buttons and text cover; the red line marks what stays free (17.3). The shading isn't in the finished Short. Each layout's preview is kept: switch back and the one you made is there, and it's there again next time you open the Short.
+3. In **Review**, each suggestion is its own plan (**Video plan** → *Short: ...*). If it starts too late or ends too early, click its row and **adjust the cut** (18.3). Choose **How the game fills the tall frame**, then **Quick preview** to watch it as it will look, in a few seconds. In the preview, the faint red areas are what the apps' buttons and text cover; the red line marks what stays free (17.3). The shading isn't in the finished Short. Each layout's preview is kept: switch back and the one you made is there, and it's there again next time you open the Short.
 4. **Render the finished video**: about 15 seconds. It's saved in `output\shorts`. Rendering marks the moment as used, so the next suggestions are different moments.
 5. **Publish** writes a title, a line or two and hashtags (20). Once the long video the moment is in is on YouTube, paste its link in *that* video's Publish section (**This video's YouTube link**): every Short from it then says **Full video:** with the link.
 
@@ -1149,7 +1159,7 @@ From the command line: `ai-editor shorts 7` lists the suggestions; `ai-editor sh
 
 ### 17.2 What a Short looks like
 
-**Length:** 15–60 seconds. Each one opens about 8 seconds before its moment, straight into the action, and runs 3 seconds past it so your reaction finishes. It never starts or ends mid-word.
+**Length:** 15–60 seconds. Each one opens about 25 seconds before its moment and runs 3 seconds past it so your reaction finishes. (It used to open 8 seconds before, but the moment AI-Editor finds is often you reacting, which comes after the play: on 10 Oct five Shorts started after what you were reacting to.) A Short from your **Numpad −** mark runs from about 45 seconds before your press to 5 seconds after it, since the good bit comes before you press. It never starts or ends mid-word. If a cut is still wrong, adjust it in Review (18.3).
 
 **Layout.** You don't have a facecam yet, so the game fills the frame in one of two ways:
 
@@ -1162,7 +1172,7 @@ How far it's zoomed is `shorts.crop_fill` (0.75; 1 fills the whole height, lower
 
 **When you get a facecam:** mark where it is in your OBS scene once, under `shorts.facecam` (for example `League of Legends: { x: 0.0, y: 0.7, w: 0.2, h: 0.3 }`, as shares of the picture). From then on that game's Shorts put your facecam across the top third and the game below it. (In the window, you'll draw the box instead.)
 
-**Captions:** big, bold, 3 words at a time, the word you're saying lit up in yellow. Only your words. Recordings with just one mixed sound track get none for Let's Play games, because the characters' lines can't be told apart from yours (19.2c). Change them with `captions.shorts_size`, `shorts_words` and `shorts_highlight`.
+**Captions:** off unless you tick **Burn in captions** for the Short in Review, like every video. When on: big, bold, 3 words at a time, the word you're saying lit up in yellow. Only your words. Recordings with just one mixed sound track get none for Let's Play games, because the characters' lines can't be told apart from yours (19.2c). Change them with `captions.shorts_size`, `shorts_words` and `shorts_highlight`.
 
 ### 17.3 Safe zones (important for TikTok)
 
@@ -1218,7 +1228,22 @@ Click a row first, then:
 
 Changes are saved straight away. You can close AI-Editor and carry on later. Everything you change is kept, so AI-Editor can learn from it (chapter 22).
 
-**Not built yet:** the length bar, trimming a clip's start or end, effects, editing captions, and undo.
+### 18.3 Adjust the cut (highlights and Shorts)
+
+When AI-Editor found the right moment but cut it too late or too early, fix it yourself. Click the clip's row, and **Adjust clip** appears under the player:
+
+- **Start** and **End**: where the clip starts and ends in the recording, to a tenth of a second.
+- **◀ 5 s**, **◀ 1 s**, **1 s ▶**, **5 s ▶**: move that edge earlier or later. The player shows the result straight away: from the new start, or the last few seconds up to the new end.
+- **Start here** / **End here**: play the clip, pause the player where you want the edge, and press it.
+- Or type a time in **Start** or **End** (`1:34:52`, or `34:52.5`) and press Enter.
+- **Watch 30 s either side**: plays from half a minute before the clip to half a minute after, so you can see what was cut off. You can move the start back past where AI-Editor's clip began, as far as you like.
+- **Play the new cut**, then **Save the new cut**.
+
+Saving moves each edge at most half a second, only so it never cuts you off mid-word, and shows the times it used. A Short can be at most 60 seconds. Captions, effects and chapters follow the new cut by themselves; make a quick preview to watch it, then render.
+
+**AI-Editor remembers your cut.** The clip in the Clips library takes your start and end, so the next highlight video or Short with that moment uses your version, and analysing the recording again never replaces it.
+
+**Not built yet:** the length bar, editing captions, and undo (Phase 2D).
 
 ---
 
@@ -1317,7 +1342,7 @@ What's captioned:
 
 AI-Editor can add a few effects to the biggest moments of your highlights and Shorts by itself. Nothing to place by hand.
 
-**Off unless you tick them, for now.** In the first test their timing felt random, so they stay off by default until Phase 2E, when League's own events (kills, objectives) place them. Tick them per video in **Review** whenever you want them.
+**Off unless you tick them, for now.** In the first test their timing felt random, so they stay off by default until you've tried them with League's own events (8.3). Tick them per video in **Review** whenever you want them.
 
 | What happens | Effect |
 |---|---|
@@ -1325,7 +1350,9 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 | You, suddenly much louder than your normal talking | A **flash** and a **hit** |
 | Both at once | All three |
 
-**Only on the moments you marked.** Each time you press a marker key (Numpad + or −) during a stream, that moment gets one effect: on the biggest moment in the 20 seconds before your press, since you press just after something happens. A really big moment wins first: the game's sound jumping by 10 dB or more, or you *talking* clearly louder than your normal talking (a bump at the mic never counts). Clips you didn't mark get no effects until 2E, when League's own events (kills, objectives) place them too. At most 1.5 a minute in highlights (3 in Shorts).
+**Only on the moments you marked.** Each time you press a marker key (Numpad + or −) during a stream, that moment gets one effect: on the biggest moment in the 20 seconds before your press, since you press just after something happens. A really big moment wins first: the game's sound jumping by 10 dB or more, or you *talking* clearly louder than your normal talking (a bump at the mic never counts). At most 1.5 a minute in highlights (3 in Shorts).
+
+**League's own moments** (when the Stream Companion logged the match, 8.3): your **multikills**, your team's **aces** and **steals** get a shake and a boom by themselves, exactly on the second League says they happened (and the flash too if you're shouting about it). A mark with a kill or objective of yours in its 20 seconds puts its effect exactly on that, the biggest one if there are several. A single kill on its own gets none, so a one-sided game doesn't shake all the way through. **Each effect** names them: "Clip 3 at 1:40: Baron steal: shake + boom".
 
 **Lined up to the instant.** Each effect starts exactly when the sound does, to the hundredth of a second, from the recording's own sound tracks.
 
@@ -1347,7 +1374,7 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 
 **Between clips.** Highlights cut straight from one clip to the next. To slide instead, pick **Slide** under **Between clips** in **Review** (for one video) or **Settings → Effects** (for every new one): like a sliding door, the next clip slides in over the last one from the right, easing in and settling, over 0.8 seconds, while the sound crossfades. Both clips play during the slide, so each one makes the video 0.8 seconds shorter (the chapters and the times in Review allow for it). A clip too short to lose 0.8 seconds at each end keeps hard cuts.
 
-**Coming next:** Phase 2E, League's events. Then 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on those events.
+**Coming next:** Phase 2C-2, punch-in zooms, slow-motion replays and freeze frames, placed on League's events.
 
 ### 19.2e The music from your stream
 
@@ -1473,12 +1500,12 @@ Not built yet.
 - From audio and video: your reactions, chat spikes.
 
 **What gets trimmed**
-- Queue waiting, champion select, loading screens, long dead timers, post-game lobby.
+- Queue waiting, champion select, loading screens and the post-game lobby, when the Stream Companion logged the match (8.3).
 
 **Tips**
-- Always run **Stream Companion** during League. Without it, AI-Editor falls back to reading the screen, which is less accurate.
+- Always run **Stream Companion** during League. Without it there are no League events, and AI-Editor goes by sound, your markers and chat alone.
 - No account setup or keys are needed for League data.
-- Pentakills and outplays automatically score very high for highlights and Shorts.
+- Kills, multikills, aces and steals score high for highlights, and the big ones become Short suggestions and get effects (8.3).
 
 ### 21.3 Escape from Tarkov (streams)
 
@@ -1606,7 +1633,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Analysis | Voice detector | Auto | Whether AI-Editor skips parts with no speech before transcribing. **Auto** uses it only on a separate microphone track, where it's reliable and stops the AI inventing words over silence. On a mixed track it's off, because there it misses speech under game music. **On** or **Off** force it either way. |
 | Analysis | Silence threshold | −50 dB (−90 to −10) | Anything quieter than this counts as silence. Raise it (towards −40) if quiet background hum stops AI-Editor spotting dead air. Changing it takes effect the next time you run analyze, without redoing the slow steps. |
 | Analysis | Sound listening window | 2 seconds (1–10) | How much audio is heard at once when listening for laughter, shouting and gunfire. Longer is steadier but can blur two quick moments together. |
-| Scoring | Weights | Markers 4.0; laughter 2.5; screaming 1.2; chat 1.2; shouting 1.0; explosions 0.9; gunfire 0.8; loudness 0.5; talking 0.2; silence −0.5 | How much each thing lifts a moment's score (chapter 11.1b). Raise the one you think is being missed, lower the one that keeps winning wrongly. A weight for a signal a recording doesn't have is simply skipped. |
+| Scoring | Weights | Markers 4.0; laughter 2.5; screaming 1.2; chat 1.2; shouting 1.0; explosions 0.9; gunfire 0.8; loudness 0.5; talking 0.2; silence −0.5. League (8.3): your kill 1.0; multikill 2.0 (a penta counts fully); ace 1.2; objective 1.0; a death you react to 1.0; team fight 0.8 | How much each thing lifts a moment's score (chapter 11.1b). Raise the one you think is being missed, lower the one that keeps winning wrongly. A weight for a signal a recording doesn't have is simply skipped. |
 | Scoring | Sustain | Gunfire 15 s, explosions 10 s | Sounds that only mean something when they keep going. One shot is someone testing their gun; fifteen seconds of it is a firefight. Raise it to ignore short bursts, lower it to catch quick exchanges. |
 | Scoring | Combination bonus / threshold | 1.2 / 0.1 | Added for each extra *kind* of thing happening at once — a fight **and** a reaction beats either alone. Kinds are: your markers, reactions (laughter, shouting, screaming), action (gunfire, explosions), audience (chat), and loudness. The threshold is how strong a signal must be to count; it's low on purpose, because the sound model hears laughter faintly. Every Wardogs clip you liked had both a fight and you reacting; every one you rejected had only one. Set the bonus to 0 to score every signal on its own. |
 | Scoring | Marker look-back / look-ahead | 60 s / 10 s | How far either side of a marker press counts as the moment you meant. You press *after* the good bit, so the look-back is the important one. Too short and the build-up is missed; too long and ordinary play gets lifted with it. |
@@ -1626,7 +1653,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Let's Play | Mode / target / range / extension / trim level | Split / 30 / 25–35 / 45–60 / Light | See chapter 15.2. |
 | Let's Play | Title card | Empty (none), 4 s | Text shown over the start of every part, e.g. `Ep {episode} – Part {part}`; `{episode}` and `{part}` are filled in. Off because the YouTube title says it. |
 | Highlights | Target length / min score / fill order / lead-in / longest clip / ordering | 10 min / 0.55 / Oldest first / 15 s / 50 s / Timeline | See chapter 16.2. |
-| Shorts | Length / layout / captions | 15–60 s / Facecam top / Word pop | See chapter 17.2. |
+| Shorts | Length / lead-in / captions | 15–60 s / 25 s (marked: 45 s before your press, 5 s after) / Off | See chapter 17.2. Burned-in captions are always off unless you tick them for a video. |
 | Render | Encoder | NVENC H.264 | Fast GPU encoding. |
 | Render | Loudness target | About −14 LUFS | Suits YouTube's volume level. |
 | Captions | Highlights / Let's Plays | Off / Off | Burn your words into finished videos of that kind, every time. Off: add `--captions` to one render instead (chapter 19.2c). |

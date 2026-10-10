@@ -35,6 +35,31 @@ BETWEEN_CHOICES = [("Hard cut", "cut"), ("Slide", "slide")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]
 PART_WIDTHS = ["10%", "20%", "45%", "25%"]
+# Adjust the cut: earlier or later by 5 or 1 seconds.
+NUDGES = ("◀ 5 s", "◀ 1 s", "1 s ▶", "5 s ▶")
+
+
+def cut_clock(seconds: float) -> str:
+    """1:34:52.4: a time in the recording, to the tenth of a second."""
+    whole = max(0.0, float(seconds))
+    hours, rest = divmod(whole, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{int(hours)}:{int(minutes):02d}:{secs:04.1f}"
+
+
+def parse_clock(text: str | None) -> float | None:
+    """'1:34:52.4', '34:52' or '5692' as seconds; None if it isn't a time."""
+    parts = (text or "").strip().split(":")
+    try:
+        values = [float(p) for p in parts]
+    except ValueError:
+        return None
+    if not 1 <= len(values) <= 3 or any(v < 0 for v in values):
+        return None
+    seconds = 0.0
+    for v in values:
+        seconds = seconds * 60 + v
+    return seconds
 
 
 def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) -> None:
@@ -162,11 +187,34 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             with gr.Column(scale=2):
                 review_player = gr.HTML(videos.player(
                     None, note="Click a row to watch it here, or make a quick preview of the "
-                               "whole video."))
+                               "whole video."), elem_id="aie-review-player")
                 preview_btn = gr.Button(WHOLE_VIDEO)
                 layout_pick = gr.Radio(LAYOUTS, value="crop", visible=False,
                                        label="How the game fills the tall frame",
                                        info="Then make a quick preview to see it.")
+                # Adjust the cut: brought forward from Phase 2D (the creator, 10 Oct).
+                with gr.Group(visible=False) as adjust_box:
+                    adjust_info = gr.Markdown()
+                    start_txt = gr.Textbox(label="Start", max_lines=1,
+                                           info="In the recording. Type a time and press Enter, "
+                                                "or use the buttons below.")
+                    with gr.Row():
+                        start_nudges = [gr.Button(label, min_width=50, size="sm")
+                                        for label in NUDGES]
+                        start_here = gr.Button("Start here", min_width=80, size="sm")
+                    end_txt = gr.Textbox(label="End", max_lines=1,
+                                         info="Or pause the player above where you want it, and "
+                                              "press 'here'.")
+                    with gr.Row():
+                        end_nudges = [gr.Button(label, min_width=50, size="sm")
+                                      for label in NUDGES]
+                        end_here = gr.Button("End here", min_width=80, size="sm")
+                    with gr.Row():
+                        around_btn = gr.Button("Watch 30 s either side")
+                        play_cut_btn = gr.Button("Play the new cut")
+                    save_cut_btn = gr.Button("Save the new cut", variant="primary")
+                    here_time = gr.Number(visible=False)
+                pending_cut = gr.State(None)
         gr.Markdown("### Finish it")
         with gr.Row():
             captions_box = gr.Checkbox(value=settings.captions.highlights,
@@ -554,6 +602,138 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return videos.player(proxy, s.src_in, s.src_out), row, gr.skip()
 
     plan_tbl.select(pick_row, plan_pick, [review_player, sel, part_pick])
+
+    # --- Adjust the cut ------------------------------------------------------------------
+
+    def cut_view(cut: dict | None, note: str = "", play: tuple[float, float] | None = None):
+        """What the adjust panel shows for a cut that isn't saved yet."""
+        if not cut:
+            return gr.update(visible=False), None, "", "", "", gr.skip()
+        length = cut["end"] - cut["start"]
+        saved = (abs(cut["start"] - cut["was"][0]) < 0.05 and abs(cut["end"] - cut["was"][1]) < 0.05)
+        info = (f"**Adjust clip {cut['index'] + 1}**: {cut_clock(cut['start'])} to "
+                f"{cut_clock(cut['end'])} in the recording, {length:.1f} s."
+                + ("" if saved else " **Not saved yet.**") + (f" {note}" if note else ""))
+        player = gr.skip()
+        if play is not None:
+            proxy = read(videos.proxy_of, cut["rid"])
+            player = videos.player(proxy, max(0.0, play[0]), play[1],
+                                   note=f"{cut_clock(play[0])} to {cut_clock(play[1])}")
+        return (gr.update(visible=True), cut, info, cut_clock(cut["start"]),
+                cut_clock(cut["end"]), player)
+
+    cut_outputs = [adjust_box, pending_cut, adjust_info, start_txt, end_txt, review_player]
+
+    def open_cut(plan_id, evt: gr.SelectData):
+        row = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe == "letsplay" or not 0 <= row < len(plan.segments):
+            return cut_view(None)
+        s = plan.segments[row]
+        cut = {"plan": plan_id, "index": row, "rid": s.recording_id, "start": s.src_in,
+               "end": s.src_out, "was": [s.src_in, s.src_out]}
+        return cut_view(cut)[:-1] + (gr.skip(),)   # the row's own player is already showing it
+
+    plan_tbl.select(open_cut, plan_pick, cut_outputs)
+    for event in (plan_pick.change, review_tab.select):
+        event(lambda: cut_view(None), None, cut_outputs)
+
+    def moved(cut, edge, value, note=""):
+        if not cut:
+            return cut_view(None)
+        new = dict(cut, **{edge: max(0.0, float(value))})
+        if new["end"] - new["start"] < 1.0:
+            return cut_view(cut, "The end must be after the start.")
+        cut = new
+        # Watch the edge that moved: the new start onwards, or the last seconds to the end.
+        play = ((cut["start"], cut["end"]) if edge == "start"
+                else (max(cut["start"], cut["end"] - 6.0), cut["end"]))
+        return cut_view(cut, note, play)
+
+    def nudge(edge, delta):
+        return lambda cut: moved(cut, edge, (cut or {}).get(edge, 0.0) + delta) if cut \
+            else cut_view(None)
+
+    for button, delta in zip(start_nudges, (-5, -1, 1, 5)):
+        button.click(nudge("start", delta), pending_cut, cut_outputs)
+    for button, delta in zip(end_nudges, (-5, -1, 1, 5)):
+        button.click(nudge("end", delta), pending_cut, cut_outputs)
+
+    def typed(edge):
+        def apply(cut, text):
+            seconds = parse_clock(text)
+            if seconds is None:
+                return cut_view(cut, f"Couldn't read \"{text}\": write it like 1:34:52 or 34:52.")
+            if cut and abs(seconds - cut[edge]) < 0.05:
+                return (gr.skip(),) * len(cut_outputs)   # only clicked in and out of the box
+            return moved(cut, edge, seconds)
+        return apply
+
+    # Enter, or clicking anywhere else: a typed time counts either way.
+    for box, edge in ((start_txt, "start"), (end_txt, "end")):
+        box.submit(typed(edge), [pending_cut, box], cut_outputs)
+        box.blur(typed(edge), [pending_cut, box], cut_outputs)
+
+    # Where the player is paused, read in the browser.
+    here_js = ("(cut, t) => { const v = document.querySelector('#aie-review-player video'); "
+               "return [cut, v ? v.currentTime : -1]; }")
+
+    def here(edge):
+        def apply(cut, t):
+            if t is None or t < 0:
+                return cut_view(cut, "Play the clip in the player above first, and pause it "
+                                     "where you want it.")
+            return moved(cut, edge, t)
+        return apply
+
+    start_here.click(here("start"), [pending_cut, here_time], cut_outputs, js=here_js)
+    end_here.click(here("end"), [pending_cut, here_time], cut_outputs, js=here_js)
+
+    around_btn.click(lambda cut: cut_view(cut, "", (cut["start"] - 30.0, cut["end"] + 30.0))
+                     if cut else cut_view(None), pending_cut, cut_outputs)
+    play_cut_btn.click(lambda cut: cut_view(cut, "", (cut["start"], cut["end"]))
+                       if cut else cut_view(None), pending_cut, cut_outputs)
+
+    def save_cut(plan_id, cut, start_text, end_text):
+        if not cut or cut.get("plan") != plan_id:
+            return gr.skip(), gr.skip(), "Click a clip in the list first.", *cut_view(None)
+        # What's in the boxes is what's saved, Enter pressed or not (10 Oct: a
+        # typed start and end were ignored because Save came straight after).
+        for edge, text in (("start", start_text), ("end", end_text)):
+            seconds = parse_clock(text)
+            if seconds is None:
+                return (gr.skip(), gr.skip(), f"Couldn't read the {edge} \"{text}\": write it "
+                        "like 1:34:52 or 34:52.", *cut_view(cut))
+            cut = dict(cut, **{edge: seconds})
+        if cut["end"] - cut["start"] < 1.0:
+            return gr.skip(), gr.skip(), "The end must be after the start.", *cut_view(cut)
+        if abs(cut["start"] - cut["was"][0]) < 0.05 and abs(cut["end"] - cut["was"][1]) < 0.05:
+            return (gr.skip(), gr.skip(), "Nothing to save: that's the cut it already has. "
+                    "Change the start or end first.", *cut_view(cut))
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            # The clip may have moved in the list since it was clicked: find it again.
+            index = next((n for n, s in enumerate(plan.segments)
+                          if s.recording_id == cut["rid"] and abs(s.src_in - cut["was"][0]) < 0.01
+                          and abs(s.src_out - cut["was"][1]) < 0.01), None)
+            if index is None:
+                return (gr.skip(), gr.skip(), "That clip has changed since you clicked it: "
+                        "click it again.", *cut_view(None))
+            change = review.adjust(conn, settings, plan, index, cut["start"], cut["end"])
+            if change.plan.segments[index].src_in == cut["was"][0] and \
+                    change.plan.segments[index].src_out == cut["was"][1]:
+                return gr.skip(), gr.skip(), change.message, *cut_view(cut)
+            save_plan(conn, change.plan, status)
+        finally:
+            conn.close()
+        s = change.plan.segments[index]
+        cut = dict(cut, index=index, start=s.src_in, end=s.src_out, was=[s.src_in, s.src_out])
+        return (videos.plan_summary(change.plan, status), table_for(change.plan), change.message,
+                *cut_view(cut, "Saved.", (s.src_in, s.src_out)))
+
+    save_cut_btn.click(save_cut, [plan_pick, pending_cut, start_txt, end_txt],
+                       [summary, plan_tbl, review_msg, *cut_outputs])
 
     def play_addable(clip_id, where):
         if not clip_id or clip_id not in where:

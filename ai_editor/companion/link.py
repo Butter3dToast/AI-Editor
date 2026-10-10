@@ -176,6 +176,9 @@ def link_recording(conn: sqlite3.Connection, recording_id: int) -> SessionMatch 
             match.short_markers += 1
 
     match.league = league_events(conn, recording_id)
+    from ..analysis.game_events import store_signals
+
+    store_signals(conn, recording_id, match.league, int(row["duration_sec"] or 0) + 1)
     # The games played, from the OBS scenes. Fill in the recording's game if
     # none was given at import: the one played longest.
     timeline = game_timeline(conn, recording_id)

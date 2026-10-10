@@ -39,9 +39,9 @@ a hard rule, not a preference.
 | **2C-1** | Effects on your marked moments: flash, screen shake, sound effects (a switch for each) | **Complete** |
 | **2C-3** | Your stream's music in videos (kept under talking), sliding between clips, a switch per effect moment | **Complete** |
 | **2E-1** | The Companion logs League events (kills, multikills, objectives, result) from the Live Client Data API | **Complete** |
-| 2E-2 | League events pick clips, give reasons ("Triple kill"), place effects, suggest Shorts, skip downtime | Next |
-| 2C-2 | Punch-in zooms, slow-motion replays, freeze frames, on real events | Not started (moved after 2E) |
-| 2D | Full Review screen: drag, trim, effect toggles, undo | Not started (moved after 2E) |
+| **2E-2** | League events pick clips, give reasons ("Triple kill"), place effects, suggest Shorts, skip downtime; plus Adjust the cut in Review (brought forward from 2D) | **Complete** |
+| 2C-2 | Punch-in zooms, slow-motion replays, freeze frames, on real events | Next |
+| 2D | Full Review screen: drag, length bar, caption editing, undo (trimming a cut is done, in 2E-2) | Not started (moved after 2E) |
 | 2F | Dawnwalker story protection, missions, hook endings, length bar | Not started |
 | 2G | Style profiles from reference videos | Not started |
 | 2H | Plain-English rules | Not started |

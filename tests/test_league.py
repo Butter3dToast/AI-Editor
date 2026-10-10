@@ -309,7 +309,12 @@ def test_the_import_lists_the_events_in_the_recordings_time(rig, settings, tmp_p
                  "'2026-10-10T12:00:00')")
     match = link_recording(conn, 1)
     found = league_events(conn, 1)
+    lol = conn.execute("SELECT name, t_sec FROM signals WHERE name LIKE 'lol_%' "
+                       "ORDER BY name, t_sec").fetchall()
     conn.close()
+    # Scoring can use them (at 249.99 or 250.0: the answer is a moment old).
+    seconds = {name: t for name, t in lol}
+    assert seconds["lol_kill"] in (249, 250) and seconds["lol_multikill"] in (259, 260)
     assert [round(t) for t, _ in found] == [100, 250, 260, 270, 299]
     assert [e["text"] for _, e in found if listed(e)] == [
         "Match started", "You killed Zed", "Double kill", "Victory"]   # not a teammate's turret

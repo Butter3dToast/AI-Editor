@@ -15,7 +15,13 @@ MARK_WINDOW_SEC before the press. Clips you didn't mark get none. This
 came from the 2C-1 tests (10 Oct): placed by loudness alone, across whole
 clips, effects "seemed randomly placed", and a shake still "happened during
 a random time ... didn't use the moments I captured with the companion".
-League's own events (kills, objectives) join in Phase 2E.
+
+**League's own events** (Phase 2E-2, the creator's choice on 10 Oct): your
+multikills, your team's aces and steals get an effect by themselves, on
+the exact second League says they happened. A mark with a kill of yours
+in its stretch puts its effect exactly on that kill (the multikill, if
+there is one) instead of the loudest second. Single kills alone get none,
+so a one-sided game doesn't shake all the way through.
 
 Within that stretch, a second that's **really big** wins first: the game's
 sound jumping by MIN_JUMP_DB or more, or the creator *talking* clearly
@@ -142,10 +148,14 @@ class Moment:
     reaction: float
     big: bool = False      # really big, by the fixed measure
     both: bool = False     # really big both ways: all three effects
+    at: float | None = None      # League's exact time, when it's on a League event
+    label: str | None = None     # that event: "Triple kill"
 
     @property
     def strength(self) -> float:
-        return max(self.impact, self.reaction) + (1.0 if self.big else 0.0)
+        # League's events are certain; sound only suggests.
+        return max(self.impact, self.reaction) + (1.0 if self.big else 0.0) + (
+            1.0 if self.at is not None else 0.0)
 
     @property
     def why(self) -> str:
@@ -180,6 +190,57 @@ def marked_moment(stream: Stream, segment: int, seg_in: float, seg_out: float,
         if best is None or m.strength > best.strength:
             best = m
     return best
+
+
+# --- League events (analysis/game_events.py) -----------------------------------------
+
+
+def league_of(conn: sqlite3.Connection, recording_id: int) -> list[tuple[float, dict]]:
+    from ..companion.link import league_events
+
+    return league_events(conn, recording_id)
+
+
+def _reacting(stream: Stream, t: float) -> bool:
+    lo, hi = max(0, int(t) - 2), min(len(stream.big_reaction), int(t) + 3)
+    return bool(stream.big_reaction[lo:hi].any())
+
+
+def event_moment(stream: Stream, segment: int, t: float, event: dict) -> Moment:
+    """An effect on a League event: an impact (shake and boom), and the flash
+    too when you're reacting to it."""
+    from ..analysis.game_events import reasons
+
+    label = (reasons([(t, event)]) or [str(event.get("text") or "")])[0]
+    both = _reacting(stream, t)
+    return Moment(segment, int(t), 1.0, 1.0 if both else 0.0, big=True, both=both, at=t,
+                  label=label)
+
+
+def big_events(events: list[tuple[float, dict]], seg_in: float,
+               seg_out: float) -> list[tuple[float, dict]]:
+    """Your multikills, aces and steals, inside the clip (not on its edges)."""
+    from ..analysis.game_events import big
+
+    return [(t, e) for t, e in events if big(e)
+            and seg_in + EDGE_SEC <= t <= seg_out - EDGE_SEC - SHAKE_SEC]
+
+
+def marked_kill(events: list[tuple[float, dict]], seg_in: float, seg_out: float,
+                press: float) -> tuple[float, dict] | None:
+    """What you marked, when League saw it: the biggest moment of yours in the
+    stretch before the press, inside the clip. A multikill, ace or steal first,
+    then the longest streak, then an objective of your team's, then your last kill."""
+    from ..analysis.game_events import big, counts_for_us
+
+    low = max(seg_in + EDGE_SEC, press - MARK_WINDOW_SEC)
+    high = min(seg_out - EDGE_SEC - SHAKE_SEC, press)
+    yours = [(t, e) for t, e in events if low <= t <= high
+             and (e.get("kind") in ("kill", "multikill", "ace") or counts_for_us(e))]
+    if not yours:
+        return None
+    return max(yours, key=lambda k: (big(k[1]), int(k[1].get("streak") or 0),
+                                     k[1].get("kind") == "objective", k[0]))
 
 
 def pick(found: list[Moment], count: int, gap_sec: float,
@@ -269,6 +330,8 @@ def effects_at(moment: Moment, at: float, on: list[str]) -> list[Effect]:
         out.append(Effect("shake", at, SHAKE_SEC, why))
     if "sfx" in on:
         out.append(Effect("sfx", at, SFX_SEC, why, SOUNDS[IMPACT if both else why]))
+    if moment.label:
+        out = [Effect(e.kind, e.at, e.length, e.why, e.sound, moment.label) for e in out]
     return out
 
 
@@ -277,19 +340,28 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
     fx = settings.effects
     streams: dict[int, Stream] = {}
     marks: dict[int, list[float]] = {}
+    league: dict[int, list[tuple[float, dict]]] = {}
     found: list[Moment] = []
     per_segment: dict[int, int] = {}
     for index, seg in enumerate(plan.segments):
         rid = seg.recording_id
         if rid not in marks:
             marks[rid] = marks_of(conn, rid)
+            league[rid] = league_of(conn, rid)
         pressed = marks_in(marks[rid], seg.src_in, seg.src_out)
-        if not pressed:
+        biggest = big_events(league[rid], seg.src_in, seg.src_out)
+        if not pressed and not biggest:
             continue
         if rid not in streams:
             streams[rid] = stream_of(conn, rid)
-        moments = [m for m in (marked_moment(streams[rid], index, seg.src_in, seg.src_out, p)
-                               for p in pressed) if m is not None]
+        moments = [event_moment(streams[rid], index, t, e) for t, e in biggest]
+        for p in pressed:
+            kill = marked_kill(league[rid], seg.src_in, seg.src_out, p)
+            m = (event_moment(streams[rid], index, *kill) if kill
+                 else marked_moment(streams[rid], index, seg.src_in, seg.src_out, p))
+            if m is not None and not any(o.at is not None and m.at is not None
+                                         and abs(o.at - m.at) < 0.5 for o in moments):
+                moments.append(m)
         found += moments
         per_segment[index] = len(moments)
     chosen = pick(found, how_many(fx.per_min(plan.recipe), plan.total_sec, bool(found)),
@@ -299,11 +371,14 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
     tracks: dict[tuple[int, str], Path | None] = {}
     for m in chosen:
         seg = plan.segments[m.segment]
-        key = (seg.recording_id, m.why)
-        if key not in tracks:
-            tracks[key] = track_path(conn, seg.recording_id, m.why)
-        at = onset(tracks[key], m.second) if tracks[key] else None
-        at = float(m.second) if at is None else at
+        if m.at is not None:
+            at = m.at   # League's own time: already exact
+        else:
+            key = (seg.recording_id, m.why)
+            if key not in tracks:
+                tracks[key] = track_path(conn, seg.recording_id, m.why)
+            at = onset(tracks[key], m.second) if tracks[key] else None
+            at = float(m.second) if at is None else at
         at = min(max(at, seg.src_in + EDGE_SEC), seg.src_out - EDGE_SEC - SHAKE_SEC)
         placed[m.segment] += effects_at(m, at, on)
     return placed

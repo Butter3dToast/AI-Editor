@@ -138,6 +138,14 @@ class Scoring(BaseModel):
         "energy_z": 0.5,
         "speech": 0.2,
         "silence": -0.5,
+        # League's own events (Phase 2E, analysis/game_events.py). Any kill of
+        # yours is a reason; multikills, aces and steals more so.
+        "lol_kill": 1.0,
+        "lol_multikill": 2.0,
+        "lol_ace": 1.2,
+        "lol_objective": 1.0,
+        "lol_death": 1.0,      # only when you react to it
+        "lol_fight": 0.8,      # champions dying close together: a team fight
     })
     # Sounds that only mean something when they keep going. A single shot is
     # someone testing their gun; fifteen seconds of it is a firefight. Each
@@ -156,6 +164,9 @@ class Scoring(BaseModel):
     # A marker is pressed after the good bit, so it counts backwards from the press.
     marker_lookback_sec: float = Field(60.0, ge=1.0, le=300.0)
     marker_lookahead_sec: float = Field(10.0, ge=0.0, le=120.0)
+    # A League event (a kill, an objective) lifts the fight leading up to it.
+    event_lookback_sec: float = Field(12.0, ge=1.0, le=120.0)
+    event_lookahead_sec: float = Field(3.0, ge=0.0, le=60.0)
     # Peaks are judged on a few seconds together, not one loud second.
     smooth_sec: float = Field(5.0, ge=1.0, le=60.0)
     # Loudness and chat are z-scores; this is what counts as "as high as it gets".
@@ -375,9 +386,16 @@ class Shorts(BaseModel):
 
     min_length_sec: float = Field(15.0, gt=0)
     max_length_sec: float = Field(60.0, gt=0)
-    # Each Short opens this long before its moment: straight into the action
-    # (spec: "hook in the first 1-2 seconds"), with just enough to follow it.
-    lead_in_sec: float = Field(8.0, ge=0.0, le=30.0)
+    # Each Short opens this long before its moment. 8 s at first (straight
+    # into the action), but the moment is often the creator's reaction, which
+    # comes after the play: five Shorts on 10 Oct started after what they
+    # were reacting to. 25 s keeps the build-up.
+    lead_in_sec: float = Field(25.0, ge=0.0, le=30.0)
+    # A Short from a mark (Numpad -) ends this long after the press: the good
+    # bit is before it. It ran ~20 s on, and the 60 s limit then cut the start.
+    after_mark_sec: float = Field(5.0, ge=0.0, le=30.0)
+    # ...and opens up to this long before the press.
+    before_mark_sec: float = Field(45.0, ge=10.0, le=60.0)
     tail_sec: float = Field(3.0, ge=0.0, le=20.0)
     per_recording: int = Field(5, ge=1, le=20)
     platform: Literal["youtube_shorts", "tiktok", "universal"] = "universal"
@@ -402,7 +420,9 @@ class Shorts(BaseModel):
     # facecam. Marking one makes facecam_top that game's layout.
     facecam: dict[str, Box] = Field(default_factory=dict)
     facecam_share: float = Field(0.33, ge=0.2, le=0.5)  # of the frame's height
-    captions: bool = True
+    # Burned-in captions: off, like everything (the creator, 2026-10-10:
+    # "burned in captions should always be off by default for everything").
+    captions: bool = False
     follow_action: bool = False
     hook: bool = True
     must_make_sense_alone: bool = True

@@ -149,6 +149,14 @@ def describe_sections(conn: sqlite3.Connection, found: list[Section]) -> None:
             clips = conn.execute(
                 "SELECT * FROM clips WHERE recording_id = ? AND end_sec > ? AND start_sec < ?",
                 (piece.recording_id, piece.src_in, piece.src_out)).fetchall()
+            # League's own events: real kills and objectives the AI may name.
+            happened = [e["text"] for c in clips for e in json.loads(c["game_events_json"] or "[]")
+                        if piece.src_in <= e.get("t", -1) <= piece.src_out and e.get("text")
+                        and e.get("kind") not in ("game_start",)]
+            if happened:
+                events = "League events: " + ", ".join(dict.fromkeys(happened))
+                if events not in lines:
+                    lines.append(events)
             for note in notes_for(conn, piece.recording_id, clips).values():
                 if note.summary and note.summary not in lines:
                     lines.append(note.summary)
@@ -183,6 +191,8 @@ no ALL CAPS words, no emoji, no "you won't believe". Example titles:
 "Wardogs Highlights - Holding the Zone with Friends", "Tarkov Highlights - Close Calls on Customs".
 
 Only use what the chapter notes say happened. Never invent kills, names, wins or events.
+"League events" in the notes come straight from the game, so they are exact: use them
+("Triple kill", "Baron steal"), but "you" there is the creator.
 The notes come from speech recognition and an AI looking at clips, so they can be rough:
 write around anything unclear rather than repeating it.
 

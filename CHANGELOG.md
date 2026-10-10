@@ -3,6 +3,49 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.15.0 — Phase 2E-2: League events in your videos, and adjusting a cut — 10 October 2026
+
+**New**
+
+- **League's events pick your clips** (recordings where the Stream Companion
+  logged the match). Any kill of yours lifts the fight leading up to it;
+  multikills, aces, your team's objectives and team fights more. Your deaths
+  only count when you react to them. A clip doesn't end while champions are
+  still dying, and never runs across a match's start or end.
+- **Downtime skipped**: queue, champion select, loading and the post-game lobby
+  are never picked unless you marked them. A gap over 12 minutes between
+  logged matches is left alone (more likely a match the Companion missed).
+- **Reasons you can read**: "Kill", "2 kills", "Triple kill", "Penta kill",
+  "Ace", "Baron steal", "Victory" in Review and the Clips tab; a clip's
+  details list its League events with their times.
+- **Effects on League's big moments**: your multikills, aces and steals get a
+  shake and boom on the exact second; a mark with a kill or objective in it
+  puts its effect on that. Single kills alone get none. Still off unless you
+  tick them, like every effect.
+- **Shorts**: multikills, aces and steals are suggested right after your
+  Numpad - moments. The local AI is told the real events for titles and
+  chapters.
+- **Adjust the cut** in Review (brought forward from Phase 2D, your ask):
+  click a clip, then move its start and end by 1 or 5 seconds, type a time,
+  or use Start here / End here from the paused player; watch 30 seconds
+  either side to see what was cut off, then save. Never mid-word. The clip in
+  the library keeps your cut, and every adjustment is kept for learning.
+
+**Changed**
+
+- **Shorts keep the build-up**: they open 25 seconds before their moment
+  (was 8, which started five of your Shorts after the play you were reacting
+  to), and a Short from your mark runs from 45 seconds before the press to 5
+  after (was about 20 after).
+- **Burned-in captions on Shorts are off by default**, like every video.
+- **AI-Editor's video work runs at below-normal priority**, so your desktop,
+  browser, OBS and games always come first (your desktop froze while doing
+  several things).
+
+**Fixed**
+
+- Save the new cut ignored times typed without pressing Enter.
+
 ## 0.14.0 — Phase 2E-1: League events from the game — 10 October 2026
 
 **New**

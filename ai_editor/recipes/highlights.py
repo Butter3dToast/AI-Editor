@@ -41,6 +41,7 @@ from ..analysis.clips import (
 )
 from ..analysis.hype import dark_seconds, load_signals
 from ..analysis.moments import load_signal
+from ..analysis.game_events import for_recording
 from ..analysis.pipeline import load_scene_cuts
 from ..config import Settings
 from .plan import EditPlan, Segment, discard_drafts, new_plan_id, save_plan, used_in
@@ -155,7 +156,9 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         if refresh:
             refresh_clips(conn, settings, row)  # a couple of seconds; always current
         words = realistic(load_words(conn, row["id"]))
-        cuts = load_scene_cuts(settings, row)
+        # A League match starting or ending is like a scene change (game_events.py).
+        cuts = sorted(load_scene_cuts(settings, row)
+                      + for_recording(conn, row["id"], int(row["duration_sec"] or 0)).cuts)
         score = load_signal(conn, row["id"], "hype")
         signals = load_signals(conn, row["id"], int(row["duration_sec"]))
         action = action_signal(signals)
@@ -195,10 +198,15 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                 scores[clip["clip_id"]], peak, (int(core[0]), int(core[1])), summary.get("reasons", []), when, must,
                 game=clip_game, marked=marked, liked=liked,
             )
-            candidate.src_in, candidate.src_out = trim(
-                candidate, words, cuts, float(row["duration_sec"]), score, settings,
-                action=action, dark=dark)
-            if timeline:
+            adjusted = bool(summary.get("adjusted"))
+            if adjusted:
+                # You set this clip's start and end yourself in Review: used as it is.
+                candidate.src_in, candidate.src_out = clip["start_sec"], clip["end_sec"]
+            else:
+                candidate.src_in, candidate.src_out = trim(
+                    candidate, words, cuts, float(row["duration_sec"]), score, settings,
+                    action=action, dark=dark)
+            if timeline and not adjusted:
                 # Never into "BRB" or the ending screen: the clip stays in the
                 # scene its moment is in, ending at the last word before the switch
                 # (the first League stream's last marker ran 3 s into "Ending Screen").

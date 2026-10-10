@@ -1245,6 +1245,12 @@ SIGNAL_LABELS = {
     "energy_z": "loud",
     "speech": "talking",
     "combination": "several at once",
+    "lol_kill": "your kill",
+    "lol_multikill": "multikill",
+    "lol_objective": "objective",
+    "lol_ace": "ace",
+    "lol_death": "a death you reacted to",
+    "lol_fight": "team fight",
 }
 
 

@@ -162,6 +162,10 @@ def clip_details(conn, clip_id: str) -> str:
              f"score {row['score']:.2f}: {why(summary.get('reasons', []))}."]
     if summary.get("game"):
         lines.append(f"Game: {summary['game']}.")
+    happened = json.loads(row["game_events_json"] or "[]")
+    if happened:
+        lines.append("**League:** " + "; ".join(f"{clock(e['t'])} {e['text']}" for e in happened)
+                     + ".")
     note = notes_for(conn, row["recording_id"], [row]).get(clip_id)
     if note:
         alone = ("Makes sense on its own (a Short)" if note.stands_alone

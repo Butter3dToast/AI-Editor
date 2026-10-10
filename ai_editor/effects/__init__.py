@@ -34,6 +34,7 @@ class Effect:
     length: float        # seconds
     why: str             # "impact" (a jump in the game's sound) | "reaction" (you)
     sound: str | None = None   # sfx: boom | hit
+    label: str | None = None   # the League event it's on: "Triple kill"
 
     def within(self, seg_in: float) -> float:
         """When it starts, counted from the start of a segment beginning at ``seg_in``."""
@@ -41,7 +42,8 @@ class Effect:
 
     def as_dict(self) -> dict:
         return {"type": self.kind, "at": round(self.at, 3), "duration": round(self.length, 3),
-                "why": self.why, **({"sound": self.sound} if self.sound else {})}
+                "why": self.why, **({"sound": self.sound} if self.sound else {}),
+                **({"label": self.label} if self.label else {})}
 
 
 def switches(settings: Settings, plan: EditPlan) -> list[str]:
@@ -96,8 +98,10 @@ def moments(conn: sqlite3.Connection, settings: Settings,
             here = [e for e in effects if e.at == at]
             what = [e.kind for e in here if e.kind != "sfx"] + [e.sound for e in here
                                                                   if e.kind == "sfx" and e.sound]
+            label = next((e.label for e in here if e.label), None)
             found.append((f"Clip {index + 1} at {clock(start + at - seg.src_in)}: "
-                          f"{' + '.join(what)}", moment_key(seg.recording_id, at)))
+                          + (f"{label}: " if label else "") + " + ".join(what),
+                          moment_key(seg.recording_id, at)))
     return found
 
 

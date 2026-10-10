@@ -316,3 +316,73 @@ def move_to(conn: sqlite3.Connection, plan: EditPlan, index: int, position: int)
     plan.segments.insert(target, segment)
     log_feedback(conn, "reordered", plan, segment, to=target + 1)
     return Change(plan, f"Moved to #{target + 1}.")
+
+
+# --- Adjusting a cut (brought forward from Phase 2D, the creator's ask on 10 Oct) ----------
+
+# A saved edge moves at most this far to land between two words.
+SNAP_SEC = 0.5
+SHORTEST_SEC = 2.0
+
+
+def _snap(t: float, words, starts: list[float], bounds: list[float], outward: int) -> float:
+    """``t``, or the nearest gap between words within SNAP_SEC if ``t`` is mid-word."""
+    from ..analysis.clips import nearest_bound, word_at
+
+    if not word_at(t, words, starts):
+        return t
+    moved = nearest_bound(bounds, t, t - SNAP_SEC, t + SNAP_SEC, outward=outward)
+    return moved if abs(moved - t) <= SNAP_SEC else t
+
+
+def adjust(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, index: int,
+           start: float, end: float) -> Change:
+    """Give one piece of a plan a new start and end in its recording.
+
+    Anywhere in the recording, not only inside the clip AI-Editor cut: the
+    point is to win back what was cut off. Each edge moves at most half a
+    second to land between two words (the creator's choice). The clip in the
+    library takes the new cut too, so the next video with that moment gets it.
+    """
+    from ..analysis.clips import load_words, realistic, word_boundaries
+
+    segment = plan.segments[index]
+    row = conn.execute("SELECT duration_sec FROM recordings WHERE id = ?",
+                       (segment.recording_id,)).fetchone()
+    duration = float(row["duration_sec"] or 0) if row else end
+    start, end = max(0.0, float(start)), min(duration, float(end))
+    if end - start < SHORTEST_SEC:
+        return Change(plan, f"The end must be at least {SHORTEST_SEC:.0f} seconds after the start.")
+    longest = settings.shorts.max_length_sec
+    if plan.recipe == "shorts" and end - start > longest + 0.01:
+        return Change(plan, f"That's {end - start:.0f} seconds: a Short can be at most "
+                            f"{longest:.0f}. Move the start later or the end earlier.")
+    words = realistic(load_words(conn, segment.recording_id))
+    starts, bounds = [w.start for w in words], word_boundaries(words)
+    snapped_start = _snap(start, words, starts, bounds, outward=-1)
+    snapped_end = _snap(end, words, starts, bounds, outward=+1)
+    if snapped_end - snapped_start >= SHORTEST_SEC:
+        start, end = snapped_start, snapped_end
+    before = (segment.src_in, segment.src_out)
+    plan.segments[index] = replace(segment, src_in=round(start, 3), src_out=round(end, 3))
+    if plan.recipe == "shorts":
+        plan.target_sec = sum(s.length for s in plan.segments)
+    log_feedback(conn, "adjusted", plan, segment, before=list(before), after=[start, end])
+
+    if segment.clip_id and segment.kind != "teaser":
+        clip = conn.execute("SELECT signals_json FROM clips WHERE clip_id = ?",
+                            (segment.clip_id,)).fetchone()
+        if clip is not None:
+            summary = json.loads(clip["signals_json"] or "{}")
+            summary["adjusted"] = True
+            said = " ".join(w.text for w in words if w.start >= start and w.end <= end)
+            conn.execute("UPDATE clips SET start_sec = ?, end_sec = ?, signals_json = ?, "
+                         "transcript = ? WHERE clip_id = ?",
+                         (round(start, 3), round(end, 3), json.dumps(summary), said,
+                          segment.clip_id))
+            conn.commit()
+
+    what = "The teaser" if segment.kind == "teaser" else f"Clip {index + 1}"
+    return Change(plan, f"{what} now runs {clock(start)}-{clock(end)} in the recording "
+                        f"({end - start:.0f} s; it was {clock(before[0])}-{clock(before[1])}). "
+                        "Make a quick preview to watch it in the video.")

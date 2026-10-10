@@ -476,15 +476,22 @@ def store_clips(
     signals: dict[str, np.ndarray],
     words: Sequence[Word],
     game_of: Callable[[float], str | None] | None = None,
+    league: Sequence[tuple[float, dict]] = (),
 ) -> int:
     """Replace a recording's automatic clips. Clips you rated, pinned or used are kept.
 
     ``game_of`` says which game was on screen at a given second, when the
     Stream Companion logged it; each clip records the game at its moment.
+    ``league``: the recording's League events (game_events.py). A clip's own
+    become its first reasons ("Triple kill") and are kept with it.
     """
+    from .game_events import SIGNALS as LEAGUE_SIGNALS, big, reasons as league_reasons, within
+    from ..companion.link import listed
+
+    # A clip whose cut you adjusted in Review is yours, like a rated one.
     conn.execute(
         "DELETE FROM clips WHERE recording_id = ? AND user_rating IS NULL AND pinned = 0 "
-        "AND used_in_json IS NULL",
+        "AND used_in_json IS NULL AND COALESCE(signals_json, '') NOT LIKE '%\"adjusted\": true%'",
         (recording_id,),
     )
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -492,18 +499,26 @@ def store_clips(
         a, b = int(clip.start), int(np.ceil(clip.end))
         summary = {name: round(float(values[a:b].max()), 3)
                    for name, values in signals.items() if values[a:b].size and values[a:b].max() > 0}
-        summary["reasons"] = [name for name, _ in clip.reasons]
+        happened = within(list(league), clip.start, clip.end)
+        # Your kills and objectives say it better than "League kill" can.
+        summary["reasons"] = league_reasons(happened) + [
+            name for name, _ in clip.reasons if name not in LEAGUE_SIGNALS]
+        if happened:
+            summary["league_big"] = any(big(e) for _, e in happened)
         # Where the moment itself is, so a video can trim the clip down to it.
         summary["peak"] = clip.peak_sec
         summary["core"] = list(clip.core)
         if game_of is not None:
             summary["game"] = game_of(clip.peak_sec)
         text = " ".join(w.text for w in words if w.start >= clip.start and w.end <= clip.end)
+        shown = [{"t": round(t, 2), "kind": e.get("kind"), "text": e.get("text")}
+                 for t, e in happened if listed(e)]
         conn.execute(
             "INSERT OR IGNORE INTO clips (clip_id, recording_id, start_sec, end_sec, score, "
-            "signals_json, transcript, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "signals_json, game_events_json, transcript, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (clip_id(recording_id, clip.start), recording_id, clip.start, clip.end,
-             clip.score, json.dumps(summary), text, now),
+             clip.score, json.dumps(summary), json.dumps(shown) if shown else None, text, now),
         )
     conn.commit()
     return len(clips)
@@ -514,6 +529,7 @@ def refresh_clips(conn: sqlite3.Connection, settings, row: sqlite3.Row):
 
     Returns (clips, score result), or (None, None) if there is nothing to score.
     """
+    from .game_events import for_recording
     from .hype import build, dark_seconds, load_signals
     from .pipeline import load_scene_cuts
 
@@ -523,7 +539,10 @@ def refresh_clips(conn: sqlite3.Connection, settings, row: sqlite3.Row):
     result = build(conn, settings, row["id"], seconds)
     words = load_words(conn, row["id"])
     signals = load_signals(conn, row["id"], len(result.score))
-    clips = build_clips(result.score, words=words, cuts=load_scene_cuts(settings, row),
+    league = for_recording(conn, row["id"], seconds)
+    # A League match starting or ending is like a scene change: never crossed.
+    cuts = sorted(load_scene_cuts(settings, row) + league.cuts)
+    clips = build_clips(result.score, words=words, cuts=cuts,
                         duration=float(row["duration_sec"]), settings=settings.clips,
                         action=action_signal(signals),
                         dark=dark_seconds(signals, seconds, settings.scoring.dark_level,
@@ -534,13 +553,15 @@ def refresh_clips(conn: sqlite3.Connection, settings, row: sqlite3.Row):
 
     timeline = game_timeline(conn, row["id"])
     game_of = (lambda t: game_at(timeline, t)) if timeline else None
-    store_clips(conn, row["id"], clips, signals=signals, words=words, game_of=game_of)
+    store_clips(conn, row["id"], clips, signals=signals, words=words, game_of=game_of,
+                league=league.events)
     return clips, result
 
 
 def action_signal(signals: dict[str, np.ndarray]) -> np.ndarray | None:
-    """Gunfire or explosions, whichever is louder, second by second."""
-    found = [signals[name] for name in ("gunfire", "explosion") if name in signals]
+    """Gunfire, explosions or League champions dying, whichever is strongest,
+    second by second. A clip doesn't end while the fight is still going."""
+    found = [signals[name] for name in ("gunfire", "explosion", "lol_fight") if name in signals]
     return np.maximum.reduce(found) if found else None
 
 

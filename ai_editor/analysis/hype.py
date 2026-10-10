@@ -16,9 +16,10 @@ Two details that matter more than the weights:
   usually a door slam; a good moment stays interesting for several seconds,
   so the score is smoothed before peaks are picked.
 
-Game events (kills, extractions) join this in Phase 2 through game profiles,
-and the local LLM's reading of the transcript after that. Nothing here needs
-either: a weight is simply missing until its signal exists.
+League's own events (kills, multikills, objectives; analysis/game_events.py)
+join in as signals of their own, each spread over the fight leading up to
+it. Your deaths only count when you react to them, and League time outside a
+match (queue, champion select, the lobby) scores nothing unless you marked it.
 """
 
 from __future__ import annotations
@@ -34,6 +35,16 @@ from ..config import Settings
 ZSCORE_SIGNALS = ("energy_z", "chat_z")
 # Signals where a marker press means "the good bit is just before this".
 MARKER_SIGNALS = ("marker", "marker_short")
+# League events (game_events.py): each lifts the fight leading up to it.
+EVENT_SIGNALS = ("lol_kill", "lol_multikill", "lol_objective", "lol_ace", "lol_death",
+                 "lol_fight")
+# Your deaths only count when you react to them: the creator's choice
+# (2026-10-10). Quiet deaths are ordinary; the loud or laughing ones are
+# the funny Short-worthy moments.
+DEATH_SIGNAL = "lol_death"
+REACTION_SIGNALS = ("laughter", "scream", "shout", "energy_z")
+REACTION_LOUD = 0.5          # energy_z on the 0-1 scale: half of "as loud as it gets"
+REACTION_NEAR_SEC = 6
 
 HYPE_SIGNAL = "hype"
 
@@ -46,6 +57,8 @@ SIGNAL_KINDS = {
     "marker": "your pick", "marker_short": "your pick",
     "laughter": "reaction", "scream": "reaction", "shout": "reaction",
     "gunfire": "action", "explosion": "action",
+    "lol_kill": "action", "lol_multikill": "action", "lol_objective": "action",
+    "lol_ace": "action", "lol_death": "action", "lol_fight": "action",
     "chat_z": "audience",
     "energy_z": "loud",
 }
@@ -92,6 +105,20 @@ def marker_curve(
                 strength = 1.0
             curve[t] = max(curve[t], strength)
     return curve
+
+
+def reacting(unit_values: dict[str, np.ndarray], seconds: int, threshold: float) -> np.ndarray:
+    """True around each second where you react: laughing, screaming, shouting,
+    or clearly louder than usual, within REACTION_NEAR_SEC either side."""
+    found = np.zeros(seconds, dtype=bool)
+    for name in REACTION_SIGNALS:
+        values = unit_values.get(name)
+        if values is not None:
+            found |= values >= (REACTION_LOUD if name == "energy_z" else threshold)
+    if not found.any():
+        return found
+    window = np.ones(2 * REACTION_NEAR_SEC + 1)
+    return np.convolve(found.astype(np.float32), window, mode="same") > 0
 
 
 def to_unit_scale(name: str, values: np.ndarray, *, zscore_full_scale: float) -> np.ndarray:
@@ -183,8 +210,12 @@ class HypeResult:
     missing: list[str] = field(default_factory=list)  # weighted signals not in this recording
 
 
-def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int) -> HypeResult:
-    """Combine the signals into one score per second, between 0 and 1."""
+def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int,
+               downtime: np.ndarray | None = None) -> HypeResult:
+    """Combine the signals into one score per second, between 0 and 1.
+
+    ``downtime``: seconds that are never a moment unless marked (League
+    outside a match, game_events.downtime)."""
     scoring = settings.scoring
     total = np.zeros(seconds, dtype=np.float32)
     parts: dict[str, np.ndarray] = {}
@@ -194,13 +225,16 @@ def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int)
     for name, weight in scoring.weights.items():
         values = signals.get(name)
         if values is None or not values.size:
-            if weight > 0:
+            if weight > 0 and name not in EVENT_SIGNALS:  # only League with the Companion has them
                 missing.append(name)
             continue
         values = np.resize(values, seconds) if values.size != seconds else values
         if name in MARKER_SIGNALS:
             values = marker_curve(values, lookback_sec=scoring.marker_lookback_sec,
                                   lookahead_sec=scoring.marker_lookahead_sec)
+        elif name in EVENT_SIGNALS:
+            # Each press-like event, scaled by its own size (a penta beats a double).
+            values = _spread(values, scoring)
         else:
             values = to_unit_scale(name, values, zscore_full_scale=scoring.zscore_full_scale)
         if name in scoring.sustain_sec:
@@ -209,6 +243,13 @@ def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int)
         contribution = (weight * values).astype(np.float32)
         parts[name] = contribution
         total += contribution
+
+    if DEATH_SIGNAL in unit_values:
+        gated = unit_values[DEATH_SIGNAL] * reacting(unit_values, seconds,
+                                                     scoring.combination_threshold)
+        unit_values[DEATH_SIGNAL] = gated
+        parts[DEATH_SIGNAL] = (scoring.weights[DEATH_SIGNAL] * gated).astype(np.float32)
+        total = sum(parts.values(), np.zeros(seconds, dtype=np.float32))
 
     bonus, _ = combination_bonus(
         unit_values, seconds,
@@ -231,6 +272,9 @@ def hype_score(signals: dict[str, np.ndarray], settings: Settings, seconds: int)
         # Wardogs clip was 48 s of black while the creator set up a scene).
         if dark is not None:
             values[dark] = 0.0
+        # League outside a match, unless you marked it.
+        if downtime is not None and downtime.size:
+            values[np.resize(downtime, seconds) & (marked <= 0)] = 0.0
         return values
 
     total, unmarked = settle(total), settle(total - marked)
@@ -275,9 +319,25 @@ def store(conn: sqlite3.Connection, recording_id: int, score: np.ndarray) -> Non
     conn.commit()
 
 
+def _spread(values: np.ndarray, scoring) -> np.ndarray:
+    """A League event lifts the fight before it (event_lookback_sec), at its own size."""
+    out = np.zeros(len(values), dtype=np.float32)
+    for second in np.nonzero(values)[0]:
+        one = np.zeros(len(values), dtype=np.float32)
+        one[second] = 1.0
+        curve = marker_curve(one, lookback_sec=scoring.event_lookback_sec,
+                             lookahead_sec=scoring.event_lookahead_sec)
+        out = np.maximum(out, curve * float(min(1.0, values[second])))
+    return out
+
+
 def build(conn: sqlite3.Connection, settings: Settings, recording_id: int,
           seconds: int) -> HypeResult:
     """Score a recording second by second and store the result."""
-    result = hype_score(load_signals(conn, recording_id, seconds), settings, seconds)
+    from .game_events import for_recording
+
+    league = for_recording(conn, recording_id, seconds)
+    result = hype_score(load_signals(conn, recording_id, seconds), settings, seconds,
+                        downtime=league.downtime)
     store(conn, recording_id, result.score)
     return result

@@ -109,9 +109,19 @@ scoring:
     gunfire: 0.8
     speech: 0.2 # someone is talking
     silence: -0.5 # dead air counts against a moment
+    # League of Legends, from the game's own events (Stream Companion, manual 8.3):
+    lol_kill: 1.0 # any kill of yours
+    lol_multikill: 2.0 # double to penta: a penta counts fully
+    lol_ace: 1.2 # your team aced them
+    lol_objective: 1.0 # your team's Baron, Dragon, Herald...; steals count fully
+    lol_death: 1.0 # your deaths, only when you react to them
+    lol_fight: 0.8 # champions dying close together: a team fight
   # A marker is pressed after the good bit, so it lifts the minute before it.
   marker_lookback_sec: 60
   marker_lookahead_sec: 10
+  # A League event lifts the fight leading up to it.
+  event_lookback_sec: 12
+  event_lookahead_sec: 3
   smooth_sec: 5 # how many seconds are judged together
   zscore_full_scale: 3.0 # how unusual loudness or chat has to be to count fully
   dark_level: 24 # a picture this dark (0-255) is a black screen: never a moment
@@ -208,8 +218,10 @@ highlights: # Spec section 7.6 Recipe B
 shorts: # Spec section 7.6 Recipe C
   min_length_sec: 15
   max_length_sec: 60
-  lead_in_sec: 8 # Each Short opens this long before its moment: straight into the action
+  lead_in_sec: 25 # Each Short opens this long before its moment, so the play your reaction is about stays in
   tail_sec: 3 # ...and runs this long after it, so the reaction finishes
+  after_mark_sec: 5 # A Short from your mark (Numpad -) ends this long after the press...
+  before_mark_sec: 45 # ...and opens up to this long before it
   per_recording: 5 # Shorts suggested per stream: your Numpad - marks first, then the AI's picks
   platform: universal # youtube_shorts | tiktok | universal: one file for all three
   preset: vertical_1080x1920_60 # One of render.presets
@@ -230,7 +242,7 @@ shorts: # Spec section 7.6 Recipe C
   # None yet. A game with one uses facecam_top.
   facecam: {}
   facecam_share: 0.33 # Height of the facecam strip at the top of a Short
-  captions: true # Shorts are watched with the sound off: captions on
+  captions: false # Burned-in captions: tick them per Short in Review
   follow_action: false
   hook: true
   must_make_sense_alone: true
