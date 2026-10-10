@@ -146,8 +146,17 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     # --- Review --------------------------------------------------------------------------
     with gr.Tab("Review", id="review") as review_tab:
-        plan_pick = gr.Dropdown(choices=plans_now, value=plans_now[0][1] if plans_now else None,
-                                label="Video plan", info="Newest first")
+        with gr.Row(equal_height=True):
+            plan_pick = gr.Dropdown(choices=plans_now,
+                                    value=plans_now[0][1] if plans_now else None,
+                                    label="Video plan", info="Newest first", scale=6)
+            delete_btn = gr.Button("Delete this plan", size="sm", variant="stop", scale=1,
+                                   min_width=140)
+        # Only when the creator says so, and asked once more.
+        with gr.Row(visible=False) as confirm_row:
+            confirm_note = gr.Markdown()
+            yes_btn = gr.Button("Yes, delete it", variant="stop", scale=0, min_width=140)
+            no_btn = gr.Button("Keep it", scale=0, min_width=110)
         summary = gr.Markdown()
         sel = gr.State(None)
         # Kept inside a tab: anything placed straight in the tab bar shifts the
@@ -897,6 +906,36 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     clip_list.submit(dropped, plan_pick, edit_outputs).then(
         list_view, [plan_pick, sel], list_outputs)
+
+    # --- Deleting a plan: the creator's doing only, asked once more -----------------------
+
+    def ask_delete(plan_id):
+        plan, status = read(videos.get_plan, plan_id)
+        if plan is None:
+            return gr.Row(visible=False), ""
+        made = ("Its finished video stays in your output folder, and its clips stay marked as "
+                "used. " if status == "approved" else "")
+        return gr.Row(visible=True), (
+            f"**Delete \"{plan.title}\" ({plan.plan_id}) from the list?** {made}Its clips, "
+            "your ratings and what AI-Editor learns from them all stay. This can't be undone.")
+
+    delete_btn.click(ask_delete, plan_pick, [confirm_row, confirm_note])
+    no_btn.click(lambda: gr.Row(visible=False), None, confirm_row)
+    plan_pick.change(lambda: gr.Row(visible=False), None, confirm_row)
+
+    def delete(plan_id):
+        from ..recipes.plan import delete_plan
+
+        if not plan_id or not read(delete_plan, plan_id):
+            return gr.Row(visible=False), gr.skip()
+        gr.Info(f"Deleted {plan_id} from the list.")
+        plans = read(videos.plan_choices)
+        return gr.Row(visible=False), gr.update(value=plans[0][1] if plans else None)
+
+    # First on to the newest plan, then the deleted one off the list: both at
+    # once, Gradio 6 kept showing the deleted plan's name in the box.
+    yes_btn.click(delete, plan_pick, [confirm_row, plan_pick]).then(
+        lambda: gr.update(choices=read(videos.plan_choices)), None, plan_pick)
 
     # --- Undo and Redo (Phase 2D-1): kept after AI-Editor closes ----------------------------
 

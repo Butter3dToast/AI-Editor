@@ -3,6 +3,26 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.17.1 — Fix: your plans from different streams, and a shorter plan list — 10 October 2026
+
+**Fixed**
+
+- **Making a highlight plan threw away the unrendered draft from another
+  stream** of the same game (your 8 October plan went when you made the 9
+  October one). Now a new plan only replaces a draft from the same stream(s);
+  the same goes for Let's Play episodes. Rendered plans are never replaced.
+
+**New**
+
+- **The stream's date in every plan's name**: "League of Legends highlights ·
+  8 Oct stream · Highlights, 15.8 min, draft". Shorts say which stream they're
+  from too. The From column in Review dates each clip by when the stream
+  started.
+- **Delete this plan** in Review, beside Video plan, after you confirm. Only
+  the plan leaves the list (and its Undo history): a finished video stays in
+  your output folder, its clips stay marked as used, and your clips, ratings
+  and what AI-Editor learns all stay. AI-Editor never deletes a plan by itself.
+
 ## 0.17.0 — Phase 2D-1: Drag, the length bar, and Undo — 10 October 2026
 
 **New**

@@ -262,7 +262,7 @@ def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Ro
                        pieces)
 
     game = row["game"]
-    discard_drafts(conn, "letsplay", game)
+    discard_drafts(conn, "letsplay", game, [row["id"]])
     plan = EditPlan(
         plan_id=new_plan_id(conn, "letsplay", game),
         recipe="letsplay",

@@ -1212,7 +1212,8 @@ Every video goes through Review before rendering. Nothing is final until you ren
 
 ### 18.1 Layout
 
-- **Video plan:** every plan you've made, newest first. It opens on the newest one.
+- **Video plan:** every plan you've made, newest first, with the stream it's from ("League of Legends highlights · 8 Oct stream · Highlights, 15.8 min, draft"). It opens on the newest one. Making a plan again from the **same** stream(s) replaces its old draft (never a rendered one); a plan from another stream is kept.
+- **Delete this plan** (beside Video plan): takes the plan on show out of the list, after you confirm. Only the plan goes (and its Undo history): a finished video stays in your output folder, its clips stay marked as used, and your clips, ratings and what AI-Editor learns from them all stay. AI-Editor never deletes a plan by itself, and deleting quick previews from the folder doesn't remove plans: use this.
 - **↶ Undo / ↷ Redo:** see 18.4.
 - **The length bar:** how long the video is against its target, one block per clip, as wide as the clip is long. The teaser is amber, a clip with a slow-motion replay is purple (and marked ⟲), the dashed line is your target. Highlights: about 10 minutes, never below; the note turns amber when the video is under it. A Short: 60 seconds at most. A Let's Play: one block per part, aiming for 25-35 minutes each. Hover a block to see what it is; click it to pick that clip (or part), the same as clicking its row.
 - **The list** (highlights and Shorts): every piece in order. The teaser first, then each clip, with where it lands in the video, which stream it's from, where it starts in that stream, its length, score, and why it's in.

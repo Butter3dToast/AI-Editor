@@ -120,16 +120,38 @@ def save_plan(conn: sqlite3.Connection, plan: EditPlan, status: str = DRAFT) -> 
     conn.commit()
 
 
-def discard_drafts(conn: sqlite3.Connection, recipe: str, game: str | None) -> int:
-    """Remaking a draft replaces the old one instead of piling up copies."""
+def discard_drafts(conn: sqlite3.Connection, recipe: str, game: str | None,
+                   streams: list[int] | None) -> int:
+    """Remaking a draft replaces the old one instead of piling up copies: one of
+    the same game from the same streams. ``streams``: the recordings asked for
+    (None: all of them). A draft from other streams stays (10 Oct: a plan from
+    the 8 Oct stream was replaced by one from the 9th)."""
+    want = sorted(streams) if streams else None
     rows = conn.execute(
-        "SELECT plan_id, plan_json FROM edit_plans WHERE recipe = ? AND status = ?",
-        (recipe, DRAFT),
+        "SELECT plan_id, plan_json, recording_ids_json FROM edit_plans WHERE recipe = ? "
+        "AND status = ?", (recipe, DRAFT),
     ).fetchall()
-    doomed = [r["plan_id"] for r in rows if json.loads(r["plan_json"]).get("game") == game]
+    doomed = []
+    for r in rows:
+        data = json.loads(r["plan_json"])
+        source = data.get("source") or {}
+        had = (source["recording_ids"] if "recording_ids" in source
+               else json.loads(r["recording_ids_json"]))
+        if data.get("game") == game and (sorted(had) if had else None) == want:
+            doomed.append(r["plan_id"])
     conn.executemany("DELETE FROM edit_plans WHERE plan_id = ?", [(p,) for p in doomed])
     conn.commit()
     return len(doomed)
+
+
+def delete_plan(conn: sqlite3.Connection, plan_id: str) -> bool:
+    """Take a plan out of the list, when the creator presses Delete in Review (10 Oct:
+    the list had grown long). Only the plan and its Undo history go: finished videos
+    and quick previews stay on disk, and the clips, ratings and feedback stay, its
+    clips still marked as used."""
+    gone = conn.execute("DELETE FROM edit_plans WHERE plan_id = ?", (plan_id,)).rowcount
+    conn.commit()
+    return gone > 0
 
 
 def latest_draft(conn: sqlite3.Connection, recipe: str, game: str | None = None) -> EditPlan | None:

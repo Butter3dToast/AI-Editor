@@ -314,3 +314,34 @@ def test_your_mark_beats_a_thumbs_down_on_a_clip_that_did_not_have_it(conn, sett
     rows = recordings_for(conn, settings, game=None, recording_ids=[1])
     found = {c.clip_id for c in gather(conn, settings, rows, refresh=False, quality_bar=False)}
     assert found == {"marked_now"}
+
+
+def test_a_new_plan_replaces_only_the_draft_from_the_same_streams(conn):
+    """10 Oct: the 8 Oct stream's draft was replaced by a plan from the 9th."""
+    from ai_editor.recipes.plan import discard_drafts, load_plan
+
+    def draft(plan_id, streams):
+        save_plan(conn, EditPlan(plan_id, "highlights", "t", "League of Legends", 600,
+                                 [Segment(1, 0, 30)], source={"recording_ids": streams}))
+
+    draft("eighth", [16])
+    draft("ninth", [17])
+    draft("all", None)
+    assert discard_drafts(conn, "highlights", "League of Legends", [17]) == 1
+    assert load_plan(conn, "ninth") is None
+    assert load_plan(conn, "eighth") is not None and load_plan(conn, "all") is not None
+    assert discard_drafts(conn, "highlights", "League of Legends", None) == 1   # "All my streams"
+
+
+def test_each_plan_says_which_stream_it_is_from(conn):
+    from datetime import datetime
+
+    from ai_editor.app.videos import plan_choices, streams_of
+
+    conn.execute("UPDATE recordings SET source_file = 'F:/raw/2026-10-08 19-55-02.mkv'")
+    save_plan(conn, EditPlan("p", "highlights", "League of Legends highlights", None, 600,
+                             [Segment(1, 0, 30)]))
+    assert "League of Legends highlights  ·  8 Oct stream  ·  Highlights" in plan_choices(conn)[0][0]
+    days = [datetime(2026, 10, d, 18).astimezone() for d in (7, 6, 7)]
+    assert streams_of(days) == "6 + 7 Oct streams"
+    assert streams_of([datetime(2026, 9, 30, 18).astimezone(), days[0]]) == "30 Sep + 7 Oct streams"

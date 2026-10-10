@@ -9,7 +9,7 @@ from __future__ import annotations
 import html
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -291,8 +291,46 @@ def kind_of(plan: EditPlan) -> str:
     return {"letsplay": "Let's Play", "shorts": "Short"}.get(plan.recipe, "Highlights")
 
 
+def stream_start(row) -> datetime | None:
+    """When a recording began: from OBS's file name ("2026-10-08 19-55-02.mkv"),
+    else its date (an OBS .mkv's date is when it finished, so less its length)."""
+    from ..companion.link import started_from_name
+
+    began = started_from_name(Path(row["source_file"] or ""))
+    if began is not None:
+        return began
+    try:
+        if row["recorded_at"]:
+            began = datetime.fromisoformat(row["recorded_at"])
+            if row["source_type"] == "local_obs":
+                began -= timedelta(seconds=row["duration_sec"] or 0)
+            return began
+        return datetime.fromisoformat(row["imported_at"])
+    except (TypeError, ValueError):
+        return None
+
+
+def _day(when: datetime | None) -> str:
+    return when.astimezone().strftime("%d %b").lstrip("0") if when else ""
+
+
+def streams_of(starts: list[datetime]) -> str:
+    """'8 Oct stream', '6 + 7 Oct streams', '30 Sep - 7 Oct streams'."""
+    days = list(dict.fromkeys(_day(s) for s in sorted(starts)))
+    if not days:
+        return ""
+    if len(days) == 1:
+        return f"{days[0]} stream"
+    if len(days) <= 3:
+        months = {d.split()[-1] for d in days}
+        shown = ([d.split()[0] for d in days[:-1]] + [days[-1]]) if len(months) == 1 else days
+        return f"{' + '.join(shown)} streams"
+    return f"{days[0]} - {days[-1]} streams"
+
+
 def plan_choices(conn) -> list[tuple[str, str]]:
-    """(label, plan id) for every plan, newest first."""
+    """(label, plan id) for every plan, newest first, with which stream it's from."""
+    starts = {r["id"]: stream_start(r) for r in conn.execute("SELECT * FROM recordings")}
     out = []
     for row in conn.execute("SELECT plan_id, plan_json, status FROM edit_plans "
                             "ORDER BY created_at DESC, rowid DESC"):
@@ -301,8 +339,11 @@ def plan_choices(conn) -> list[tuple[str, str]]:
         state = "rendered" if row["status"] == APPROVED else "draft"
         length = (f"{plan.total_sec:.0f} s" if plan.recipe == "shorts"
                   else f"{plan.total_sec / 60:.1f} min")
-        out.append((f"{plan.title}  ·  {kind}, {length}, {state}  "
-                    f"({plan.plan_id})", plan.plan_id))
+        # A Let's Play's title already has its recording's date and time.
+        when = "" if plan.recipe == "letsplay" else streams_of(
+            [starts[r] for r in plan.recording_ids if starts.get(r)])
+        out.append((f"{plan.title}  ·  {when + '  ·  ' if when else ''}{kind}, {length}, "
+                    f"{state}  ({plan.plan_id})", plan.plan_id))
     return out
 
 
@@ -334,14 +375,7 @@ def timeline(conn, plan: EditPlan, settings: Settings | None = None) -> Timeline
 
 def recorded_days(conn) -> dict[int, str]:
     """'3 Oct' for each recording: the day it was streamed."""
-    def day(iso: str | None) -> str:
-        try:
-            return datetime.fromisoformat(iso).astimezone().strftime("%d %b").lstrip("0")
-        except (TypeError, ValueError):
-            return ""
-
-    return {r["id"]: day(r["recorded_at"] or r["imported_at"])
-            for r in conn.execute("SELECT id, recorded_at, imported_at FROM recordings")}
+    return {r["id"]: _day(stream_start(r)) for r in conn.execute("SELECT * FROM recordings")}
 
 
 def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[list]:

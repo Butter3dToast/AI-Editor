@@ -154,7 +154,7 @@ def test_the_history_is_kept_and_goes_with_its_plan(conn, settings, library):
         assert history.can(again, plan.plan_id) == ("removing clip 3", None)
     finally:
         again.close()
-    discard_drafts(conn, "highlights", None)   # remade: the old plan and its history go
+    discard_drafts(conn, "highlights", None, None)   # remade: the old plan and its history go
     assert conn.execute("SELECT COUNT(*) FROM plan_history").fetchone()[0] == 0
 
 
@@ -198,3 +198,21 @@ def test_text_in_the_list_is_shown_not_run(conn, settings):
                     [Segment(1, 0.0, 30.0, reasons=["<script>alert(1)</script>"])])
     page = review_list.review_list(conn, plan, settings)
     assert "<script>" not in page and "&lt;script&gt;" in page
+
+
+def test_deleting_a_plan_takes_only_the_plan_out_of_the_list(conn, settings, library):
+    from ai_editor.recipes.plan import approve_plan, delete_plan
+
+    plan = plan_of(library)
+    save_plan(conn, plan)
+    change(conn, settings, plan, "removing clip 3", review.remove, 2)
+    conn.execute("INSERT INTO clips (clip_id, recording_id, start_sec, end_sec, score, "
+                 "created_at) VALUES ('c1x', 1, 0, 10, 0.5, 'now')")
+    approve_plan(conn, plan.plan_id)
+    used = conn.execute("SELECT COUNT(*) FROM clips WHERE used_in_json IS NOT NULL").fetchone()[0]
+    assert delete_plan(conn, plan.plan_id) and load_plan(conn, plan.plan_id) is None
+    assert conn.execute("SELECT COUNT(*) FROM plan_history").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0] == 1   # still learnt from
+    assert conn.execute("SELECT COUNT(*) FROM clips WHERE used_in_json IS NOT NULL"
+                        ).fetchone()[0] == used
+    assert not delete_plan(conn, plan.plan_id)

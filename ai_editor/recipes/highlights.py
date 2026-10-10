@@ -541,7 +541,7 @@ def build_highlights(
     # Otherwise it's stream highlights, whatever was played.
     games = {c.game for c in chosen}
     game_name = game or (next(iter(games)) if len(games) == 1 else None)
-    discard_drafts(conn, "highlights", game_name)
+    discard_drafts(conn, "highlights", game_name, recording_ids)
     plan = EditPlan(
         plan_id=new_plan_id(conn, "highlights", game_name),
         recipe="highlights",
