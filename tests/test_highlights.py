@@ -172,17 +172,19 @@ def test_a_plan_survives_being_saved_and_loaded(conn):
     assert loaded == plan and status == "draft"
 
 
-def test_stream_highlights_take_every_game_but_not_lets_plays(settings):
+def test_stream_highlights_take_every_game_but_not_lets_plays(settings, tmp_path):
     """ "Because we are doing stream highlights we are taking all the games that were played." """
     from ai_editor.recipes.highlights import recordings_for
 
     conn = init_db(settings.db_path)
+    video = tmp_path / "r.mkv"
+    video.write_bytes(b"x")
     for rid, game in ((1, "Wardogs"), (2, "League of Legends"), (3, "The Blood of Dawnwalker"),
                       (4, None)):
         conn.execute(
             "INSERT INTO recordings (id, content_hash, source_type, source_file, game, duration_sec, "
-            "imported_at, analysis_status) VALUES (?, ?, 'local_obs', 'r.mkv', ?, 600, "
-            "'2026-09-26T12:00:00', 'complete')", (rid, f"h{rid}", game))
+            "imported_at, analysis_status) VALUES (?, ?, 'local_obs', ?, ?, 600, "
+            "'2026-09-26T12:00:00', 'complete')", (rid, f"h{rid}", str(video), game))
     conn.commit()
     try:
         streams = {r["id"] for r in recordings_for(conn, settings, game=None, recording_ids=None)}

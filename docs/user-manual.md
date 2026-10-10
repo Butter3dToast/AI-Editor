@@ -649,7 +649,7 @@ The **Library** tab lists every recording you've imported, newest first:
 | Column | Shows |
 |---|---|
 | Sound | **4 tracks** (separate mic, game, Discord) or **1 mixed track** |
-| Status | **Analysed**, **Not analysed yet**, **Analysis paused** or **Analysis failed**, **Import unfinished**, or **File missing** (moved or deleted) |
+| Status | **Analysed**, **Not analysed yet**, **Analysis paused** or **Analysis failed**, **Import unfinished**, or **Video deleted (kept for learning)** (deleted or moved; see 23.4) |
 | Clips | How many candidate clips analysis found |
 | Chat | Twitch chat messages attached. For a VOD without chat, how many days Twitch still keeps it |
 
@@ -1601,6 +1601,19 @@ Nothing is lost: clips, ratings, plans, preview copies and sound tracks all stay
 ### 23.3 Moving footage to another drive
 
 If you move raw files, open the project and click **Relink media** to point AI-Editor to the new location.
+
+### 23.4 Deleting a stream once its videos are made
+
+Streams take a lot of space, so it's fine to delete a recording from your recordings folder once you've made its highlights and Shorts. **What AI-Editor learned from it stays**, because it lives in AI-Editor's own library, not in the video file: your 👍 and 👎, the clips you removed or moved, the cuts you adjusted, the transcript, every second's analysis and the League events.
+
+After you delete it:
+
+- The Library shows it as **Video deleted (kept for learning)**.
+- Its clips can still be browsed, watched, rated and adjusted (that uses the smaller preview copy in the cache).
+- New highlight videos leave it out, and say so ("Left out 3 recordings whose video was deleted"); it can't be picked for a Short or Let's Play (**(video deleted)** in the list). Nothing new can be rendered from it.
+- Finished videos you already made are separate files in your output folder and aren't affected.
+
+AI-Editor itself never deletes your recordings: only you do. An automatic test checks every place in AI-Editor that deletes anything (all of them are its own temporary and working files, and Storage clean-up only ever touches its cache), and fails if a new one appears until it's been checked.
 
 ---
 

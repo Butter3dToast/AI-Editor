@@ -67,6 +67,8 @@ def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None)
     ``lets_play``: True for Let's Play games only, False for streams only.
     """
     episodes = {g.lower() for g in settings.lets_play.games}
+    from ..recipes.highlights import has_video
+
     rows = conn.execute("SELECT id, title, source_file, game FROM recordings WHERE "
                         "analysis_status = 'complete' ORDER BY COALESCE(recorded_at, imported_at) "
                         "DESC").fetchall()
@@ -76,7 +78,8 @@ def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None)
         if lets_play is not None and is_episode != lets_play:
             continue
         out.append((f"#{r['id']}  {r['title'] or Path(r['source_file']).stem}"
-                    + (f"  ({r['game']})" if r["game"] else ""), r["id"]))
+                    + (f"  ({r['game']})" if r["game"] else "")
+                    + ("" if has_video(r) else "  (video deleted)"), r["id"]))
     return out
 
 

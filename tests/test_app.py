@@ -169,7 +169,7 @@ def test_the_library_shows_each_recordings_state_in_plain_words(conn, settings, 
     assert by_id[1]["Status"] == "Analysed" and by_id[1]["Clips"] == 1
     assert by_id[1]["Sound"] == "4 tracks" and by_id[1]["Length"] == "2h 00m 00s"
     assert by_id[2]["Status"] == "Import unfinished" and by_id[2]["Sound"] == "1 mixed track"
-    assert by_id[3]["Status"] == "File missing"
+    assert by_id[3]["Status"] == "Video deleted (kept for learning)"
     assert library.recording_choices(conn)[1] == ("#1  done  (Wardogs)", 1)
     text = library.recording_details(conn, settings, 1)
     assert "**Clips found:** 1" in text and "track 0 mic" in text and "Wardogs" in text

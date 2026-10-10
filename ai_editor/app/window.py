@@ -314,7 +314,7 @@ def build(settings: Settings, worker: Worker):
                 return "Pick a recording first."
             name = row["title"] or Path(row["source_file"]).stem
             status = library.status_of(row)
-            if status == "File missing":
+            if status == library.VIDEO_GONE:
                 return (f"The recording isn't at {row['source_file']} any more. If you moved it, "
                         "import it from its new place: it's recognised and relinked.")
             if status == "Import unfinished":

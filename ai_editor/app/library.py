@@ -64,9 +64,13 @@ def _rows(conn) -> list:
     ).fetchall()
 
 
+# Deleted after its videos were made (the creator's way, 10 Oct), or moved.
+VIDEO_GONE = "Video deleted (kept for learning)"
+
+
 def status_of(row) -> str:
     if not Path(row["source_file"]).exists():
-        return "File missing"
+        return VIDEO_GONE
     imported = (row["proxy_path"] and Path(row["proxy_path"]).exists()
                 and row["tracks"] and row["tracks_ready"] == row["tracks"])
     if not imported:
@@ -166,7 +170,10 @@ def recording_details(conn, settings: Settings, recording_id: int) -> str:
                             for t, e in shown)
             lines.append(f"\n<details><summary>Every League event ({len(shown)}): times in the "
                          f"recording</summary><ul>{items}</ul></details>\n")
-    lines.append(f"- **File:** `{source}`" + ("" if source.exists() else "  **(not found)**"))
+    lines.append(f"- **File:** `{source}`" + ("" if source.exists() else
+                 "  **(deleted or moved)**: its clips, transcript and everything you taught "
+                 "AI-Editor are kept, and its clips can still be watched; finished videos "
+                 "can't be made from it. Moved it? Import it from its new place to relink it."))
     return "\n".join(lines)
 
 

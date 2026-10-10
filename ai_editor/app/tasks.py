@@ -358,6 +358,11 @@ def make_letsplay(settings: Settings, recording_id: int) -> Job:
             if row is None or row["analysis_status"] != "complete":
                 raise TaskFailed(f"Recording #{recording_id} isn't analysed yet. Analyse it in "
                                  "the Library first.")
+            from ..recipes.highlights import has_video
+            from ..recipes.shorts import GONE
+
+            if not has_video(row):
+                raise TaskFailed(f"Recording #{recording_id}: {GONE}")
             report.progress("Trimming and splitting into parts", 0.0)
             result = build_letsplay(conn, settings, row)
             report.progress("Trimming and splitting into parts", 1.0)

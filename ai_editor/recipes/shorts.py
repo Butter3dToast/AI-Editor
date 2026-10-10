@@ -30,7 +30,7 @@ from ..analysis.ai_rating import notes_for
 from ..analysis.captions import clock
 from ..config import Settings
 from ..analysis.clips import load_words, realistic, word_boundaries
-from .highlights import Candidate, gather, inside
+from .highlights import Candidate, gather, has_video, inside
 from .plan import DRAFT, EditPlan, Segment, new_plan_id, save_plan, used_in
 
 # Shorter than this share of shorts.min_length_sec (a clip that can't grow
@@ -108,6 +108,8 @@ def choose(candidates: list[Candidate], clips: dict[str, sqlite3.Row], notes: di
     return chosen, rated
 
 
+GONE = ("Its video was deleted (or moved), so a finished video can't be made from it. Its clips and everything you taught AI-Editor about them are kept.")
+
 # A mark pressed a little after its clip ends is still about it.
 MARK_AFTER_SEC = 10.0
 
@@ -164,6 +166,9 @@ def build_shorts(conn: sqlite3.Connection, settings: Settings, recording_id: int
     result = ShortsResult()
     if row is None or row["analysis_status"] != "complete":
         result.notes.append(f"Recording #{recording_id} isn't analysed yet.")
+        return result
+    if not has_video(row):
+        result.notes.append(f"Recording #{recording_id}: " + GONE)
         return result
     candidates = gather(conn, short_settings(settings), [row], quality_bar=False, reuse=True)
     words = realistic(load_words(conn, recording_id))

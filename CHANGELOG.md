@@ -3,6 +3,24 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.15.1 — Deleting streams once their videos are made — 10 October 2026
+
+**Fixed**
+
+- **New highlight videos leave out recordings whose video you deleted**, and say
+  so ("Left out 3 recordings whose video was deleted"). Before, a plan could pick
+  their clips, look fine in quick preview, and then fail at Render.
+- Shorts and Let's Plays can't be started from a deleted recording, and explain
+  why. The Library shows it as **Video deleted (kept for learning)**, and the
+  Create video lists mark it **(video deleted)**. Its clips can still be watched,
+  rated and adjusted, and everything you taught AI-Editor with it is kept.
+
+**New**
+
+- **Proof that AI-Editor never deletes your recordings**: a test lists every
+  place it deletes anything (all its own temporary and working files) and fails
+  if a new one appears until it's checked. Manual 23.4.
+
 ## 0.15.0 — Phase 2E-2: League events in your videos, and adjusting a cut — 10 October 2026
 
 **New**

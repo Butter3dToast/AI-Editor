@@ -30,11 +30,14 @@ def seg(c: Candidate, kind: str = "clip") -> Segment:
 
 
 @pytest.fixture
-def conn(settings):
+def conn(settings, tmp_path):
     connection = init_db(settings.db_path)
+    video = tmp_path / "x.mkv"   # the recording's video is still there (has_video)
+    video.write_bytes(b"x")
     connection.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
                        "duration_sec, imported_at, analysis_status) VALUES "
-                       "(1, 'h', 'local_obs', 'x.mkv', 7200, '2026-10-01T20:00:00', 'complete')")
+                       "(1, 'h', 'local_obs', ?, 7200, '2026-10-01T20:00:00', 'complete')",
+                       (str(video),))
     connection.commit()
     yield connection
     connection.close()

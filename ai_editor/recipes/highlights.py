@@ -102,8 +102,16 @@ def recorded_at(row: sqlite3.Row) -> datetime:
     return datetime.fromisoformat(row["imported_at"]).astimezone(timezone.utc)
 
 
+def has_video(row: sqlite3.Row) -> bool:
+    """Whether the recording's own video is still there. The creator deletes
+    streams once their videos are made (10 Oct); what AI-Editor learned from
+    them stays in the library, but nothing new can be rendered from them."""
+    return Path(row["source_file"]).is_file()
+
+
 def recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str | None,
-                   recording_ids: list[int] | None) -> list[sqlite3.Row]:
+                   recording_ids: list[int] | None,
+                   need_video: bool = True) -> list[sqlite3.Row]:
     """The recordings a highlight video draws from.
 
     By number, if given. For one game: recordings of that game, plus any
@@ -112,7 +120,15 @@ def recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str | 
     Let's Play episodes (lets_play.games) -- "because we are doing stream
     highlights we are taking all the games that were played". A recording
     whose game isn't known is still a stream, so it is included.
+
+    ``need_video``: leave out recordings whose video was deleted (has_video).
     """
+    found = _recordings_for(conn, settings, game=game, recording_ids=recording_ids)
+    return [r for r in found if has_video(r)] if need_video else found
+
+
+def _recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str | None,
+                    recording_ids: list[int] | None) -> list[sqlite3.Row]:
     if recording_ids:
         marks = ",".join("?" * len(recording_ids))
         rows = conn.execute(f"SELECT * FROM recordings WHERE id IN ({marks})", recording_ids)
@@ -499,7 +515,10 @@ def build_highlights(
     ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one."""
     h = settings.highlights
     target = (target_min or h.target_length_min) * 60
-    recordings = recordings_for(conn, settings, game=game, recording_ids=recording_ids)
+    everything = recordings_for(conn, settings, game=game, recording_ids=recording_ids,
+                                need_video=False)
+    recordings = [r for r in everything if has_video(r)]
+    deleted = [r for r in everything if not has_video(r)]
     candidates = gather(conn, settings, recordings, game=game, reuse=reuse)
     for c in candidates:
         if c.clip_id == teaser_clip:
@@ -535,6 +554,11 @@ def build_highlights(
                                      kind="clip", clip_id=c.clip_id, score=c.score,
                                      reasons=c.reasons, game=c.game))
 
+    if deleted:
+        names = ", ".join(f"#{r['id']}" for r in deleted)
+        plan.notes.append(f"Left out {len(deleted)} recording{'s' if len(deleted) != 1 else ''} "
+                          f"whose video was deleted ({names}): nothing can be rendered from "
+                          "them. What you taught AI-Editor with them is kept.")
     if not chosen:
         plan.notes.append(nothing_left_note(conn, settings, recordings, game, reuse))
     elif sum(c.length for c in chosen) < target:

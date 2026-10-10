@@ -110,3 +110,30 @@ def test_heavy_video_work_runs_below_normal_priority():
     if sys.platform == "win32":
         assert ffmpeg._BACKGROUND & subprocess.BELOW_NORMAL_PRIORITY_CLASS
         assert ffmpeg._BACKGROUND & subprocess.CREATE_NO_WINDOW
+
+
+# --- Streams deleted once their videos are made (10 Oct) ----------------------------------------
+
+
+def test_new_highlights_leave_out_recordings_whose_video_was_deleted(settings, tmp_path):
+    from ai_editor.recipes.highlights import build_highlights, recordings_for
+    from ai_editor.recipes.shorts import build_shorts
+
+    conn = init_db(settings.db_path)
+    kept = tmp_path / "kept.mkv"
+    kept.write_bytes(b"x")
+    for rid, path in ((1, kept), (2, tmp_path / "deleted.mkv")):
+        conn.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                     "duration_sec, imported_at, analysis_status, game) VALUES "
+                     "(?, ?, 'local_obs', ?, 600, 'now', 'complete', 'Wardogs')",
+                     (rid, f"h{rid}", str(path)))
+    conn.commit()
+    assert [r["id"] for r in recordings_for(conn, settings, game="Wardogs",
+                                            recording_ids=None)] == [1]
+    assert len(recordings_for(conn, settings, game="Wardogs", recording_ids=None,
+                              need_video=False)) == 2
+    plan = build_highlights(conn, settings, game="Wardogs").plan
+    assert any("Left out 1 recording whose video was deleted (#2)" in n for n in plan.notes)
+    shorts = build_shorts(conn, settings, 2)
+    assert not shorts.plans and "video was deleted" in shorts.notes[0]
+    conn.close()
