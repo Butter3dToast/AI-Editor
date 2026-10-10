@@ -20,9 +20,9 @@ from ..config import Settings
 from ..db import init_db
 from ..errors import AIEditorError
 from ..games import canonical_game
-from ..recipes import review
+from ..recipes import history, review
 from ..recipes.plan import save_plan
-from . import library, tasks, videos
+from . import library, review_list, tasks, videos
 from .worker import DONE, Worker, submitted
 
 ALL_STREAMS = "All my streams"
@@ -155,10 +155,18 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         seen = gr.State(-1)
         handled = gr.State({"plan_id": 0, "preview": 0})
         add_spots = gr.State({})
+        undo_note = gr.State("")    # what Undo or Redo just did, shown once all is redrawn
         with gr.Row():
             with gr.Column(scale=3):
-                plan_tbl = gr.Dataframe(headers=videos.PLAN_COLUMNS, interactive=False, wrap=True,
-                                        max_height=520, column_widths=PLAN_WIDTHS)
+                with gr.Row():
+                    undo_btn = gr.Button("↶ Undo", size="sm", interactive=False, scale=1)
+                    redo_btn = gr.Button("↷ Redo", size="sm", interactive=False, scale=1)
+                # The length bar, and the clips to click and drag (Phase 2D-1).
+                clip_list = gr.HTML("", css_template=review_list.LIST_CSS,
+                                    js_on_load=review_list.LIST_JS, elem_id="aie-clip-list")
+                # A Let's Play's parts: the list above shows only their bar.
+                plan_tbl = gr.Dataframe(headers=videos.PART_COLUMNS, interactive=False, wrap=True,
+                                        max_height=520, column_widths=PART_WIDTHS, visible=False)
                 # Highlights only: hidden for a Let's Play.
                 with gr.Row():
                     teaser_btn = gr.Button("Use as teaser")
@@ -369,14 +377,31 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     # --- Review: handlers ---------------------------------------------------------------
 
     def table_for(plan):
+        """A Let's Play's parts. Highlights and Shorts show their clips in clip_list."""
         if plan.recipe == "letsplay":
             return pd.DataFrame(videos.part_table(plan), columns=videos.PART_COLUMNS)
-        return pd.DataFrame(read(videos.plan_table, plan, settings), columns=videos.PLAN_COLUMNS)
+        return gr.skip()
 
     def shaped_table(plan):
-        widths = PART_WIDTHS if plan is not None and plan.recipe == "letsplay" else PLAN_WIDTHS
-        return gr.Dataframe(value=table_for(plan) if plan is not None
-                            else pd.DataFrame(columns=videos.PLAN_COLUMNS), column_widths=widths)
+        lets_play = plan is not None and plan.recipe == "letsplay"
+        return gr.Dataframe(value=table_for(plan) if lets_play
+                            else pd.DataFrame(columns=videos.PART_COLUMNS), visible=lets_play)
+
+    def list_view(plan_id, selected=None):
+        """The length bar and clip list, and what Undo and Redo would do."""
+        conn = init_db(settings.db_path)
+        try:
+            plan, _ = videos.get_plan(conn, plan_id)
+            body = review_list.review_list(conn, plan, settings, selected)
+            back, again = history.can(conn, plan_id if plan is not None else None)
+        finally:
+            conn.close()
+        return (body,
+                gr.Button(value=f"↶ Undo {back}" if back else "↶ Undo", interactive=bool(back)),
+                gr.Button(value=f"↷ Redo {again}" if again else "↷ Redo",
+                          interactive=bool(again)))
+
+    list_outputs = [clip_list, undo_btn, redo_btn]
 
     def show_plan(plan_id):
         plan, status = read(videos.get_plan, plan_id)
@@ -416,13 +441,15 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return [gr.update(visible=visible, choices=[e[:2] for e in extra], value=None)
                 if part is add_pick else gr.update(visible=visible) for part in highlight_only]
 
-    plan_outputs =[summary, plan_tbl, *highlight_only, episode_box, part_pick, captions_box,
+    plan_outputs = [summary, plan_tbl, *highlight_only, episode_box, part_pick, captions_box,
                     preview_btn, review_player, sel, review_msg, finish_msg, add_spots]
     plan_pick.change(show_plan, plan_pick, plan_outputs)
     ui.load(show_plan, plan_pick, plan_outputs)
     # Again on opening the tab: Gradio 6 drops "hide this" sent to a tab that
     # isn't on screen yet, so a Let's Play could open showing highlight buttons.
     review_tab.select(show_plan, plan_pick, plan_outputs)
+    for event in (plan_pick.change, review_tab.select, ui.load):
+        event(list_view, plan_pick, list_outputs)
 
     def show_layout(plan_id):
         from ..render.final import vertical_of
@@ -443,8 +470,9 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             plan, status = videos.get_plan(conn, plan_id)
             if plan is None or plan.recipe != "shorts" or not layout:
                 return gr.skip(), gr.skip()
-            plan.source["layout"] = layout
-            save_plan(conn, plan, status)
+            with history.step(conn, plan_id, "the Short's layout"):
+                plan.source["layout"] = layout
+                save_plan(conn, plan, status)
         finally:
             conn.close()
         name = dict((v, k) for k, v in LAYOUTS).get(layout, layout)
@@ -454,7 +482,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return (f"This Short will use **{name}**. Make a quick preview to see it.",
                 videos.player(None, note=f"No quick preview of {name} yet."))
 
-    layout_pick.input(set_layout, [plan_pick, layout_pick], [review_msg, review_player])
+    layout_pick.input(set_layout, [plan_pick, layout_pick], [review_msg, review_player]).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def show_effects(plan_id):
         from ..effects import switches
@@ -473,8 +502,9 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             plan, status = videos.get_plan(conn, plan_id)
             if plan is None:
                 return "Pick a plan first."
-            set_switches(plan, chosen or [])
-            save_plan(conn, plan, status)
+            with history.step(conn, plan_id, "the effects"):
+                set_switches(plan, chosen or [])
+                save_plan(conn, plan, status)
         finally:
             conn.close()
         if not chosen:
@@ -502,7 +532,9 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     for event in (plan_pick.change, review_tab.select, ui.load):
         event(show_moments, plan_pick, moments_box)
-    effects_changed.then(show_moments, plan_pick, moments_box)  # once the switches are saved
+    # Once the switches are saved: replays change the video's length.
+    effects_changed.then(show_moments, plan_pick, moments_box).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def set_moments(plan_id, kept):
         from ..effects import moments, set_moments_on
@@ -513,15 +545,17 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             if plan is None:
                 return "Pick a plan first."
             every = [k for _, k in moments(conn, settings, plan)]
-            set_moments_on(plan, every, kept or [])
-            save_plan(conn, plan, status)
+            with history.step(conn, plan_id, "each effect's ticks"):
+                set_moments_on(plan, every, kept or [])
+                save_plan(conn, plan, status)
         finally:
             conn.close()
         left_out = len(every) - len(set(kept or []) & set(every))
         return (f"{len(every) - left_out} of {len(every)} moments keep their effects. Make a quick "
                 "preview to see and hear them.")
 
-    moments_box.input(set_moments, [plan_pick, moments_box], review_msg)
+    moments_box.input(set_moments, [plan_pick, moments_box], review_msg).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def show_between(plan_id):
         from ..render.slide import between
@@ -540,14 +574,16 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             plan, status = videos.get_plan(conn, plan_id)
             if plan is None:
                 return "Pick a plan first."
-            plan.source["between"] = choice
-            save_plan(conn, plan, status)
+            with history.step(conn, plan_id, "between clips"):
+                plan.source["between"] = choice
+                save_plan(conn, plan, status)
         finally:
             conn.close()
         return ("Each clip slides in over the last. Make a quick preview to see it."
                 if choice == "slide" else "Hard cuts between clips.")
 
-    between_pick.input(set_between, [plan_pick, between_pick], review_msg)
+    between_pick.input(set_between, [plan_pick, between_pick], review_msg).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def show_music(plan_id):
         plan, _ = read(videos.get_plan, plan_id)
@@ -564,14 +600,16 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             plan, status = videos.get_plan(conn, plan_id)
             if plan is None:
                 return "Pick a plan first."
-            plan.source["music"] = bool(on)
-            save_plan(conn, plan, status)
+            with history.step(conn, plan_id, "music from your stream"):
+                plan.source["music"] = bool(on)
+                save_plan(conn, plan, status)
         finally:
             conn.close()
         return ("The music from your stream will be in this video, kept under the talking."
                 if on else "No music from your stream in this video.")
 
-    music_box.input(set_music, [plan_pick, music_box], review_msg)
+    music_box.input(set_music, [plan_pick, music_box], review_msg).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def part_preview(plan_id, part):
         plan, _ = read(videos.get_plan, plan_id)
@@ -581,9 +619,18 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     part_pick.input(part_preview, [plan_pick, part_pick], review_player)
 
-    def pick_row(plan_id, evt: gr.SelectData):
-        row = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+    def selected_row(evt) -> int | None:
+        """The row a click picked: from the table (SelectData), or clip_list's trigger."""
+        index = getattr(evt, "index", None) if isinstance(evt, gr.SelectData) else \
+            (getattr(evt, "_data", None) or {}).get("row")
+        row = index[0] if isinstance(index, (list, tuple)) else index
+        return int(row) if isinstance(row, (int, float)) else None
+
+    def pick_row(plan_id, evt: gr.EventData):
+        row = selected_row(evt)
         plan, _ = read(videos.get_plan, plan_id)
+        if row is None:
+            return gr.skip(), gr.skip(), gr.skip()
         if plan is None:
             return gr.skip(), None, gr.skip()
         if plan.recipe == "letsplay":
@@ -603,6 +650,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return videos.player(proxy, s.src_in, s.src_out), row, gr.skip()
 
     plan_tbl.select(pick_row, plan_pick, [review_player, sel, part_pick])
+    clip_list.click(pick_row, plan_pick, [review_player, sel, part_pick])
 
     # --- Adjust the cut ------------------------------------------------------------------
 
@@ -625,10 +673,11 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     cut_outputs = [adjust_box, pending_cut, adjust_info, start_txt, end_txt, review_player]
 
-    def open_cut(plan_id, evt: gr.SelectData):
-        row = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+    def open_cut(plan_id, evt: gr.EventData):
+        row = selected_row(evt)
         plan, _ = read(videos.get_plan, plan_id)
-        if plan is None or plan.recipe == "letsplay" or not 0 <= row < len(plan.segments):
+        if plan is None or plan.recipe == "letsplay" or row is None \
+                or not 0 <= row < len(plan.segments):
             return cut_view(None)
         s = plan.segments[row]
         cut = {"plan": plan_id, "index": row, "rid": s.recording_id, "start": s.src_in,
@@ -636,6 +685,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return cut_view(cut)[:-1] + (gr.skip(),)   # the row's own player is already showing it
 
     plan_tbl.select(open_cut, plan_pick, cut_outputs)
+    clip_list.click(open_cut, plan_pick, cut_outputs)
     for event in (plan_pick.change, review_tab.select):
         event(lambda: cut_view(None), None, cut_outputs)
 
@@ -721,11 +771,15 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             if index is None:
                 return (gr.skip(), gr.skip(), "That clip has changed since you clicked it: "
                         "click it again.", *cut_view(None))
-            change = review.adjust(conn, settings, plan, index, cut["start"], cut["end"])
-            if change.plan.segments[index].src_in == cut["was"][0] and \
-                    change.plan.segments[index].src_out == cut["was"][1]:
-                return gr.skip(), gr.skip(), change.message, *cut_view(cut)
-            save_plan(conn, change.plan, status)
+            segment = plan.segments[index]
+            what = ("the teaser's cut" if segment.kind == "teaser"
+                    else f"clip {index + 1}'s cut")
+            with history.step(conn, plan_id, f"adjusting {what}", clips=[segment.clip_id]):
+                change = review.adjust(conn, settings, plan, index, cut["start"], cut["end"])
+                if change.plan.segments[index].src_in == cut["was"][0] and \
+                        change.plan.segments[index].src_out == cut["was"][1]:
+                    return gr.skip(), gr.skip(), change.message, *cut_view(cut)
+                save_plan(conn, change.plan, status)
         finally:
             conn.close()
         s = change.plan.segments[index]
@@ -734,7 +788,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 *cut_view(cut, "Saved.", (s.src_in, s.src_out)))
 
     save_cut_btn.click(save_cut, [plan_pick, pending_cut, start_txt, end_txt],
-                       [summary, plan_tbl, review_msg, *cut_outputs])
+                       [summary, plan_tbl, review_msg, *cut_outputs]).then(
+        list_view, [plan_pick, sel], list_outputs)
 
     def play_addable(clip_id, where):
         if not clip_id or clip_id not in where:
@@ -771,31 +826,39 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 return gr.skip(), gr.skip(), "Type the number to move it to first.", index, *skip
             if index is None or not 0 <= index < len(plan.segments):
                 return gr.skip(), gr.skip(), "Click a row in the list first.", index, *skip
+            number = index + 1
+            teaser = plan.segments[index].kind == "teaser"
+            what = {"add": "adding a clip", "sort": "sorting by time",
+                    "move_to": f"moving clip {number} to #{int(extra or 0)}",
+                    "remove": "removing the teaser" if teaser else f"removing clip {number}",
+                    "up": f"moving clip {number} up", "down": f"moving clip {number} down",
+                    }.get(action, "choosing the teaser")
             conn = init_db(settings.db_path)
             try:
-                if action == "add":
-                    change = review.add(conn, settings, plan, extra)
-                    index = None
-                elif action == "sort":
-                    change = review.sort_by_time(conn, plan)
-                    index = None
-                elif action == "move_to":
-                    change = review.move_to(conn, plan, index, int(extra))
-                    if change.message.startswith("Moved to #"):
-                        index = int(change.message.removeprefix("Moved to #").rstrip(".")) - 1
-                elif action == "remove":
-                    change = review.remove(conn, settings, plan, index)
-                    index = None
-                elif action in ("up", "down"):
-                    step = -1 if action == "up" else 1
-                    change = review.move(conn, plan, index, step)
-                    if change.message.startswith("Moved"):
-                        clips = review.clip_indexes(plan)
-                        index = clips[clips.index(index) + step] if index in clips else index
-                else:
-                    change = review.use_as_teaser(conn, settings, plan, index, moment_range)
-                    index = None
-                save_plan(conn, change.plan, status)
+                with history.step(conn, plan_id, what):
+                    if action == "add":
+                        change = review.add(conn, settings, plan, extra)
+                        index = None
+                    elif action == "sort":
+                        change = review.sort_by_time(conn, plan)
+                        index = None
+                    elif action == "move_to":
+                        change = review.move_to(conn, plan, index, int(extra))
+                        if change.message.startswith("Moved to #"):
+                            index = int(change.message.removeprefix("Moved to #").rstrip(".")) - 1
+                    elif action == "remove":
+                        change = review.remove(conn, settings, plan, index)
+                        index = None
+                    elif action in ("up", "down"):
+                        step = -1 if action == "up" else 1
+                        change = review.move(conn, plan, index, step)
+                        if change.message.startswith("Moved"):
+                            clips = review.clip_indexes(plan)
+                            index = clips[clips.index(index) + step] if index in clips else index
+                    else:
+                        change = review.use_as_teaser(conn, settings, plan, index, moment_range)
+                        index = None
+                    save_plan(conn, change.plan, status)
                 # What's in the video changed, so what could be added did too.
                 extra = None
                 if action in ("add", "remove"):
@@ -813,14 +876,49 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return apply
 
     edit_outputs = [summary, plan_tbl, review_msg, sel, add_pick, add_spots]
-    add_btn.click(edit("add"), [plan_pick, sel, add_pick], edit_outputs)
-    sort_btn.click(edit("sort"), [plan_pick, sel], edit_outputs)
-    move_to_btn.click(edit("move_to"), [plan_pick, sel, position], edit_outputs)
-    remove_btn.click(edit("remove"), [plan_pick, sel], edit_outputs)
-    up_btn.click(edit("up"), [plan_pick, sel], edit_outputs)
-    down_btn.click(edit("down"), [plan_pick, sel], edit_outputs)
-    teaser_btn.click(edit("teaser"), [plan_pick, sel], edit_outputs)
-    moment_btn.click(edit("moment"), [plan_pick, sel, moment], edit_outputs)
+    for button, action, inputs in ((add_btn, "add", [plan_pick, sel, add_pick]),
+                                   (sort_btn, "sort", [plan_pick, sel]),
+                                   (move_to_btn, "move_to", [plan_pick, sel, position]),
+                                   (remove_btn, "remove", [plan_pick, sel]),
+                                   (up_btn, "up", [plan_pick, sel]),
+                                   (down_btn, "down", [plan_pick, sel]),
+                                   (teaser_btn, "teaser", [plan_pick, sel]),
+                                   (moment_btn, "moment", [plan_pick, sel, moment])):
+        button.click(edit(action), inputs, edit_outputs).then(
+            list_view, [plan_pick, sel], list_outputs)
+
+    def dropped(plan_id, evt: gr.EventData):
+        """A clip dragged to a new place in the list: ``from`` and ``to`` are rows."""
+        data = getattr(evt, "_data", None) or {}
+        if not isinstance(data.get("from"), (int, float)) or not isinstance(data.get("to"),
+                                                                              (int, float)):
+            return (gr.skip(),) * len(edit_outputs)
+        return edit("move_to")(plan_id, int(data["from"]), int(data["to"]) + 1)
+
+    clip_list.submit(dropped, plan_pick, edit_outputs).then(
+        list_view, [plan_pick, sel], list_outputs)
+
+    # --- Undo and Redo (Phase 2D-1): kept after AI-Editor closes ----------------------------
+
+    def stepper(fn):
+        def apply(plan_id):
+            if not plan_id:
+                return "Pick a plan first."
+            return read(fn, plan_id)
+        return apply
+
+    for button, fn in ((undo_btn, history.undo), (redo_btn, history.redo)):
+        # Everything Review shows about the plan, again, then what was undone.
+        (button.click(stepper(fn), plan_pick, undo_note)
+         .then(show_plan, plan_pick, plan_outputs)
+         .then(show_layout, plan_pick, layout_pick)
+         .then(show_effects, plan_pick, effects_box)
+         .then(show_moments, plan_pick, moments_box)
+         .then(show_between, plan_pick, between_pick)
+         .then(show_music, plan_pick, music_box)
+         .then(lambda: cut_view(None), None, cut_outputs)
+         .then(list_view, plan_pick, list_outputs)
+         .then(lambda note: note, undo_note, review_msg))
 
     def preview(plan_id, part):
         plan, _ = read(videos.get_plan, plan_id)

@@ -3,6 +3,46 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.17.0 — Phase 2D-1: Drag, the length bar, and Undo — 10 October 2026
+
+**New**
+
+- **Drag clips to reorder them** in Review: grab a row and drop it where you
+  want it; a line shows where it lands. The teaser always opens the video, so
+  it can't be dragged. Move up/down, Move to # and Sort by time are still there.
+- **The length bar** above the list: one block per clip, as wide as the clip
+  is long, against your target (about 10 minutes for highlights, never below;
+  60 seconds at most for a Short; 25-35 minutes a part for a Let's Play). The
+  teaser is amber, a clip with a slow-motion replay purple. Click a block to
+  pick that clip, the same as clicking its row.
+- **Undo and Redo** for every change in Review: removing, moving, dragging,
+  the teaser, adding a clip, adjusting a cut, the effect switches and ticks,
+  between clips, music, a Short's layout. The button says what it would undo.
+  Each video keeps its own history after AI-Editor closes. Undoing an adjusted
+  cut puts the clip in the library back too. An undone change is marked
+  undone in what AI-Editor keeps for learning, so a misclick teaches nothing.
+  The upload text is never undone.
+- **⭐ on your marked clips**: a clip with your Stream Companion mark in it has a
+  star in front of its Why, in Clips and in Review.
+
+**Fixed**
+
+- **Your Stream Companion marks from 6-9 October were missing from those
+  streams' clips.** The Companion connected to OBS just after recording began,
+  so it didn't hear the file's name, and the backup match by time read the
+  date inside the .mkv, which OBS writes when recording *ends*: two hours out.
+  Recordings now also match by the file named when recording stops, by the
+  time in OBS's file name, and by the file's dates less its length. At start,
+  AI-Editor links any recording that now matches and cuts its clips again
+  with your marks in (your ratings, adjusted cuts and used clips stay): 69
+  marks found across 6, 7, 8 and 9 October.
+- **Importing now always says whether a Companion log was found**, with your
+  marks counted, or that none matched; the line above the Clips list says the
+  same for each recording.
+- **Your mark beats a 👎 on a clip that didn't have it**: those streams were
+  rated before their marks were linked, so a thumbs-down on a badly cut,
+  unmarked clip no longer keeps your marked moment out.
+
 ## 0.16.0 — Phase 2C-2: Punch-in zoom and slow-motion replays — 10 October 2026
 
 **New**

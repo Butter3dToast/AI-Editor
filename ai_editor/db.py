@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 _V1 = """
@@ -290,7 +290,29 @@ CREATE INDEX idx_ai_notes_recording ON ai_clip_notes(recording_id, start_sec);
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3}
+# Phase 2D: Undo and Redo in Review, kept after AI-Editor closes (the
+# creator's choice). Each row is one change to a plan: the plan before and
+# after, the library clips it re-cut, and the feedback it logged. An undone
+# change's feedback is marked undone, so a misclick teaches nothing; whatever
+# learns from feedback later must skip those rows.
+_V4 = """
+CREATE TABLE plan_history (
+    id              INTEGER PRIMARY KEY,
+    plan_id         TEXT    NOT NULL REFERENCES edit_plans(plan_id) ON DELETE CASCADE,
+    what            TEXT    NOT NULL,          -- "removing clip 4", in plain words
+    before_json     TEXT    NOT NULL,
+    after_json      TEXT    NOT NULL,
+    clips_json      TEXT,                      -- [{clip_id, before, after}] for re-cut clips
+    feedback_json   TEXT,                      -- ids of the feedback rows it logged
+    undone          INTEGER NOT NULL DEFAULT 0,
+    made_at         TEXT    NOT NULL
+);
+CREATE INDEX idx_plan_history ON plan_history(plan_id, id);
+ALTER TABLE feedback ADD COLUMN undone INTEGER NOT NULL DEFAULT 0;
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

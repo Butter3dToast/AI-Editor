@@ -185,9 +185,15 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         starts = [w.start for w in words]
         when = recorded_at(row)
         clips = conn.execute("SELECT * FROM clips WHERE recording_id = ?", (row["id"],)).fetchall()
+        def has_mark(c) -> bool:
+            summary = json.loads(c["signals_json"] or "{}")
+            return "marker" in summary or "marker_short" in summary
+
         # A thumbs-down covers the moment, not just that clip: a re-cut clip
-        # starting a little earlier must not bring it back.
-        rejected = [(c["start_sec"], c["end_sec"]) for c in clips
+        # starting a little earlier must not bring it back. Except your own mark,
+        # when the clip you turned down didn't have it (10 Oct: 6-9 Oct streams
+        # were rated before their marks were linked).
+        rejected = [(c["start_sec"], c["end_sec"], has_mark(c)) for c in clips
                     if c["user_rating"] is not None and c["user_rating"] < 0]
         # The local AI's rating counts for llm.rating_weight of the score (0 by default).
         scores = scores_for(conn, settings, row["id"], clips)
@@ -202,7 +208,8 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                 (h.always_include_markers and marked)
             if quality_bar and scores[clip["clip_id"]] < h.min_clip_score and not must:
                 continue
-            if any(a < clip["end_sec"] and clip["start_sec"] < b for a, b in rejected):
+            if any(a < clip["end_sec"] and clip["start_sec"] < b and (had_mark or not marked)
+                   for a, b, had_mark in rejected):
                 continue  # thumbs down
             clip_game = summary.get("game") or row["game"]
             if game and clip_game != game:

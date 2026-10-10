@@ -41,7 +41,8 @@ a hard rule, not a preference.
 | **2E-1** | The Companion logs League events (kills, multikills, objectives, result) from the Live Client Data API | **Complete** |
 | **2E-2** | League events pick clips, give reasons ("Triple kill"), place effects, suggest Shorts, skip downtime; plus Adjust the cut in Review (brought forward from 2D) | **Complete** |
 | **2C-2** | Punch-in zoom on your reactions, slow-motion replays after the big moments (freeze frames left out: your choice) | **Complete** |
-| 2D | Full Review screen: drag, length bar, caption editing, undo (trimming a cut is done, in 2E-2) | Next |
+| **2D-1** | Review: drag clips to reorder, a length bar against the target, Undo and Redo kept after closing | **Complete** |
+| 2D-2 | Review: editing captions (fixes apply everywhere, originals kept) | Next |
 | 2F | Dawnwalker story protection, missions, hook endings, length bar | Not started |
 | 2G | Style profiles from reference videos | Not started |
 | 2H | Plain-English rules | Not started |

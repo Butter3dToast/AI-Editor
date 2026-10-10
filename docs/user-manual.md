@@ -481,7 +481,11 @@ Recordings made before version 0.14 have no League events; they keep working as 
 
 ### 8.4 Session log
 
-Right-click the tray icon → **View session log** to see markers and events from today's sessions. AI-Editor matches these to your footage automatically during import.
+Right-click the tray icon → **View session log** to see markers and events from today's sessions. AI-Editor matches these to your footage automatically during import: by the file OBS was writing (told when recording starts or stops), or else by when the recording started (from OBS's file name, like `2026-10-08 19-55-02.mkv`, or the file's own dates).
+
+**The import always says what it found** in the Jobs list: "Stream Companion log found: 5 highlight mark(s) and 11 Shorts mark(s)…", or "No Stream Companion log matched this recording, so none of your marks are in its clips." The line above the Clips list says the same for each recording ("your marks: 5 highlight, 11 Shorts", or "no Stream Companion log linked").
+
+If a log turns up for a recording that had none (as for the streams of 6-9 October 2026, when the Companion noticed OBS recording a moment late), AI-Editor links it the next time it starts and cuts that recording's clips again with your marks in, shown in Jobs as **Finding your Stream Companion marks**. Your 👍/👎, adjusted cuts and clips used in videos stay as they are. Your mark wins over a 👎 you gave a clip of the same moment that didn't have the mark.
 
 From the command line: `ai-editor sessions` lists recent sessions, and `ai-editor sessions <session>` shows one in full. Each line has the time it happened, how far into the stream it was, and how far into the recording.
 
@@ -789,7 +793,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 ### 12.1 What you see for each clip
 
-1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, and how many minutes of video your unused 👍 clips make.
+1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, how many minutes of video your unused 👍 clips make, and your marks from the Stream Companion (8.4). A clip with your mark in it has a ⭐ in front of its **Why** ("⭐ you marked it (Short)"), here and in Review.
 2. Each row is one clip:
 
 | Column | Shows |
@@ -1209,19 +1213,23 @@ Every video goes through Review before rendering. Nothing is final until you ren
 ### 18.1 Layout
 
 - **Video plan:** every plan you've made, newest first. It opens on the newest one.
-- **The list** (highlights): every piece in order. The teaser first, then each clip, with where it lands in the video, which stream it's from, where it starts in that stream, its length, score, and why it's in.
+- **↶ Undo / ↷ Redo:** see 18.4.
+- **The length bar:** how long the video is against its target, one block per clip, as wide as the clip is long. The teaser is amber, a clip with a slow-motion replay is purple (and marked ⟲), the dashed line is your target. Highlights: about 10 minutes, never below; the note turns amber when the video is under it. A Short: 60 seconds at most. A Let's Play: one block per part, aiming for 25-35 minutes each. Hover a block to see what it is; click it to pick that clip (or part), the same as clicking its row.
+- **The list** (highlights and Shorts): every piece in order. The teaser first, then each clip, with where it lands in the video, which stream it's from, where it starts in that stream, its length, score, and why it's in.
 - **The parts** (Let's Plays): see 15.1.
-- **Player** (right): click a row to watch that piece, from the preview copy.
+- **Player** (right): click a row (or a block on the bar) to watch that piece, from the preview copy.
 - **Quick preview of the whole video:** a low-resolution version of the whole thing, made in seconds, that plays in the same player.
 
 ### 18.2 Things you can do (highlights)
 
-Click a row first, then:
+**Drag a clip to move it:** grab its row (the ⠿ on the left, or anywhere on the row) and drop it where you want it; a line shows where it will land. The teaser always opens the video, so it can't be dragged.
+
+Or click a row first, then:
 
 - **Use as teaser:** the video opens with a few seconds of this clip's best moment, and ends on the clip in full, paying the teaser off.
 - **Or the teaser from an exact moment:** type the time in the quick preview or render, e.g. `6:36-6:42`, or just where it starts, `6:36`, and click **Use this moment**. AI-Editor adds a second either side and never starts or stops mid-word.
 - **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
-- **Move up / Move down:** changes the order one place. The teaser always stays first.
+- **Move up / Move down:** changes the order one place, if you'd rather not drag. The teaser always stays first.
 - **Move the clicked clip to #:** type a number from the list's **#** column and click **Move**: the clip jumps straight there.
 - **Sort by time:** puts everything back in the order it happened: the teaser first, the clips as they happened, the teaser's own clip saved for the end.
 - **Add a clip that isn't in the video:** lists the clips from the same streams that aren't in it, your 👍 clips first, then the best (including ones under the quality bar: you're the judge here). Pick one to watch it in the player, then **Add to video**. It goes in where it happened in the stream; move it from there. A clip that fills the gap after a **Remove** slots in by time the same way.
@@ -1243,7 +1251,19 @@ Saving moves each edge at most half a second, only so it never cuts you off mid-
 
 **AI-Editor remembers your cut.** The clip in the Clips library takes your start and end, so the next highlight video or Short with that moment uses your version, and analysing the recording again never replaces it.
 
-**Not built yet:** the length bar, editing captions, and undo (Phase 2D).
+### 18.4 Undo and Redo
+
+**↶ Undo** takes back your last change to this video; press it again to go further back. **↷ Redo** does again what you undid. The button says what it would undo or redo, e.g. "↶ Undo removing clip 4".
+
+- It covers every change in Review: removing, moving and dragging, the teaser, adding a clip, adjusting a cut, the effect switches and each effect's ticks, between clips, music, and a Short's layout.
+- Each video has its own history, and it's kept when you close AI-Editor.
+- Undoing a cut you adjusted puts the clip in the Clips library back as it was, too.
+- **A misclick teaches nothing:** what AI-Editor keeps for learning (chapter 22) marks an undone change as undone.
+- Making a new change after undoing ends Redo for what you undid.
+- The upload text (titles, description, tags) is never undone: change that by hand, and **Keep my changes**.
+- Making a plan again in Create video starts it with a fresh history.
+
+**Not built yet:** editing captions (Phase 2D-2).
 
 ---
 

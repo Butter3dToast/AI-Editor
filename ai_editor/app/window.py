@@ -458,6 +458,22 @@ def recover(settings: Settings) -> None:
         conn.close()
 
 
+def find_marks(settings: Settings, worker: Worker) -> None:
+    """Recordings with no Stream Companion log linked that one now matches get
+    it, with their clips cut again (10 Oct: 6-9 Oct streams had none). Quick
+    to check, so it's checked at every start; a job only when there's work."""
+    from ..companion.link import unlinked_with_log
+
+    conn = init_db(settings.db_path)
+    try:
+        waiting = unlinked_with_log(conn)
+    finally:
+        conn.close()
+    if waiting:
+        worker.submit(f"Finding your Stream Companion marks ({len(waiting)} recording(s))",
+                      "companion:marks", tasks.find_marks(settings))
+
+
 def _ignore_dropped_connections(record: logging.LogRecord) -> bool:
     """A browser tab closing mid-request makes Windows' asyncio print a
     ConnectionResetError traceback in the black window. It's harmless, and
@@ -486,6 +502,7 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
     logging.getLogger("asyncio").addFilter(_ignore_dropped_connections)
     worker = Worker()
     ui = build(settings, worker)
+    find_marks(settings, worker)
     print(f"\n  {__product_name__} {__version__} is running at {url}\n"
           "  Only this PC can open it.\n\n"
           "  Leave this window open while you use AI-Editor.\n"

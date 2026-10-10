@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..cli import ANALYSIS_LABELS, STEP_LABELS, _duration, _safe_filename
-from ..companion.link import league_summary, link_recording
+from ..companion.link import found_text, link_recording
 from ..config import Settings
 from ..db import init_db
 from ..errors import AIEditorError
@@ -138,18 +138,32 @@ def _ingest(conn, settings: Settings, path: Path, report: Reporter, *, game, tra
         raise TaskFailed(f"{result.error_message} Press Resume to try again; finished "
                          "steps won't be repeated.")
     recording_id = result.registration.recording_id
-    match = link_recording(conn, recording_id)
-    if match:
-        detail = f"Stream Companion session found: {match.markers} marker(s)"
-        if match.short_markers:
-            detail += f" and {match.short_markers} Short-worthy"
-        if match.games:
-            detail += f"; games played: {', '.join(match.games)}"
-        if match.league:
-            detail += f"; League events: {league_summary(match.league)}"
-        report.say(detail + ".")
+    report.say(found_text(link_recording(conn, recording_id)))
     report.say(f"Imported #{recording_id}.")
     return recording_id
+
+
+def find_marks(settings: Settings) -> Job:
+    """Link Stream Companion logs to recordings that have none, and cut their
+    clips again with the marks in. Run once at start when there are any (10 Oct:
+    6-9 Oct streams had none linked). Ratings, adjusted cuts and used clips stay."""
+    from ..analysis.clips import refresh_clips
+    from ..companion.link import unlinked_with_log
+
+    def run(report: Reporter) -> None:
+        conn = init_db(settings.db_path)
+        try:
+            for row in unlinked_with_log(conn):
+                name = Path(row["source_file"]).stem
+                text = found_text(link_recording(conn, row["id"]))
+                if row["analysis_status"] == "complete":
+                    clips, _ = refresh_clips(conn, settings, row)
+                    text += f" Its clips are cut again with them: {len(clips or [])} clips."
+                report.say(f"#{row['id']} {name}: {text}")
+        finally:
+            conn.close()
+
+    return run
 
 
 def _analyse(conn, settings: Settings, recording_id: int, report: Reporter) -> None:

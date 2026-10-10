@@ -37,7 +37,7 @@ from .ffmpeg import (
     nvenc_encoders,
     probe,
 )
-from .companion.link import link_recording, stream_offset
+from .companion.link import found_text, link_recording, stream_offset
 from .games import canonical_game
 from .ingest import Registration, ingest_recording
 from .logging_setup import get_logger, setup_logging
@@ -508,6 +508,8 @@ def _import_file(settings, conn, path: Path, *, game, tracks, source_type, vod_i
         if match.games:
             detail += f"; games played: {', '.join(match.games)}"
         console.print(f"Stream Companion: {detail}")
+    else:
+        console.print(f"[yellow]{found_text(None)}[/yellow]")
 
     console.print(f"Next: [bold]ai-editor analyze {recording_id}[/bold]")
     return recording_id

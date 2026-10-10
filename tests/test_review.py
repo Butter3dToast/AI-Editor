@@ -300,3 +300,17 @@ def test_move_to_a_number_in_one_go(conn, library):
     assert review.move_to(conn, plan, 1, 1).message == "It's already #2."  # never above the teaser
     assert review.move_to(conn, plan, 1, 99).message == "Moved to #6."
     assert "teaser always opens" in review.move_to(conn, plan, 0, 3).message
+
+
+def test_your_mark_beats_a_thumbs_down_on_a_clip_that_did_not_have_it(conn, settings):
+    """6-9 Oct: clips were rated before the Companion's marks were linked."""
+    from ai_editor.recipes.highlights import gather, recordings_for
+
+    add_clip(conn, "old_cut", 100, 140, 0.5, rating=-1)              # turned down, no mark
+    add_clip(conn, "marked_now", 120, 200, 0.5, marker=True)         # the same moment, marked
+    add_clip(conn, "turned_down_marked", 500, 560, 1.0, rating=-1, marker=True)
+    add_clip(conn, "recut_of_that", 510, 580, 1.0, marker=True)      # still turned down
+    conn.commit()
+    rows = recordings_for(conn, settings, game=None, recording_ids=[1])
+    found = {c.clip_id for c in gather(conn, settings, rows, refresh=False, quality_bar=False)}
+    assert found == {"marked_now"}

@@ -179,3 +179,95 @@ def test_scene_names_map_to_games():
     assert game_for_scene("The Blood Of Dawnwalker") == "The Blood of Dawnwalker"
     assert game_for_scene("Brb") is None
     assert game_for_scene("Scene 2", {"scene 2": "tarkov"}) == "Escape from Tarkov"
+
+
+# --- A Companion that noticed the recording late (6-10 Oct 2026) ------------------------
+
+
+def late_session(conn, session="S2", *, start=T0, stop_path=None, markers=(3, 10)):
+    """What the Companion logged: no file at the start, perhaps one at the stop."""
+    add_event(conn, session, "obs_record_started", at=start, record_sec=0.0)
+    for offset in markers:
+        add_event(conn, session, "marker", at=start + timedelta(seconds=offset), record_sec=offset)
+    if stop_path:
+        add_event(conn, session, "obs_record_stopped", at=start + timedelta(seconds=600),
+                  record_sec=600, path=stop_path)
+
+
+def test_the_file_heard_when_recording_stopped_counts(conn, settings):
+    late_session(conn, stop_path="F:/raw/b.mkv")
+    recording_id = add_recording(conn, "F:/raw/b.mkv")
+    match = link_recording(conn, recording_id)
+    assert (match.matched_by, match.session_id, match.markers) == ("file", "S2", 2)
+
+
+def test_obs_names_its_files_after_when_they_started_in_the_pcs_time(conn, settings):
+    from ai_editor.companion.link import started_from_name
+
+    local = T0.astimezone()     # the PC's own clock, as OBS writes it
+    name = local.strftime("F:/raw/%Y-%m-%d %H-%M-%S.mkv")
+    assert started_from_name(name) == T0
+    late_session(conn)
+    assert link_recording(conn, add_recording(conn, name)).markers == 2
+
+
+def test_the_date_inside_an_obs_file_is_when_it_finished(conn, settings):
+    """OBS writes the .mkv's date last: 2 h after it started, for a 2 h stream."""
+    late_session(conn)
+    recording_id = add_recording(conn, "F:/raw/renamed.mkv", duration_sec=7200,
+                                 recorded_at=T0 + timedelta(seconds=7200))
+    assert link_recording(conn, recording_id).matched_by == "time"
+
+
+def test_a_recording_period_already_linked_is_not_taken_by_time(conn, settings):
+    late_session(conn)
+    first = add_recording(conn, "F:/raw/one.mkv", recorded_at=T0)
+    assert link_recording(conn, first) is not None
+    second = add_recording(conn, "F:/raw/two.mkv", recorded_at=T0 + timedelta(seconds=30))
+    assert link_recording(conn, second) is None
+
+
+def test_it_says_so_either_way_and_finds_what_is_still_unlinked(conn, settings):
+    from ai_editor.app.videos import marks_line
+    from ai_editor.companion.link import found_text, unlinked_with_log
+
+    late_session(conn, stop_path="F:/raw/b.mkv")
+    recording_id = add_recording(conn, "F:/raw/b.mkv")
+    add_recording(conn, "F:/raw/never.mkv")
+    assert "none of your marks" in marks_line(conn, recording_id)
+    assert [r["id"] for r in unlinked_with_log(conn)] == [recording_id]
+    match = link_recording(conn, recording_id)
+    assert found_text(match).startswith("Stream Companion log found: 2 highlight mark(s)")
+    assert found_text(None).startswith("No Stream Companion log matched")
+    assert "your marks: **2 highlight, 0 Shorts**" in marks_line(conn, recording_id)
+    assert unlinked_with_log(conn) == []
+
+
+def test_at_start_the_marks_are_found_for_recordings_that_missed_them(conn, settings):
+    from ai_editor.app import tasks
+
+    late_session(conn, stop_path="F:/raw/b.mkv")
+    recording_id = add_recording(conn, "F:/raw/b.mkv")
+
+    class Notes:
+        said: list[str] = []
+
+        def say(self, text):
+            self.said.append(text)
+
+        def progress(self, *_):
+            pass
+
+    notes = Notes()
+    tasks.find_marks(settings)(notes)
+    assert notes.said == [f"#{recording_id} b: Stream Companion log found: 2 highlight mark(s) "
+                          "and 0 Shorts mark(s)."]
+    assert conn.execute("SELECT COUNT(*) FROM signals WHERE recording_id = ? AND name = 'marker'",
+                        (recording_id,)).fetchone()[0] == 2
+
+
+def test_a_clip_with_your_mark_has_a_star():
+    from ai_editor.app.videos import why
+
+    assert why(["marker_short", "laughter"]).startswith("⭐ you marked it (Short)")
+    assert why(["marker"]).startswith("⭐ ") and not why(["laughter"]).startswith("⭐")

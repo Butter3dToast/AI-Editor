@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -32,8 +33,13 @@ def short_clock(seconds: float) -> str:
     return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
 
 
+# A clip with your own mark from the Stream Companion stands out (10 Oct).
+MARKED = "⭐"
+
+
 def why(reasons: list[str]) -> str:
-    return ", ".join(SIGNAL_LABELS.get(r, r) for r in reasons) or "-"
+    text = ", ".join(SIGNAL_LABELS.get(r, r) for r in reasons) or "-"
+    return f"{MARKED} {text}" if {"marker", "marker_short"} & set(reasons) else text
 
 
 def player(path: str | Path | None, start: float | None = None, end: float | None = None,
@@ -116,7 +122,24 @@ def clip_summary(conn, settings: Settings, recording_id: int,
     if up:
         text += (f" · your unused 👍 clips make about **{fresh / 60:.1f} min** of video "
                  "(each trimmed to its moment)")
-    return text
+    return text + " · " + marks_line(conn, recording_id)
+
+
+def marks_line(conn, recording_id: int) -> str:
+    """Whether the Stream Companion's log is in, and how many of the creator's marks
+    (10 Oct: nothing said so when it wasn't)."""
+    linked = conn.execute("SELECT session_id FROM recordings WHERE id = ?",
+                          (recording_id,)).fetchone()
+    if not linked or not linked["session_id"]:
+        return "no Stream Companion log linked, so none of your marks"
+    counts = dict(conn.execute(
+        "SELECT name, COUNT(*) FROM signals WHERE recording_id = ? AND name IN "
+        "('marker', 'marker_short') GROUP BY name", (recording_id,)).fetchall())
+    league = conn.execute("SELECT COUNT(*) FROM companion_events WHERE recording_id = ? AND "
+                          "event_type = 'league'", (recording_id,)).fetchone()[0]
+    return (f"your marks: **{counts.get('marker', 0)} highlight, "
+            f"{counts.get('marker_short', 0)} Shorts**"
+            + (f" · {league} League events" if league else ""))
 
 
 def clip_table(conn, recording_id: int, show: str = "Not used yet",
@@ -283,27 +306,50 @@ def plan_choices(conn) -> list[tuple[str, str]]:
     return out
 
 
-def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[list]:
-    """A highlight plan's pieces in order, PLAN_COLUMNS. With ``settings``, the
-    times allow for slides between clips (render/slide.py)."""
+@dataclass
+class Timeline:
+    """Each piece's length and start in the finished video, and the whole length."""
+    lengths: list[float]
+    starts: list[float]
+    replays: list[bool]
+    total: float
+
+
+def timeline(conn, plan: EditPlan, settings: Settings | None = None) -> Timeline:
+    """Where each piece lands in the finished video. With ``settings``, it allows
+    for slides between clips (render/slide.py) and slow-motion replays."""
+    from ..render.replay import extra, for_plan as replays_for
     from ..render.slide import overlaps, starts
+
+    lengths = [s.length for s in plan.segments]
+    slides = overlaps(settings, plan, lengths, 60) if settings else []
+    more = [0.0] * len(lengths)
+    if settings:    # slow-motion replays make their clips longer
+        more = extra(replays_for(conn, settings, plan, 60))
+        lengths = [n + more[i] for i, n in enumerate(lengths)]
+    begins = starts(lengths, slides)
+    total = begins[-1] + lengths[-1] if lengths else 0.0
+    return Timeline(lengths, begins, [m > 0 for m in more], total)
+
+
+def recorded_days(conn) -> dict[int, str]:
+    """'3 Oct' for each recording: the day it was streamed."""
     def day(iso: str | None) -> str:
         try:
             return datetime.fromisoformat(iso).astimezone().strftime("%d %b").lstrip("0")
         except (TypeError, ValueError):
             return ""
 
-    days = {r["id"]: day(r["recorded_at"] or r["imported_at"])
+    return {r["id"]: day(r["recorded_at"] or r["imported_at"])
             for r in conn.execute("SELECT id, recorded_at, imported_at FROM recordings")}
-    from ..render.replay import extra, for_plan as replays_for
 
-    lengths = [s.length for s in plan.segments]
-    slides = overlaps(settings, plan, lengths, 60) if settings else []
-    if settings:    # slow-motion replays make their clips longer
-        more = extra(replays_for(conn, settings, plan, 60))
-        lengths = [n + more[i] for i, n in enumerate(lengths)]
+
+def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[list]:
+    """A highlight plan's pieces in order, PLAN_COLUMNS. With ``settings``, the
+    times allow for slides between clips (render/slide.py)."""
+    days = recorded_days(conn)
     rows = []
-    for n, (s, position) in enumerate(zip(plan.segments, starts(lengths, slides))):
+    for n, (s, position) in enumerate(zip(plan.segments, timeline(conn, plan, settings).starts)):
         where = "Teaser" if s.kind == "teaser" else short_clock(position)
         rows.append([n + 1, where, f"#{s.recording_id} · {days.get(s.recording_id, '')}",
                      clock(s.src_in), f"{s.length:.0f}s",
