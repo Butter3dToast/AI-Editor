@@ -6,9 +6,10 @@ after AI-Editor closes. Each change is a row in plan_history with the plan
 before and after it, so stepping back and forward is just putting one of
 them back.
 
-Two things a change touches outside the plan go back with it: a library
-clip re-cut by "Adjust the cut", and the feedback the change logged, which
-is marked undone so a misclick never teaches the AI anything.
+Three things a change touches outside the plan go back with it: a library
+clip re-cut by "Adjust the cut", the words of a caption line fixed or hidden
+(Phase 2D-2), and the feedback the change logged, which is marked undone so a
+misclick never teaches the AI anything.
 
 The upload text (plan.publish) never goes back: it took the AI a minute to
 write, and it isn't part of the edit.
@@ -49,13 +50,18 @@ def _edit_of(text: str) -> dict:
 
 @contextmanager
 def step(conn: sqlite3.Connection, plan_id: str, what: str,
-         clips: list[str | None] = ()) -> Iterator[None]:
+         clips: list[str | None] = (),
+         words: tuple[int, int, int] | None = None) -> Iterator[None]:
     """Record whatever the body changes in a plan as one step to undo.
 
     ``what``: the change in plain words ("removing clip 4"), for the Undo
-    button. ``clips``: library clips the change may re-cut. A body that ends
-    up changing nothing records nothing.
+    button. ``clips``: library clips the change may re-cut. ``words``:
+    (recording, first idx, last idx) of a caption line it may change. A body
+    that ends up changing nothing records nothing.
     """
+    from ..analysis.caption_edit import snapshot
+
+    words_before = snapshot(conn, *words) if words else []
     before = _plan_json(conn, plan_id)
     newest = conn.execute("SELECT COALESCE(MAX(id), 0) FROM feedback").fetchone()[0]
     watched = [c for c in dict.fromkeys(clips) if c]
@@ -66,7 +72,10 @@ def step(conn: sqlite3.Connection, plan_id: str, what: str,
         return
     recut = [{"clip_id": c, "before": clips_before[c], "after": _clip_state(conn, c)}
              for c in watched if clips_before[c] != _clip_state(conn, c)]
-    if _edit_of(before) == _edit_of(after) and not recut:
+    words_after = snapshot(conn, *words) if words else []
+    lines = ({"recording": words[0], "before": words_before, "after": words_after}
+             if words and words_before != words_after else None)
+    if _edit_of(before) == _edit_of(after) and not recut and not lines:
         return
     logged = [r[0] for r in conn.execute("SELECT id FROM feedback WHERE id > ? AND plan_id = ?",
                                          (newest, plan_id))]
@@ -74,8 +83,9 @@ def step(conn: sqlite3.Connection, plan_id: str, what: str,
     conn.execute("DELETE FROM plan_history WHERE plan_id = ? AND undone = 1", (plan_id,))
     conn.execute(
         "INSERT INTO plan_history (plan_id, what, before_json, after_json, clips_json, "
-        "feedback_json, made_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "feedback_json, words_json, made_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (plan_id, what, before, after, json.dumps(recut), json.dumps(logged),
+         json.dumps(lines) if lines else None,
          datetime.now(timezone.utc).isoformat(timespec="seconds")))
     conn.execute(
         "DELETE FROM plan_history WHERE plan_id = ? AND id NOT IN (SELECT id FROM plan_history "
@@ -118,6 +128,14 @@ def _clips_to(conn: sqlite3.Connection, recut: list[dict], side: str) -> None:
                      "WHERE clip_id = ?", (*[state[f] for f in CLIP_FIELDS], clip["clip_id"]))
 
 
+def _words_to(conn: sqlite3.Connection, text: str | None, side: str) -> None:
+    if text:
+        from ..analysis.caption_edit import restore
+
+        lines = json.loads(text)
+        restore(conn, lines["recording"], lines[side])
+
+
 def undo(conn: sqlite3.Connection, plan_id: str | None) -> str:
     """Take back the newest change. Returns what happened, in plain words."""
     row = conn.execute("SELECT * FROM plan_history WHERE plan_id = ? AND undone = 0 "
@@ -126,6 +144,7 @@ def undo(conn: sqlite3.Connection, plan_id: str | None) -> str:
         return "Nothing to undo."
     _put_back(conn, plan_id, row["before_json"])
     _clips_to(conn, json.loads(row["clips_json"] or "[]"), "before")
+    _words_to(conn, row["words_json"], "before")
     logged = json.loads(row["feedback_json"] or "[]")
     conn.executemany("UPDATE feedback SET undone = 1 WHERE id = ?", [(i,) for i in logged])
     conn.execute("UPDATE plan_history SET undone = 1 WHERE id = ?", (row["id"],))
@@ -141,6 +160,7 @@ def redo(conn: sqlite3.Connection, plan_id: str | None) -> str:
         return "Nothing to redo."
     _put_back(conn, plan_id, row["after_json"])
     _clips_to(conn, json.loads(row["clips_json"] or "[]"), "after")
+    _words_to(conn, row["words_json"], "after")
     logged = json.loads(row["feedback_json"] or "[]")
     conn.executemany("UPDATE feedback SET undone = 0 WHERE id = ?", [(i,) for i in logged])
     conn.execute("UPDATE plan_history SET undone = 0 WHERE id = ?", (row["id"],))

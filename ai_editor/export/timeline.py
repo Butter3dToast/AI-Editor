@@ -51,7 +51,7 @@ def export_plan(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     # only come from a recording with the mic on its own track.
     speaking = {rid for rid in plan.recording_ids if plan.recipe != "letsplay"
                 or choose_tracks(conn, settings, rid).separate}
-    words = {rid: load_words(conn, rid) for rid in speaking}
+    words = {rid: load_words(conn, rid, captions=True) for rid in speaking}
 
     for job, name, stem in jobs:
         result.saved.append(write_fcpxml(folder / f"{stem}.fcpxml", job, sources, name=name,

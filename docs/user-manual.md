@@ -1256,7 +1256,7 @@ Saving moves each edge at most half a second, only so it never cuts you off mid-
 
 **↶ Undo** takes back your last change to this video; press it again to go further back. **↷ Redo** does again what you undid. The button says what it would undo or redo, e.g. "↶ Undo removing clip 4".
 
-- It covers every change in Review: removing, moving and dragging, the teaser, adding a clip, adjusting a cut, the effect switches and each effect's ticks, between clips, music, and a Short's layout.
+- It covers every change in Review: removing, moving and dragging, the teaser, adding a clip, adjusting a cut, the effect switches and each effect's ticks, between clips, music, a Short's layout, and fixing, hiding or putting back a caption line (18.5).
 - Each video has its own history, and it's kept when you close AI-Editor.
 - Undoing a cut you adjusted puts the clip in the Clips library back as it was, too.
 - **A misclick teaches nothing:** what AI-Editor keeps for learning (chapter 22) marks an undone change as undone.
@@ -1264,7 +1264,21 @@ Saving moves each edge at most half a second, only so it never cuts you off mid-
 - The upload text (titles, description, tags) is never undone: change that by hand, and **Keep my changes**.
 - Making a plan again in Create video starts it with a fresh history.
 
-**Not built yet:** editing captions (Phase 2D-2).
+### 18.5 Fixing captions (highlights and Shorts)
+
+Speech recognition mishears names and slang ("zonya" for Zhonya's). Click a clip's row, and **Captions for clip N** appears under the player, below Adjust the cut:
+
+- **Caption lines:** the clip's captions as they show in the video, each with where it starts in the clip. ✎ marks a line you've fixed, ⊘ one you've hidden. Click a line to hear it (the player plays just that line) and to fix it.
+- **This line:** change the words, then **Save line** (or press Enter). Each word keeps its own time, so the caption stays in sync with your voice; type more or fewer words and they're shared over the line's time.
+- **Hide this line:** it's never shown as a caption, but its words stay in the transcript ("You said", what the AI writes). **Show this line** brings it back.
+- **Put back the original:** the line as it was first heard, shown again.
+- **Play this line:** hear it again.
+
+**A fix goes everywhere** that moment is used: every video and Short with it, the **You said** column in Clips, and what the AI writes about it. Analysing the stream again keeps your fixes and hidden lines. **Undo** takes back a fix, a hide or a put-back like any other change in Review.
+
+**Remembering a fix.** When you change one word to another, AI-Editor asks: *"Always write zonya as Zhonya's? It's heard 3 more times in 2 streams."* **Yes, everywhere** fixes it in every stream now, and in new streams as they're analysed. Check the count before saying yes: a common word ("not") can be in hundreds of places. **Settings → Captions and sound** lists the fixes you've remembered; **Forget this fix** puts every word it changed back as it was heard. (Undo doesn't take back a remembered fix: forget it in Settings.)
+
+Captions are only in a video when **Burn in captions** is ticked (off by default); tick it and make a quick preview to see your fixes.
 
 ---
 

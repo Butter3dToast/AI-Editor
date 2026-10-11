@@ -158,7 +158,7 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
     zone = settings.shorts.safe_zone()
     work = target.with_suffix("")
     work.mkdir(parents=True, exist_ok=True)
-    words = (realistic_timing(load_words(conn, segment.recording_id))
+    words = (realistic_timing(load_words(conn, segment.recording_id, captions=True))
              if settings.shorts.captions and segment.captions else None)
     from ..effects import for_plan, sfx
     from ..ffmpeg import probe
@@ -342,7 +342,8 @@ def render_preview(
                     cues.append(Cue(offset, offset + segment.length, labels[index]))
             elif segment.captions:
                 if segment.recording_id not in words:
-                    words[segment.recording_id] = load_words(conn, segment.recording_id)
+                    words[segment.recording_id] = load_words(conn, segment.recording_id,
+                                                             captions=True)
                 # After a replay in the clip, its words come that much later.
                 for c in segment_cues(words[segment.recording_id], segment.src_in,
                                       segment.src_out):

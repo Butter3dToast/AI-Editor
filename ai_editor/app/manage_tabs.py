@@ -35,6 +35,9 @@ FOLDERS = {"raw": "Your recordings (raw)", "cache": "AI-Editor's working copies 
 CHANGEABLE = ("raw", "output")  # moving the cache or models would mean moving their files too
 
 
+FIX_COLUMNS = ["Heard", "Written", "Words fixed"]
+
+
 def part_lengths(settings: Settings, minutes: float) -> dict[tuple[str, str], object]:
     """A new Let's Play part length, with the range around it kept consistent."""
     lp = settings.lets_play
@@ -112,6 +115,17 @@ def build(settings: Settings, worker: Worker) -> None:
                     label="Music from your stream in videos",
                     info="Lowered where it would cover talking. Only for DMCA-free music: "
                          "commercial music gets YouTube videos claimed.")
+            # Fixes the creator asked to remember in Review's captions (Phase 2D-2).
+            fixes_tbl = gr.Dataframe(headers=FIX_COLUMNS, interactive=False, wrap=True,
+                                     label="Spelling fixes you asked to remember (Review → "
+                                           "Captions)", max_height=260)
+            with gr.Row():
+                fix_pick = gr.Dropdown(choices=[], value=None, scale=4,
+                                       label="Forget a fix",
+                                       info="Every word it changed goes back to how it was "
+                                            "heard.")
+                forget_btn = gr.Button("Forget this fix", size="sm", scale=0, min_width=140)
+            fixes_msg = gr.Markdown()
         with gr.Accordion("Effects", open=True):
             gr.Markdown("On the moments you marked with the Stream Companion: a jump in the "
                         "game's sound gets a shake and a boom, you shouting gets a flash and a "
@@ -239,6 +253,38 @@ def build(settings: Settings, worker: Worker) -> None:
     free_btn.click(free, tidy_pick, storage_outputs)
 
     # --- Settings: handlers ----------------------------------------------------------
+
+    def fixes_view(message: str = ""):
+        from ..analysis.caption_edit import remembered
+
+        conn = init_db(settings.db_path)
+        try:
+            found = remembered(conn)
+        finally:
+            conn.close()
+        rows = [[heard, written, count] for _, heard, written, count in found]
+        if not rows:
+            message = message or "None yet."
+        return (pd.DataFrame(rows, columns=FIX_COLUMNS),
+                gr.update(choices=[(f"{heard} → {written}", fid)
+                                   for fid, heard, written, _ in found], value=None), message)
+
+    fix_outputs = [fixes_tbl, fix_pick, fixes_msg]
+    settings_tab.select(fixes_view, None, fix_outputs)
+
+    def forget(fix_id):
+        from ..analysis.caption_edit import forget as forget_fix
+
+        if fix_id is None:
+            return fixes_view("Pick a fix first.")
+        conn = init_db(settings.db_path)
+        try:
+            count = forget_fix(conn, int(fix_id))
+        finally:
+            conn.close()
+        return fixes_view(f"Forgotten: {count} word(s) put back as they were heard.")
+
+    forget_btn.click(forget, fix_pick, fix_outputs)
 
     def ai_look():
         conn = init_db(settings.db_path)

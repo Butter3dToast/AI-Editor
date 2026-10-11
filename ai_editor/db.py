@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 _V1 = """
@@ -312,7 +312,26 @@ ALTER TABLE feedback ADD COLUMN undone INTEGER NOT NULL DEFAULT 0;
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4}
+# Phase 2D-2: fixing captions in Review. A fixed word is fixed in the
+# transcript itself, so every video, Short, title and AI summary gets it; the
+# word as first heard is kept in `original` so it can be put back. A hidden
+# word is never shown as a caption but stays in the transcript. word_fixes are
+# the fixes the creator asked to remember: every stream, and new ones too.
+_V5 = """
+ALTER TABLE transcript_words ADD COLUMN original TEXT;
+ALTER TABLE transcript_words ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE transcript_words ADD COLUMN fixed_by INTEGER;
+CREATE TABLE word_fixes (
+    id              INTEGER PRIMARY KEY,
+    wrong           TEXT    NOT NULL UNIQUE,   -- as heard, lower case, no punctuation
+    right           TEXT    NOT NULL,          -- as it should be written
+    created_at      TEXT    NOT NULL
+);
+ALTER TABLE plan_history ADD COLUMN words_json TEXT;
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

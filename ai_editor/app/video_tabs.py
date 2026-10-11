@@ -233,6 +233,28 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                     save_cut_btn = gr.Button("Save the new cut", variant="primary")
                     here_time = gr.Number(visible=False)
                 pending_cut = gr.State(None)
+                # Fixing captions, line by line (Phase 2D-2).
+                with gr.Group(visible=False) as lines_box:
+                    lines_info = gr.Markdown()
+                    line_pick = gr.Radio([], label="Caption lines",
+                                         info="Click a line to hear it and fix it. ✎ fixed, "
+                                              "⊘ hidden.")
+                    line_txt = gr.Textbox(label="This line", max_lines=3,
+                                          info="Fix the words and save: the fix goes everywhere "
+                                               "this moment is used.")
+                    with gr.Row():
+                        save_line_btn = gr.Button("Save line", variant="primary", size="sm")
+                        hide_line_btn = gr.Button("Hide this line", size="sm")
+                        back_line_btn = gr.Button("Put back the original", size="sm")
+                        play_line_btn = gr.Button("Play this line", size="sm")
+                    with gr.Row(visible=False) as remember_row:
+                        remember_note = gr.Markdown()
+                        remember_yes = gr.Button("Yes, everywhere", size="sm", scale=0,
+                                                 min_width=130)
+                        remember_no = gr.Button("No, just here", size="sm", scale=0,
+                                                min_width=110)
+                lines_state = gr.State(None)
+                offer_state = gr.State(None)
         gr.Markdown("### Finish it")
         with gr.Row():
             captions_box = gr.Checkbox(value=settings.captions.highlights,
@@ -937,6 +959,132 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     yes_btn.click(delete, plan_pick, [confirm_row, plan_pick]).then(
         lambda: gr.update(choices=read(videos.plan_choices)), None, plan_pick)
 
+    # --- Fixing captions, line by line (Phase 2D-2) ------------------------------------------
+
+    from ..analysis import caption_edit
+
+    def line_label(line, src_in: float) -> str:
+        mark = " ⊘" if line.hidden else (" ✎" if line.edited else "")
+        return f"{videos.short_clock(max(0.0, line.start - src_in))}{mark}  {line.text}"
+
+    def lines_of(state):
+        return read(caption_edit.lines, state["rid"], state["in"], state["out"])
+
+    def lines_radio(state, near: int | None = None):
+        """The clip's lines; ``near``: pick the line holding that word again."""
+        found = lines_of(state)
+        value = None
+        if near is not None:
+            value = next((ln.key for ln in found if ln.first <= near <= ln.last), None)
+        return gr.update(choices=[(line_label(ln, state["in"]), ln.key) for ln in found],
+                         value=value)
+
+    def no_lines():
+        return (gr.update(visible=False), None, "", gr.update(choices=[], value=None), "",
+                gr.update(visible=False))
+
+    lines_outputs = [lines_box, lines_state, lines_info, line_pick, line_txt, remember_row]
+
+    def open_lines(plan_id, evt: gr.EventData):
+        row = selected_row(evt)
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe == "letsplay" or row is None \
+                or not 0 <= row < len(plan.segments):
+            return no_lines()
+        s = plan.segments[row]
+        what = "the teaser" if s.kind == "teaser" else f"clip {row + 1}"
+        state = {"plan": plan_id, "index": row, "rid": s.recording_id, "in": s.src_in,
+                 "out": s.src_out, "what": what}
+        found = lines_of(state)
+        info = (f"**Captions for {what}**: {len(found)} line(s). " if found else
+                f"**Captions for {what}**: nobody talks in it. ")
+        info += ("A fix shows in captions, \"You said\" and what the AI writes. Captions are "
+                 "only in a video when **Burn in captions** is ticked.")
+        return (gr.update(visible=True), state, info,
+                gr.update(choices=[(line_label(ln, s.src_in), ln.key) for ln in found],
+                          value=None), "", gr.update(visible=False))
+
+    clip_list.click(open_lines, plan_pick, lines_outputs)
+    for event in (plan_pick.change, review_tab.select):
+        event(no_lines, None, lines_outputs)
+
+    def the_line(state, key):
+        if not state or not key:
+            return None
+        return next((ln for ln in lines_of(state) if ln.key == key), None)
+
+    def pick_line(state, key):
+        line = the_line(state, key)
+        if line is None:
+            return gr.skip(), gr.skip(), gr.skip()
+        proxy = read(videos.proxy_of, state["rid"])
+        return (line.text, gr.update(value="Show this line" if line.hidden else "Hide this line"),
+                videos.player(proxy, max(0.0, line.start - 0.3), line.end + 0.4,
+                              note="This caption line."))
+
+    line_pick.input(pick_line, [lines_state, line_pick], [line_txt, hide_line_btn, review_player])
+    play_line_btn.click(pick_line, [lines_state, line_pick],
+                        [line_txt, hide_line_btn, review_player])
+
+    def line_change(action):
+        def apply(plan_id, state, key, text):
+            line = the_line(state, key)
+            if line is None:
+                return (gr.skip(),) * 3 + ("Click a caption line first.", gr.skip(), gr.skip(),
+                                           gr.skip())
+            what = state.get("what", "this clip")
+            label = {"save": f"fixing a caption in {what}",
+                     "hide": (f"showing a caption line in {what}" if line.hidden
+                              else f"hiding a caption line in {what}"),
+                     "back": f"putting back a caption line in {what}"}[action]
+            offer = None
+            conn = init_db(settings.db_path)
+            try:
+                with history.step(conn, plan_id, label, words=(state["rid"], line.first,
+                                                               line.last)):
+                    if action == "save":
+                        saved = caption_edit.save_line(conn, state["rid"], line.first,
+                                                       line.last, text or "")
+                        message, offer = saved.message, saved.offer
+                    elif action == "hide":
+                        caption_edit.hide_line(conn, state["rid"], line.first, line.last,
+                                               not line.hidden)
+                        message = ("Shown in captions again." if line.hidden else
+                                   "Hidden from captions. Its words stay in the transcript.")
+                    else:
+                        caption_edit.put_back(conn, state["rid"], line.first, line.last)
+                        message = "Put back as it was first heard."
+            finally:
+                conn.close()
+            radio = lines_radio(state, line.first)
+            now = next((ln for ln in lines_of(state) if ln.first <= line.first <= ln.last), None)
+            row = ((gr.update(visible=True), read(caption_edit.offer_text, *offer)) if offer
+                   else (gr.update(visible=False), ""))
+            return (radio, now.text if now else gr.skip(),
+                    gr.update(value="Show this line" if now and now.hidden else "Hide this line"),
+                    message, *row, offer)
+        return apply
+
+    line_outputs = [line_pick, line_txt, hide_line_btn, review_msg, remember_row, remember_note,
+                    offer_state]
+    for button, action in ((save_line_btn, "save"), (hide_line_btn, "hide"),
+                           (back_line_btn, "back")):
+        button.click(line_change(action), [plan_pick, lines_state, line_pick, line_txt],
+                     line_outputs).then(list_view, [plan_pick, sel], list_outputs)
+    line_txt.submit(line_change("save"), [plan_pick, lines_state, line_pick, line_txt],
+                    line_outputs).then(list_view, [plan_pick, sel], list_outputs)
+
+    def remember(offer, state, key):
+        if not offer:
+            return gr.update(visible=False), gr.skip(), gr.skip()
+        message = read(caption_edit.remember, *offer)
+        return (gr.update(visible=False), message,
+                lines_radio(state, int(key.split("-")[0])) if state and key else gr.skip())
+
+    remember_yes.click(remember, [offer_state, lines_state, line_pick],
+                       [remember_row, review_msg, line_pick])
+    remember_no.click(lambda: gr.update(visible=False), None, remember_row)
+
     # --- Undo and Redo (Phase 2D-1): kept after AI-Editor closes ----------------------------
 
     def stepper(fn):
@@ -956,6 +1104,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
          .then(show_between, plan_pick, between_pick)
          .then(show_music, plan_pick, music_box)
          .then(lambda: cut_view(None), None, cut_outputs)
+         .then(no_lines, None, lines_outputs)
          .then(list_view, plan_pick, list_outputs)
          .then(lambda note: note, undo_note, review_msg))
 

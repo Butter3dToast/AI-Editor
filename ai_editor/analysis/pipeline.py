@@ -433,6 +433,11 @@ def store_results(
     for segment in dropped:
         log.info("Set aside likely mishearing at %.1fs: %r", segment["s"], segment["text"])
 
+    from .caption_edit import keep_fixes, put_fixes_back
+
+    # Your caption fixes and hidden lines carry over (Phase 2D-2), and the
+    # fixes you asked to remember are made.
+    kept = keep_fixes(conn, recording_id)
     conn.execute("DELETE FROM transcript_words WHERE recording_id = ?", (recording_id,))
     conn.executemany(
         "INSERT INTO transcript_words (recording_id, idx, word, start_sec, end_sec, "
@@ -442,6 +447,7 @@ def store_results(
             for i, w in enumerate(words)
         ],
     )
+    put_fixes_back(conn, recording_id, kept)
 
     voice_db = np.array(loudness["voice_db"], dtype=np.float32)
     game_db = np.array(loudness["game_db"], dtype=np.float32) if "game_db" in loudness else None

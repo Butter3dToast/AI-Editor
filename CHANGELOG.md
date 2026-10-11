@@ -3,6 +3,30 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.18.0 — Phase 2D-2: Fixing captions — 11 October 2026
+
+**New**
+
+- **Fix captions in Review**, line by line: click a clip, and its caption
+  lines appear under the player, each with its time. Click a line to hear
+  it, fix its words and save. Each word keeps its own time, so the caption
+  stays in sync with your voice.
+- **A fix goes everywhere** that moment is used: every video and Short with
+  it, "You said" in Clips, and what the AI writes. The word as first heard is
+  kept: **Put back the original** brings the line back as it was.
+- **Hide a line**: never shown as a caption, but its words stay in the
+  transcript for the AI and titles. **Show this line** brings it back.
+- **Remember a fix**: after changing one word, AI-Editor asks whether to
+  always write it that way, saying how many other places that would change.
+  Yes fixes it in every stream now and in new ones as they're analysed.
+  **Settings → Captions and sound** lists them; **Forget this fix** puts the
+  words back.
+- **Undo and Redo** cover caption fixes, hides and put-backs.
+- Analysing a stream again keeps your caption fixes and hidden lines.
+- Captions stay off by default: tick **Burn in captions** to see them.
+
+This finishes Phase 2D, the full Review screen.
+
 ## 0.17.1 — Fix: your plans from different streams, and a shorter plan list — 10 October 2026
 
 **Fixed**

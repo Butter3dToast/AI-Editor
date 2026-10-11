@@ -565,12 +565,17 @@ def action_signal(signals: dict[str, np.ndarray]) -> np.ndarray | None:
     return np.maximum.reduce(found) if found else None
 
 
-def load_words(conn: sqlite3.Connection, recording_id: int) -> list[Word]:
+def load_words(conn: sqlite3.Connection, recording_id: int, *,
+               captions: bool = False) -> list[Word]:
+    """The recording's words, with the creator's fixes (Phase 2D-2). ``captions``:
+    only the words shown as captions, without lines hidden in Review. Everything
+    else (never cutting mid-word, what was said) wants every word."""
+    shown = " AND hidden = 0 AND trim(word) != ''" if captions else ""
     return [
         Word(r["word"], r["start_sec"], r["end_sec"], r["confidence"] or 1.0)
         for r in conn.execute(
             "SELECT word, start_sec, end_sec, confidence FROM transcript_words "
-            "WHERE recording_id = ? ORDER BY start_sec",
+            f"WHERE recording_id = ?{shown} ORDER BY start_sec",
             (recording_id,),
         )
     ]

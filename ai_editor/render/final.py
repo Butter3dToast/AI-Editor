@@ -424,7 +424,8 @@ def render_plan(
         cues = []
         if segment.recording_id in captioned and segment.captions:
             if segment.recording_id not in words:
-                words[segment.recording_id] = load_words(conn, segment.recording_id)
+                words[segment.recording_id] = load_words(conn, segment.recording_id,
+                                                         captions=True)
             cues = segment_cues(words[segment.recording_id], seg_in, seg_in + length)
             caption_count += len(cues)
         card = (Cue(0.0, min(settings.lets_play.title_card_sec, length), title)
