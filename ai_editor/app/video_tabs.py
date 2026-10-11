@@ -22,10 +22,12 @@ from ..errors import AIEditorError
 from ..games import canonical_game
 from ..recipes import history, review
 from ..recipes.plan import save_plan
+from ..style.apply import NO_PROFILE
 from . import library, review_list, tasks, videos
 from .worker import DONE, Worker, submitted
 
 ALL_STREAMS = "All my streams"
+NO_STYLE = -1   # the Style profile box: no profile, the Settings as they are
 ALL_PARTS = "All parts"
 WHOLE_VIDEO = "Quick preview of the whole video"
 SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
@@ -84,6 +86,30 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     plans_now = read(videos.plan_choices)
 
+    def style_choices() -> list[tuple[str, int]]:
+        from ..style import profiles as style_profiles
+
+        return [(NO_PROFILE, NO_STYLE), *read(style_profiles.names)]
+
+    def recording_game(recording_id) -> str | None:
+        if recording_id is None:
+            return None
+        row = read(lambda c: c.execute("SELECT game FROM recordings WHERE id = ?",
+                                       (int(recording_id),)).fetchone())
+        return row["game"] if row else None
+
+    def auto_style(what, game, episode_rec, short_rec):
+        """The profile made for this game and kind of video, else none."""
+        from ..style.apply import matching
+
+        recipe = {"Highlights": "highlights", "Let's Play": "letsplay"}.get(what, "shorts")
+        if what == "Highlights":
+            game = None if not game or game == ALL_STREAMS else canonical_game(game)
+        else:
+            game = recording_game(episode_rec if what == "Let's Play" else short_rec)
+        found = read(matching, settings, game, recipe)
+        return gr.update(choices=style_choices(), value=found if found is not None else NO_STYLE)
+
     # --- Clips -------------------------------------------------------------------------
     with gr.Tab("Clips", id="clips"):
         with gr.Row():
@@ -111,7 +137,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 clip_msg = gr.Markdown()
 
     # --- Create video --------------------------------------------------------------------
-    with gr.Tab("Create video", id="create"):
+    with gr.Tab("Create video", id="create") as create_tab:
         kind = gr.Radio(["Highlights", "Let's Play", "Shorts"], value="Highlights",
                         label="What to make")
         with gr.Group(visible=True) as hl_group:
@@ -141,6 +167,11 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                  info="Up to five suggestions, each 15-60 seconds and vertical: "
                                       "your Numpad - moments first, then the AI's picks that make "
                                       "sense on their own.")
+        # Phase 2G-2: picked by itself for the game and kind of video, changeable.
+        style_pick = gr.Dropdown(choices=style_choices(), value=NO_STYLE, label="Style profile",
+                                 info="Picked by itself when a profile is made for this game and "
+                                      "kind of video (Style Profiles). It sets the pace and "
+                                      "amounts; it never switches effects or captions on.")
         make_btn = gr.Button("Make the plan", variant="primary")
         make_msg = gr.Markdown()
 
@@ -380,13 +411,15 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                            gr.update(visible=k == "Let's Play"), gr.update(visible=k == "Shorts")),
                 kind, [hl_group, lp_group, sh_group])
 
-    def make(what, game, chosen, minutes, episode_rec, reuse=False, short_rec=None):
+    def make(what, game, chosen, minutes, episode_rec, reuse=False, short_rec=None,
+             style=NO_STYLE):
+        profile = None if style in (None, NO_STYLE) else int(style)
         if what == "Shorts":
             if short_rec is None:
                 return "Pick the stream or recording first."
             return submitted(worker, worker.submit(
                 f"Suggesting Shorts from #{short_rec}", f"make:shorts:{short_rec}",
-                tasks.make_shorts(settings, int(short_rec))))
+                tasks.make_shorts(settings, int(short_rec), profile)))
         if what == "Highlights":
             game = None if not game or game == ALL_STREAMS else canonical_game(game)
             ids = [int(x) for x in chosen] if chosen else None
@@ -395,15 +428,19 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 f"Making a {label} highlights plan", f"make:highlights:{game}",
                 tasks.make_highlights(settings, game=game, recording_ids=ids,
                                       minutes=float(minutes) if minutes else None,
-                                      reuse=bool(reuse))))
+                                      reuse=bool(reuse), profile=profile)))
         if episode_rec is None:
             return "Pick the episode's recording first."
         return submitted(worker, worker.submit(
             f"Making a Let's Play plan from #{episode_rec}", f"make:letsplay:{episode_rec}",
-            tasks.make_letsplay(settings, int(episode_rec))))
+            tasks.make_letsplay(settings, int(episode_rec), profile)))
 
     make_btn.click(lambda *a: make(*a) + " When it's finished, it opens in Review.",
-                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse, sh_rec], make_msg)
+                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse, sh_rec, style_pick],
+                   make_msg)
+    for picker in (kind, hl_game, lp_rec, sh_rec):
+        picker.change(auto_style, [kind, hl_game, lp_rec, sh_rec], style_pick)
+    create_tab.select(auto_style, [kind, hl_game, lp_rec, sh_rec], style_pick)
 
     # --- Review: handlers ---------------------------------------------------------------
 

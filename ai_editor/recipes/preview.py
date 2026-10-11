@@ -139,6 +139,9 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
                          target: Path | None = None) -> Path:
     """A Short as it will look -- tall, its layout, its captions -- from the
     preview copy, with the areas the apps cover shaded. Seconds, not minutes."""
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # its style profile's captions and effects (2G-2)
     from ..analysis.captions import realistic_timing
     from ..config import RenderPreset
     from ..render.captions import short_document
@@ -246,6 +249,9 @@ def render_preview(
 ) -> Path:
     """``labels``: a caption per segment shown instead of what was said (the
     Let's Play cuts reel names each cut). ``target``: where to save it."""
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # its style profile's captions and effects (2G-2)
     target = target or preview_path(settings, plan)
     parts_dir = target.with_suffix("")  # a working folder beside it, removed at the end
     parts_dir.mkdir(parents=True, exist_ok=True)

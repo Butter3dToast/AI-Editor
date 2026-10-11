@@ -65,8 +65,10 @@ def _rebuild(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> li
     """A plan made before the planner: find its safe breaks again (seconds)."""
     from ..analysis.quests import story_of
     from .letsplay import kept_pieces, load_episode, trim
+    from ..style.apply import styled
     from .parts import break_points
 
+    settings = styled(settings, plan)   # its style profile's silence trim (2G-2)
     row = conn.execute("SELECT * FROM recordings WHERE id = ?",
                        (plan.segments[0].recording_id,)).fetchone()
     episode = load_episode(conn, settings, row)

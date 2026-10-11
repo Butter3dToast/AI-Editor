@@ -33,7 +33,8 @@ REVIEWED = {
     "analysis/pipeline.py": 1,  # a half-written sound file, in the cache
     "analysis/separation.py": 3,  # voice separation's working files, in the cache
     "app/storage.py": 1,        # Storage clean-up: inside the cache only (tested below)
-    "style/references.py": 1,   # a reference video's working folder, inside cache/style only (test_style)
+    "style/references.py": 2,   # a reference's working folder (cache/style only, test_style), and a
+                                # download YouTube refused half-way, in that same folder
 }
 
 

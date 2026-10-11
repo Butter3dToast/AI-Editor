@@ -518,6 +518,9 @@ class Effects(BaseModel):
     shorts_per_min: float = Field(3.0, ge=0.0, le=10.0)
     lets_play_per_min: float = Field(0.75, ge=0.0, le=10.0)
     min_gap_sec: float = Field(6.0, ge=1.0)
+    # At most this many of one kind a minute ({"zoom": 0.5}), on the biggest
+    # moments: set by a style profile (Phase 2G-2); empty, no limit of its own.
+    kind_per_min: dict[str, float] = {}
     # Sound effects' loudness against the loud parts of the clip they're in.
     sfx_volume_db: float = Field(-3.0, ge=-30.0, le=10.0)
     # Between the clips of a highlight video: a hard cut, or the new clip

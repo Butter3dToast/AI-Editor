@@ -386,6 +386,11 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
         else:
             m.replay = False
 
+    # A style profile's own limit per kind (2G-2): "at most 0.5 zooms a minute" keeps
+    # zooms to the biggest moments; the other effects there still go.
+    allowed = {kind: {id(m) for m in sorted(chosen, key=lambda m: -m.strength)
+                      [:how_many(rate, plan.total_sec, bool(chosen))]}
+               for kind, rate in fx.kind_per_min.items()}
     placed: list[list[Effect]] = [[] for _ in plan.segments]
     tracks: dict[tuple[int, str], Path | None] = {}
     for m in chosen:
@@ -400,5 +405,6 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
             at = float(m.second) if at is None else at
         longest = ZOOM_SEC if "zoom" in on else SHAKE_SEC   # all of it inside the clip
         at = min(max(at, seg.src_in + EDGE_SEC), seg.src_out - EDGE_SEC - longest)
-        placed[m.segment] += effects_at(m, at, on)
+        placed[m.segment] += [e for e in effects_at(m, at, on)
+                              if e.kind not in allowed or id(m) in allowed[e.kind]]
     return placed

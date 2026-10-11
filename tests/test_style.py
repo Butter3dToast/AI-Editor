@@ -289,3 +289,78 @@ def test_the_ai_is_told_what_was_measured_and_kept_to_a_few_notes(settings, monk
     prompt, schema, _ = asked[0]
     assert "12.5 cuts a minute, 0 zooms a minute" in prompt and "don't list cuts" in prompt
     assert schema["properties"]["techniques"]["maxItems"] == notes.PER_LOOK
+
+
+def test_a_download_youtube_refuses_is_asked_for_again(settings, monkeypatch):
+    """YouTube now and then answers "403 Forbidden": one of the creator's five links
+    failed that way and downloaded fine on the second try."""
+    import yt_dlp
+    from yt_dlp.utils import DownloadError
+
+    from ai_editor.style import references
+
+    tries = []
+
+    class FakeYDL:
+        def __init__(self, options):
+            self.outtmpl = options["outtmpl"]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {"title": "A League video", "duration": 600}
+
+        def process_ie_result(self, info, download=True):
+            tries.append(1)
+            if len(tries) == 1:
+                raise DownloadError("\x1b[0;31mERROR:\x1b[0m unable to download video data: "
+                                    "HTTP Error 403: Forbidden")
+            Path(self.outtmpl.replace("%(ext)s", "mp4")).write_bytes(b"video")
+
+    from pathlib import Path
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
+    monkeypatch.setattr(references.time, "sleep", lambda s: None)
+    folder = references.working_folder(settings, 1)
+    video, title = references.download(settings, "https://youtu.be/x", folder, lambda f: None)
+    assert len(tries) == 2 and video.name == "reference.mp4" and title == "A League video"
+
+    tries.clear()
+
+    class AlwaysRefused(FakeYDL):
+        def process_ie_result(self, info, download=True):
+            tries.append(1)
+            raise DownloadError("\x1b[0;31mERROR:\x1b[0m HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", AlwaysRefused)
+    with pytest.raises(references.ReferenceProblem) as found:
+        references.download(settings, "https://youtu.be/x", folder, lambda f: None)
+    assert len(tries) == references.ATTEMPTS
+    assert "\x1b" not in str(found.value) and "[0;31m" not in str(found.value)
+    assert str(found.value).startswith("Couldn't download it: HTTP Error 403: Forbidden.")
+
+
+def test_the_tabs_own_buttons_work_inside_the_window(settings):
+    """Save profile once failed in the window only ("build.<locals>.read() got an
+    unexpected keyword argument"): the buttons' own handlers, called as the page does."""
+    from ai_editor.app.window import build
+    from ai_editor.app.worker import Worker
+
+    ui = build(settings, Worker())
+    handlers = {f.fn.__name__: f.fn for f in ui.fns.values()
+                if f.fn is not None and f.fn.__module__.endswith("style_tab")}
+    assert handlers["create"]("League of legends")[2].startswith("Created")
+    conn = init_db(settings.db_path)
+    pid = profiles.names(conn)[0][1]
+    values = [s.default(settings) for s in profiles.SLIDERS]
+    assert handlers["save"](pid, ["League of Legends"], ["highlights"], *values) == "Saved."
+    saved = profiles.load(conn, pid)
+    assert saved.games == ["League of Legends"] and saved.recipes == ["highlights"]
+    assert "Add some reference videos first" in handlers["analyse"](pid, False)
+    shown = handlers["show"](pid)
+    assert shown[1] == ["League of Legends"]
+    conn.close()

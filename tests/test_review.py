@@ -96,10 +96,16 @@ def test_when_good_clips_run_out_it_says_so_instead_of_padding(conn, settings, l
     assert not change.added and "Only 4.0 of 5 minutes" in change.message
 
 
-def test_removing_the_teaser_just_takes_it_out(conn, settings, library):
+def test_removing_the_teaser_puts_its_clip_back_where_it_happened(conn, settings, library):
+    """Saved for the end only because the teaser showed it first (11 Oct)."""
     plan = plan_of(library)
     change = review.remove(conn, settings, plan, 0)
-    assert ids(change.plan) == ["c1", "c2", "c3", "c4", "c0"] and "Teaser taken out" in change.message
+    assert ids(change.plan) == ["c0", "c1", "c2", "c3", "c4"]
+    assert "Teaser taken out" in change.message and "back to where it happened" in change.message
+    # Another order of the clips keeps its ending.
+    settings.highlights.ordering = "best_last"
+    plan = plan_of(library)
+    assert ids(review.remove(conn, settings, plan, 0).plan) == ["c1", "c2", "c3", "c4", "c0"]
 
 
 def test_clips_move_up_and_down_around_the_teaser(conn, library):
@@ -154,7 +160,26 @@ def test_the_player_plays_just_the_clip_from_the_preview_copy(tmp_path):
     proxy.parent.mkdir()
     proxy.write_bytes(b"x")
     page = videos.player(proxy, 61.5, 95)
-    assert "/gradio_api/file=" in page and "my%20recordings/proxy.mp4#t=61.50,95.00" in page
+    assert "/gradio_api/file=" in page and "my%20recordings/proxy.mp4?v=" in page
+    assert "#t=61.50,95.00'" in page
+
+
+def test_a_video_made_again_under_the_same_name_gets_a_new_address(tmp_path):
+    """11 Oct: a new plan with the same name as one replaced; its new 12.9-minute
+    preview played as the old 5:07 one, frozen, from the browser's stored copy."""
+    import os
+    import re
+
+    from ai_editor.app.videos import player
+
+    video = tmp_path / "highlights_league-of-legends_2026-10-11_1.mp4"
+    video.write_bytes(b"old")
+    os.utime(video, ns=(1_000_000_000, 1_000_000_000))
+    before = re.search(r"src='([^']+)'", player(video)).group(1)
+    video.write_bytes(b"new")
+    os.utime(video, ns=(2_000_000_000, 2_000_000_000))
+    after = re.search(r"src='([^']+)'", player(video)).group(1)
+    assert before != after and before.split("?")[0] == after.split("?")[0]
     assert "Pick something" in videos.player(None) and "<video" not in videos.player(tmp_path / "no")
 
 

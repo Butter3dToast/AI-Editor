@@ -47,8 +47,8 @@ a hard rule, not a preference.
 | **2F-2** | Part Planner: drag split points on the parts bar, double-click to add, × to join (real-footage test pending) | **Complete** |
 | **2F-3** | Short leftovers join the last part, never carried to the next session (all of 2F: real-footage test pending) | **Complete** |
 | **2G-1** | Style profiles: reference videos (YouTube links or files) measured into a draft profile with sliders | **Complete** |
-| 2G-2 | Choosing a style profile when making a video | Next |
-| 2H | Plain-English rules | Not started |
+| **2G-2** | Style profiles used: picked by itself in Create video, changing pace, teaser, effect amounts and captions | **Complete** |
+| 2H | Plain-English rules | Next |
 | 2 | Speaker identification for voice chat | Not started |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 

@@ -379,11 +379,20 @@ def best_of(chosen: list[Candidate], pick: str | None = None) -> Candidate:
                                     c.clip_id))
 
 
+def ordering_for(settings: Settings) -> str:
+    """The order to use. "As it happened, the teaser's moment saved for last" with
+    no teaser is just as it happened: the creator, 11 Oct, on a plan whose style
+    profile had no teaser, saw its last clip "jump" back to 0:50 after 2:06."""
+    h = settings.highlights
+    return "chronological" if h.ordering == "timeline" and not h.hook else h.ordering
+
+
 def order(chosen: list[Candidate], ordering: str, pick: str | None = None) -> list[Candidate]:
     """The order of the clips; ``ordering`` as in settings (highlights.ordering).
 
     timeline: as it happened, oldest stream first, with the best moment (the
     teaser's) saved for the end -- how the creator laid out their own video.
+    Without a teaser, see ordering_for(): nothing sets that ending up.
     balanced: strong opener, alternating intensity, best moment last (spec 7.6).
     """
     if ordering == "chronological":
@@ -535,7 +544,7 @@ def build_highlights(
     # Chosen once, so the teaser and the ending are always the same moment
     # (two marked League moments tied, and each broke the tie differently).
     best = best_of(selected, teaser_clip) if selected else None
-    chosen = order(selected, h.ordering, best.clip_id if best else None)
+    chosen = order(selected, ordering_for(settings), best.clip_id if best else None)
 
     # One game named, or every clip from the same game: a game highlight.
     # Otherwise it's stream highlights, whatever was played.

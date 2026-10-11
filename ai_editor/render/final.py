@@ -334,6 +334,9 @@ def render_plan(
 ) -> RenderResult:
     """``captions``: burn them in; None = as Settings say for this kind of video.
     ``title``: a title card over the first seconds ("Ep 1 – Part 2")."""
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # its style profile's captions and effects (2G-2)
     began = time.monotonic()
     lets_play = plan.recipe == "letsplay"
     short = plan.recipe == "shorts"

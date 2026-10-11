@@ -29,7 +29,7 @@ INTRO = ("A style profile is an editing look, measured from videos whose editing
          "adjust the sliders and save. Only the measurements are kept: a downloaded video is "
          "deleted once it's measured, and your own files are only read. A profile never "
          "switches effects or captions on; it sets how often and how strong they are when you "
-         "do. Choosing a profile when you make a video comes next (Phase 2G-2).")
+         "do. Tick its game and kinds of video, and Create video picks it by itself.")
 
 
 def _num(x, unit: str = "") -> str:
@@ -93,10 +93,10 @@ def notes_text(profile: profiles.Profile) -> str:
 def build(settings: Settings, worker: Worker, timer: gr.Timer) -> None:
     """Add the tab. Call inside the window's gr.Tabs()."""
 
-    def read(fn, *args):
+    def read(fn, *args, **kwargs):
         conn = init_db(settings.db_path)
         try:
-            return fn(conn, *args)
+            return fn(conn, *args, **kwargs)
         finally:
             conn.close()
 
@@ -110,6 +110,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer) -> None:
                                   scale=3)
             new_btn = gr.Button("Create", size="sm", scale=0, min_width=100)
         with gr.Column(visible=first is not None) as body:
+            gr.Markdown("Tick the game and kinds of video this profile is for: Create video "
+                        "then picks it by itself for them (you can still change it there).")
             with gr.Row():
                 games = gr.Dropdown(choices=read(library.game_choices), value=[],
                                     multiselect=True, allow_custom_value=True,

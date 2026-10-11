@@ -76,6 +76,9 @@ def log_feedback(conn: sqlite3.Connection, action: str, plan: EditPlan, segment:
 
 def _candidates(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
                 quality_bar: bool = True) -> list[Candidate]:
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # clips cut to its style profile's pace (2G-2)
     source = plan.source or {}
     recordings = recordings_for(conn, settings, game=source.get("game", plan.game),
                                 recording_ids=source.get("recording_ids"))
@@ -103,11 +106,19 @@ def _segment(c: Candidate) -> Segment:
 def remove(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, index: int) -> Change:
     """Take out one piece. A clip is replaced by the next best; the teaser just goes."""
     segment = plan.segments[index]
+    finale = _finale(plan) if segment.kind == "teaser" else None
     plan.segments.pop(index)
     log_feedback(conn, "removed", plan, segment, kind=segment.kind)
     if segment.kind == "teaser":
-        return Change(plan, "Teaser taken out: the video now starts with its first clip. "
-                            "Pick a clip and press 'Use as teaser' to add one back.")
+        moved = ""
+        # Its clip was saved for the end because the teaser showed it first; with
+        # nothing setting it up, it goes back to where it happened (11 Oct).
+        if finale is not None and settings.highlights.ordering == "timeline":
+            clip = plan.segments.pop(finale - 1 if finale > index else finale)
+            insert_by_time(conn, plan, clip)
+            moved = " Its clip, saved for the end, went back to where it happened."
+        return Change(plan, "Teaser taken out: the video now starts with its first clip."
+                            + moved + " Pick a clip and press 'Use as teaser' to add one back.")
 
     plan.source = dict(plan.source or {})
     plan.source["removed"] = [*plan.source.get("removed", []), segment.clip_id]
@@ -180,6 +191,9 @@ def use_as_teaser(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, 
     ``moment``: the stretch to show, in recording time; else the automatic
     pick (the reaction's peak, ending at a pause).
     """
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # the teaser's length from its style profile (2G-2)
     segment = plan.segments[index]
     if segment.kind == "teaser":
         return Change(plan, "That's already the teaser. Pick one of the clips.")

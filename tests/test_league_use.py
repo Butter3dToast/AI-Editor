@@ -196,3 +196,15 @@ def test_big_league_moments_are_suggested_after_your_marked_ones(settings):
     assert [(p.candidate.clip_id, p.why) for p in picks] == [
         ("b", "marked"), ("d", "league"), ("c", "liked")]
     assert picks[1].summary == "Quadra kill"
+
+
+def test_a_style_profile_limits_one_kind_of_effect_to_the_biggest_moments(conn, settings):
+    """At most 0.1 sound effects a minute (2G-2): one, on the biggest moment; the
+    shakes stay on both."""
+    settings.effects.highlights_per_min = 6.0
+    settings.effects.kind_per_min = {"sfx": 0.1}
+    plan = EditPlan("hl", "highlights", "t", None, 600,
+                    [Segment(1, 20, 40), Segment(1, 60, 90), Segment(1, 140, 165)])
+    placed = placement.place(conn, settings, plan, ["shake", "sfx"])
+    kinds = [[e.kind for e in effects] for effects in placed]
+    assert kinds == [[], ["shake", "sfx"], ["shake"]]     # the Double kill beats a single kill

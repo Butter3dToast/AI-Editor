@@ -843,7 +843,25 @@ A Style Profile is a saved editing look, measured from videos whose editing you 
 
 **What a profile does, and doesn't.** It sets the *pace and the amounts*: how fast, how often, how strong, how captions look. It **never switches an effect or burned-in captions on**: they stay off by default, and you switch them on per video in Review or in Settings. A profile only decides how often and how strong they are when you do.
 
-**Not built yet:** choosing a profile when you make a video (Phase 2G-2). For now you build and save profiles.
+### 13.0 Using a profile
+
+1. In the profile, tick the **game(s)** and the **kinds of video** it's for, and click **Save profile**.
+2. In **Create video**, the **Style profile** box picks that profile by itself when the game and kind of video match. Change it there if you like, or choose **No profile (my Settings)**.
+3. Make the plan. Review's summary starts with a **Style:** line saying what the profile changed, for example *"Style: League of legends, clips about 26 s, no teaser, when switched on: at most 0.5 zooms a minute (1.25x) and 0.1 sound effects a minute."*
+
+The profile's values are copied into the plan when it's made. Changing the profile later doesn't change plans already made; to use the new values, make the plan again.
+
+**What each slider changes:**
+
+| Slider | Changes |
+|---|---|
+| Cuts per minute | How long **highlight** clips run (2.3 a minute: about 26 s each). Your marked moments keep their own length. Not Shorts (one clip) or Let's Plays (parts are split their own way). |
+| Opening teaser | The highlight teaser's length; **0 = no teaser**. |
+| Longest silence left in | **Let's Plays only**: the silence trim (never below 5 s). |
+| Zooms / sound effects per minute | **At most** that many, on the biggest moments, when you've switched them on. 0 means none of that kind. |
+| Zoom strength | How far zooms push in, when switched on. |
+| Caption size / height | Burned-in captions, when switched on. |
+| Caption words at once | Shorts' captions, when switched on. |
 
 ### 13.1 Creating a profile from reference videos
 
@@ -1076,7 +1094,8 @@ Use Condense when you want a single video from a session.
 4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video.
 
 When the Stream Companion was running, no clip runs into your "BRB", "Starting" or "Ending Screen" scenes: each one stops half a second before you switched, and a moment during "BRB" isn't used.
-5. Click **Make the plan**. It shows under **Jobs**, then opens in **Review** (chapter 18).
+5. Check the **Style profile** box: a profile made for this game and highlights is picked by itself (chapter 13.0). Or choose **No profile (my Settings)**.
+6. Click **Make the plan**. It shows under **Jobs**, then opens in **Review** (chapter 18).
 
 ### 16.1a From the command line (until the app window arrives)
 
@@ -1127,7 +1146,7 @@ The preview is only for judging the choices. The finished video, in full quality
 | **Fill order** | Oldest first | When one stream runs out of good clips: *Oldest first* uses up the earliest stream before moving to the next; *Best first* takes the highest-scoring clips from any stream. |
 | **Lead-in / longest clip** | 15 s / 50 s | How much of the build-up each clip keeps, and the most any one clip can run, so the video keeps its pace. |
 | **Hook** | On | Opens with a 5–15 second teaser of the best moment. |
-| **Ordering** | Timeline | *Timeline* (as it happened, the teaser's clip saved for the end), *Chronological* (strictly as it happened), *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
+| **Ordering** | Timeline | *Timeline* (as it happened, the teaser's clip saved for the end; with no teaser, simply as it happened), *Chronological* (strictly as it happened), *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
 | **Allow reused clips** | Off | Whether clips already used in other highlight videos can appear. |
 | **Always include pinned clips** | On | Your pinned clips are always used. |
 | **Always include markers** | On | Moments you marked with the hotkey always go in. |
@@ -1234,6 +1253,7 @@ Or click a row first, then:
 - **Move up / Move down:** changes the order one place, if you'd rather not drag. The teaser always stays first.
 - **Move the clicked clip to #:** type a number from the list's **#** column and click **Move**: the clip jumps straight there.
 - **Sort by time:** puts everything back in the order it happened: the teaser first, the clips as they happened, the teaser's own clip saved for the end.
+- **Taking the teaser out** (Remove on the teaser) also moves its clip, saved for the end, back to where it happened: with no teaser, nothing sets that ending up.
 - **Add a clip that isn't in the video:** lists the clips from the same streams that aren't in it, your 👍 clips first, then the best (including ones under the quality bar: you're the judge here). Pick one to watch it in the player, then **Add to video**. It goes in where it happened in the stream; move it from there. A clip that fills the gap after a **Remove** slots in by time the same way.
 
 Changes are saved straight away. You can close AI-Editor and carry on later. Everything you change is kept, so AI-Editor can learn from it (chapter 22).

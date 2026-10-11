@@ -334,9 +334,35 @@ def download_model(settings: Settings) -> Job:
 # --- Phase 1H-2: making, previewing and rendering videos ------------------------------
 
 
+def _with_style(conn, settings: Settings, profile: int | None, recipe: str):
+    """(settings to make the plan with, the profile or None): a style profile's
+    values in, if one was chosen (Phase 2G-2)."""
+    from ..style import profiles
+    from ..style.apply import apply
+
+    found = profiles.load(conn, profile) if profile is not None else None
+    if found is None:
+        return settings, None
+    return apply(settings, found.current(settings), recipe), found
+
+
+def _stamp(conn, settings: Settings, plans, profile, report: Reporter) -> None:
+    """Keep the profile's values in each plan just made, and say what they changed."""
+    from ..recipes.plan import save_plan
+    from ..style.apply import stamp, summary
+
+    if profile is None:
+        return
+    for plan in plans:
+        stamp(plan, profile, settings)
+        save_plan(conn, plan)
+    if plans:
+        report.say(summary(plans[0]))
+
+
 def make_highlights(settings: Settings, *, game: str | None, recording_ids: list[int] | None,
-                    minutes: float | None, reuse: bool = False) -> Job:
-    """`ai-editor highlights`: a draft plan for Review."""
+                    minutes: float | None, reuse: bool = False, profile: int | None = None) -> Job:
+    """`ai-editor highlights`: a draft plan for Review. ``profile``: a style profile's id."""
 
     def run(report: Reporter) -> None:
         from ..recipes.highlights import build_highlights
@@ -344,10 +370,12 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
         conn = init_db(settings.db_path)
         try:
             report.progress("Choosing the best clips", 0.0)
-            result = build_highlights(conn, settings, game=game, recording_ids=recording_ids,
+            used, style = _with_style(conn, settings, profile, "highlights")
+            result = build_highlights(conn, used, game=game, recording_ids=recording_ids,
                                       target_min=minutes, reuse=reuse)
             report.progress("Choosing the best clips", 1.0)
             plan = result.plan
+            _stamp(conn, settings, [plan], style, report)
             report.say(f"{plan.title}: {plan.total_sec / 60:.1f} min from "
                        f"{result.recordings_used} of {result.recordings_searched} recording(s), "
                        f"{len(plan.segments)} piece(s). Open Review to check it.")
@@ -360,7 +388,7 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
     return run
 
 
-def make_letsplay(settings: Settings, recording_id: int) -> Job:
+def make_letsplay(settings: Settings, recording_id: int, profile: int | None = None) -> Job:
     """`ai-editor letsplay`: trim the episode and split it into parts."""
 
     def run(report: Reporter) -> None:
@@ -384,8 +412,10 @@ def make_letsplay(settings: Settings, recording_id: int) -> Job:
                 # is split in the middle of one.
                 ensure_read(conn, row, lambda f: report.progress("Reading the quest tracker", f))
             report.progress("Trimming and splitting into parts", 0.0)
-            result = build_letsplay(conn, settings, row)
+            used, style = _with_style(conn, settings, profile, "letsplay")
+            result = build_letsplay(conn, used, row)
             report.progress("Trimming and splitting into parts", 1.0)
+            _stamp(conn, settings, [result.plan], style, report)
             removed = sum(c.length for c in result.cuts)
             report.say(f"{result.duration_sec / 60:.1f} min trimmed to "
                        f"{(result.duration_sec - removed) / 60:.1f} min ({len(result.cuts)} cuts, "
@@ -399,7 +429,7 @@ def make_letsplay(settings: Settings, recording_id: int) -> Job:
     return run
 
 
-def make_shorts(settings: Settings, recording_id: int) -> Job:
+def make_shorts(settings: Settings, recording_id: int, profile: int | None = None) -> Job:
     """`ai-editor shorts`: up to five suggested Shorts, each its own plan for Review."""
 
     def run(report: Reporter) -> None:
@@ -408,8 +438,10 @@ def make_shorts(settings: Settings, recording_id: int) -> Job:
         conn = init_db(settings.db_path)
         try:
             report.progress("Choosing the moments", 0.0)
-            result = build_shorts(conn, settings, recording_id)
+            used, style = _with_style(conn, settings, profile, "shorts")
+            result = build_shorts(conn, used, recording_id)
             report.progress("Choosing the moments", 1.0)
+            _stamp(conn, settings, result.plans, style, report)
             for n, plan in enumerate(result.plans, 1):
                 report.say(f"{n}. {plan.title.removeprefix('Short: ')} "
                            f"({plan.total_sec:.0f} s; {WHY[plan.source['why']]})")

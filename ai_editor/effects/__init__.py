@@ -67,7 +67,10 @@ def moment_key(recording_id: int, at: float) -> str:
 
 
 def _placed(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> list[list[Effect]]:
+    from ..style.apply import styled
     from .placement import place
+
+    settings = styled(settings, plan)   # its style profile's amounts (2G-2)
 
     on = switches(settings, plan)
     if not on:

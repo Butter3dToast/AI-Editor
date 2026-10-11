@@ -3,6 +3,42 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.23.0 — Phase 2G-2: Using a style profile — 11 October 2026
+
+**New**
+
+- **Create video has a Style profile box.** It picks the profile made for that
+  game and kind of video by itself (tick them on the profile), and you can
+  change it or choose "No profile (my Settings)".
+- **What a profile changes**, and never switches anything on:
+  - cuts per minute: how long highlight clips run (asking for 26 s clips gave
+    29 s in the middle; 12 s gave 14.6 s; your marked moments keep their
+    own length);
+  - opening teaser: its length, or none;
+  - longest silence left in: the Let's Play silence trim only;
+  - zooms and sound effects: at most that many a minute each, on the biggest
+    moments, when they're switched on; zoom strength;
+  - captions: size, height, and words at once on Shorts, when switched on.
+- Review's summary starts with a **Style:** line saying what the profile
+  changed. A plan keeps a copy of the values it was made with.
+
+**Changed**
+
+- **With no teaser, "As it happened" is strictly as it happened.** The best
+  clip was held back for the end even when no teaser set it up, so the last
+  clip jumped back in time (0:50 after 2:06). Taking the teaser out in Review
+  also moves its clip back to where it happened.
+
+**Fixed**
+
+- **Save profile** failed with an error ("build...") every time.
+- **A new quick preview played the old one**, frozen with noise, when a new
+  plan had the same name as one it replaced: the browser kept its copy of the
+  old video. Each preview now has its own address.
+- YouTube references: a download YouTube refuses ("403 Forbidden") is tried
+  again, up to 3 times; error messages no longer show colour codes; videos
+  over half an hour now download (they failed before).
+
 ## 0.22.0 — Phase 2G-1: Style profiles from reference videos — 11 October 2026
 
 **New**

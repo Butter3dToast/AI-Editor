@@ -58,6 +58,11 @@ def player(path: str | Path | None, start: float | None = None, end: float | Non
         return ("<div class='aie-player-empty'>" + html.escape(note or "Pick something to play it here.")
                 + "</div>")
     url = "/gradio_api/file=" + quote(Path(path).as_posix(), safe="/:")
+    # When the file was last made, in its address: a preview made again under the
+    # same name (a plan replaced by a new one with the same name, 11 Oct) is then a
+    # new address, not the browser's stored copy of the old video -- which played
+    # as a frozen frame and noise, 5:07 long for a 12.9-minute preview.
+    url += f"?v={Path(path).stat().st_mtime_ns}"
     if start is not None:
         url += f"#t={start:.2f}" + (f",{end:.2f}" if end is not None else "")
     caption = f"<div class='aie-player-note'>{html.escape(note)}</div>" if note else ""
@@ -428,7 +433,10 @@ def plan_summary(plan: EditPlan, status: str) -> str:
              f"{kind} · {length}"
              + (f" (target {plan.target_sec / 60:.0f})" if plan.recipe == "highlights" else "")
              + f" · {'rendered' if status == APPROVED else 'draft'} · `{plan.plan_id}`"]
-    lines += [f"- {note}" for note in plan.notes]
+    from ..style.apply import summary as style_summary
+
+    style = style_summary(plan)   # Phase 2G-2: which style profile, and what it changed
+    lines += [f"- {note}" for note in ([style] if style else []) + list(plan.notes)]
     return "\n\n".join(lines[:2]) + ("\n\n" + "\n".join(lines[2:]) if lines[2:] else "")
 
 

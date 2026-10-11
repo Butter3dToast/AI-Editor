@@ -31,6 +31,9 @@ def export_plan(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     ``episode`` and ``parts`` are for Let's Plays (all parts if None).
     ``note(n, segment)`` writes each clip's marker.
     """
+    from ..style.apply import styled
+
+    settings = styled(settings, plan)   # its style profile's captions (2G-2)
     from ..analysis.captions import Cue, segment_cues, write_srt
     from ..analysis.clips import load_words
     from ..render import parts as lp

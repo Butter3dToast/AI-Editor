@@ -279,3 +279,15 @@ def test_when_every_good_clip_is_in_a_video_the_note_says_which_and_what_to_do(
     note = highlights.nothing_left_note(conn, settings, rows, None, reuse=False)
     assert "highlights_league_1" in note and "Use clips already in a video" in note
     assert "quality bar" in highlights.nothing_left_note(conn, settings, rows, None, reuse=True)
+
+
+def test_with_no_teaser_as_it_happened_keeps_every_clip_in_order(settings):
+    """A style profile with no teaser (11 Oct): the best clip isn't held back for an
+    ending nothing set up."""
+    from ai_editor.recipes.highlights import ordering_for
+
+    assert ordering_for(settings) == "timeline"
+    settings.highlights.hook = False
+    assert ordering_for(settings) == "chronological"
+    settings.highlights.ordering = "balanced"
+    assert ordering_for(settings) == "balanced"
