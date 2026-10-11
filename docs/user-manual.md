@@ -1015,8 +1015,7 @@ With that, a part is **never split in the middle of a quest** if it can be helpe
 | **Trim level** | **Light** | *Light* keeps more exploration and chat. *Standard* is balanced. *Tight* removes more. |
 | **Silence** | **20 s** | Nobody talking and nothing happening for longer than this is cut down, leaving 3 seconds either side. |
 | **Menus** | **5 s** | A still picture (menu, map, inventory) for this long is cut, unless you're talking over it. |
-| **Leftover handling** | **Carry to next session** | What happens to a short leftover piece at the end of a session. |
-| **Leftover minimum** | **15 min** | Pieces shorter than this are treated as leftovers. |
+| **Leftover minimum** | **15 min** | A last part shorter than this is a leftover: it joins the part before it. |
 | **Recap at start** | Off | Adds a "previously on" recap (max 15 seconds). |
 | **Hook endings** | On | Prefers ending parts right after an exciting moment. |
 | **Speed-up indicator** | On | Shows a small fast-forward icon during sped-up travel. |
@@ -1032,6 +1031,7 @@ AI-Editor follows these rules, in order:
 5. If the mission still isn't over at **60 minutes**, it splits at the gentlest point available (between scenes or at a fade), adds a "To be continued" card, and flags it for you to check.
 6. After a longer part, the remaining parts **go back to about 30 minutes**.
 7. When two break points are equally good, it picks the one **right after an exciting moment**, so viewers want to watch the next part.
+8. **No leftovers:** a last part under **15 minutes** joins the part before it, so every part from a recording stays in that recording's episode (nothing is carried to the next session: each one opens on your intro). A short last part stays only if joining it would make a part over **60 minutes** and no split can move to make room; the plan's notes then say so.
 
 **How many parts will I get?** Usually about **four** from a 2-hour session. Sometimes three or five, because loading screens and menus are removed and story missions vary. AI-Editor never adds boring footage just to make four parts. If you're regularly getting three, try **Trim level: Light** (default) or record a little longer.
 
@@ -1045,6 +1045,7 @@ In **Review**, a Let's Play's parts bar is also the Part Planner: one block per 
 - A split drawn **red** ends a part in the middle of a quest; the **Ends on** column under the bar says which.
 - Times under the handles are in the recording, the same as the table.
 - A part is never longer than 60 minutes or shorter than 2: a move that would break that is refused, and the message says why.
+- If a change leaves the last part under 15 minutes, it's still made, and the message points it out (*"Part 5 is only 0:09:00: × joins it to Part 4."*). It's your call.
 - **↶ Undo** takes back any of these, like every change in Review. Make a quick preview of a part to watch it as it now is.
 
 ### 15.5 Numbering and series
@@ -1052,7 +1053,6 @@ In **Review**, a Let's Play's parts bar is also the Part Planner: one block per 
 - Go to **Series** to manage your Dawnwalker playthrough.
 - Part numbers continue across sessions automatically (Part 1, 2, 3, ...).
 - To fix numbering, click **Series → Edit numbering**.
-- Leftover pieces carried over from the last session appear at the start of the next session's first part, labelled **Carried over**.
 
 ### 15.6 Condense mode (one video per session)
 

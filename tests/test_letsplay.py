@@ -133,6 +133,34 @@ def test_a_short_leftover_joins_the_previous_part(settings):
     assert len(parts) == 2 and min(parts) >= 25
 
 
+def test_a_leftover_after_a_long_stretch_joins_the_last_part(settings):
+    """No safe break from 40 to 88 minutes (a long cutscene), then 10 minutes:
+    40 + 58, not 40 + 48 + a 10-minute scrap (Phase 2F-3)."""
+    breaks = pauses(30, every_sec=600) + [Break(40 * 60, 40 * 60, -0.3, "pause"),
+                                          Break(88 * 60, 88 * 60, -8.0, "loading", hook=True)]
+    breaks += [Break(t * 60, t * 60, -0.3, "pause") for t in range(89, 98)]
+    assert lengths(98, breaks, settings) == [40.0, 58.0]
+
+
+def test_a_leftover_stays_only_when_joining_it_would_pass_sixty_minutes(settings):
+    """No break from 35 to 85 minutes: 34 + 51 + 10, since 51 + 10 is over 60; the
+    plan says why."""
+    from ai_editor.recipes.parts import leftover_note
+
+    breaks = pauses(35) + [Break(85 * 60, 85 * 60, -3.0, "loading")]
+    breaks += [Break(t * 60, t * 60, -0.3, "pause") for t in range(86, 95)]
+    total = 95 * 60
+    parts = make_parts(total, split(total, breaks, settings), [(0.0, total)])
+    assert [round(p.length / 60) for p in parts] == [34, 51, 10]
+    note = leftover_note(parts, settings)
+    assert note.startswith("Part 3 is only 10 minutes: joined to Part 2 it would be 61 minutes")
+    assert leftover_note(parts[:2], settings) is None
+
+
+def test_a_short_episode_is_one_part(settings):
+    assert lengths(12, pauses(12), settings) == [12.0]
+
+
 def test_no_clean_break_for_an_hour_stretches_a_part_but_never_past_sixty(settings):
     """A long story stretch with nothing allowed: the part stretches, up to the hard cap."""
     breaks = [Break(50 * 60, 0, -0.3, "pause")] + [Break(t, t, 50.0, "forced")

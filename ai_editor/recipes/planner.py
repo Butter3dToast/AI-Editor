@@ -138,6 +138,21 @@ def _said(b: Break) -> str:
     return what
 
 
+def _short_last(settings: Settings, plan: EditPlan) -> str:
+    """A word about the last part, when a change leaves it too short to stand alone."""
+    edges = splits_of(plan)
+    if not edges:
+        return ""
+    total = total_of(plan)
+    last = total - edges[-1]
+    if last >= settings.lets_play.leftover.min_standalone_min * 60:
+        return ""
+    count = len(edges) + 1
+    joined = total - (edges[-2] if len(edges) > 1 else 0.0)
+    return (f" Part {count} is only {clock(last)}"
+            + (f": × joins it to Part {count - 1}." if not _too_long(settings, joined) else "."))
+
+
 def move_split(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, index: int,
                at: float) -> Change:
     """Part ``index + 1`` ends nearer ``at`` (seconds into the trimmed episode)."""
@@ -162,7 +177,7 @@ def move_split(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, ind
     _regroup(plan, edges, infos)
     return Change(plan, f"Part {index + 1} now ends at {clock(found.at)}, on {_said(found)}: "
                         f"parts {index + 1} and {index + 2} are {clock(found.at - lo)} and "
-                        f"{clock(hi - found.at)}.")
+                        f"{clock(hi - found.at)}." + _short_last(settings, plan))
 
 
 def add_split(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, at: float) -> Change:
@@ -181,7 +196,7 @@ def add_split(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, at: 
     edges.insert(part, found.at)
     _regroup(plan, edges, infos)
     return Change(plan, f"Part {part + 1} split at {clock(found.at)}, on {_said(found)}: "
-                        f"{len(edges) + 1} parts now.")
+                        f"{len(edges) + 1} parts now." + _short_last(settings, plan))
 
 
 def remove_split(settings: Settings, plan: EditPlan, index: int) -> Change:

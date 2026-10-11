@@ -231,10 +231,10 @@ class Clips(BaseModel):
 
 
 class Leftover(BaseModel):
+    # A last part shorter than this joins the part before it (recipes/parts.py).
+    # Carrying it to the next session was in the spec; the creator chose never
+    # to (2026-10-11): every recording opens on an intro.
     min_standalone_min: float = 15.0
-    default_action: Literal["carry_to_next_session", "merge_into_previous"] = (
-        "carry_to_next_session"
-    )
 
 
 class SplitPenalties(BaseModel):

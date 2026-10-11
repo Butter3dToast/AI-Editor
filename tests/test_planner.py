@@ -74,6 +74,14 @@ def test_adding_and_removing_splits(settings):
     assert "60 minutes at most" in planner.remove_split(settings, plan, 0).message
 
 
+def test_a_short_last_part_is_pointed_out(settings):
+    plan = lp_plan()
+    change = planner.move_split(None, settings, plan, 1, 79 * MIN)   # 80 in the recording
+    assert lengths(plan) == [30, 49, 11]
+    assert change.message.endswith("Part 3 is only 0:11:00: × joins it to Part 2.")
+    assert "only" not in planner.move_split(None, settings, plan, 1, 64 * MIN).message
+
+
 def test_a_split_in_the_middle_of_a_quest_is_flagged(settings):
     plan = lp_plan()
     change = planner.move_split(None, settings, plan, 1, 71 * MIN)

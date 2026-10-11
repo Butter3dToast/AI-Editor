@@ -3,6 +3,28 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.21.0 — Phase 2F-3: Short leftovers join the last part — 11 October 2026
+
+**Changed**
+
+- **No leftovers.** A Let's Play's last part under 15 minutes now always joins
+  the part before it, so every part from a recording stays in that
+  recording's episode. Before, the splitter usually avoided a scrap but could
+  still leave one (40 + 48 + a 10-minute scrap after a long cutscene; now
+  40 + 58).
+- A short last part stays only when joining it would make a part over 60
+  minutes and no split can move to make room. The plan's notes then say why.
+- In the Part Planner, a drag or a new split that leaves the last part short
+  is still made, and the message points it out ("× joins it to Part 4").
+
+**Removed**
+
+- Carrying a leftover to the next session's Part 1 (in the original plan, never
+  built). The creator opens every recording on an intro and makes all its parts
+  from it, so it's not wanted. The setting is gone from `settings.yaml`.
+
+All of 2F is tested on real footage next Saturday.
+
 ## 0.20.0 — Phase 2F-2: The Part Planner — 11 October 2026
 
 **New**

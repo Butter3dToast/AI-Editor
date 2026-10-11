@@ -17,6 +17,13 @@ costs settings.lets_play.penalties.split_inside_story_mission, so a part
 stretches toward 45 minutes (60 at most) to finish it, and is flagged when it
 can't. A break just after a quest ends, or as the time of day turns, is a
 good place to end.
+
+Leftovers (Phase 2F-3): a last part shorter than
+settings.lets_play.leftover.min_standalone_min (15) joins the part before it.
+The creator makes every part from one recording, each opening on an intro,
+so nothing is carried to the next session. A short last part stays only when
+there's no other way: joined, the part would be over 60 minutes, and no
+split can move to make room.
 """
 
 from __future__ import annotations
@@ -175,10 +182,20 @@ def part_cost(minutes: float, settings: Settings, *, last: bool) -> float | None
 
 
 def split(total_sec: float, breaks: list[Break], settings: Settings) -> list[Break]:
-    """The cheapest set of breaks. Returns the chosen breaks, in order."""
+    """The cheapest set of breaks. Returns the chosen breaks, in order.
+
+    A short last part (a leftover) only if there's no way without one."""
     points = [Break(0.0, 0.0, 0.0, "start")] + [b for b in breaks if 0 < b.at < total_sec] \
         + [Break(total_sec, 0.0, 0.0, "end")]
+    chosen = _cheapest(points, settings, leftover=False)
+    return chosen if chosen is not None else _cheapest(points, settings, leftover=True) or []
+
+
+def _cheapest(points: list[Break], settings: Settings, *, leftover: bool) -> list[Break] | None:
+    """The cheapest way through ``points`` (start ... end); None if there's none.
+    ``leftover``: whether the last part may be shorter than a part can stand alone."""
     hard = settings.lets_play.story_extension_hard_max_min * 60
+    shortest = settings.lets_play.leftover.min_standalone_min * 60
     best = [float("inf")] * len(points)
     back = [-1] * len(points)
     best[0] = 0.0
@@ -190,6 +207,8 @@ def split(total_sec: float, breaks: list[Break], settings: Settings) -> list[Bre
         for i in range(first, j):
             if best[i] == float("inf"):
                 continue
+            if last and i > 0 and not leftover and points[j].at - points[i].at < shortest:
+                continue
             cost = part_cost((points[j].at - points[i].at) / 60, settings, last=last)
             if cost is None:
                 continue
@@ -197,6 +216,8 @@ def split(total_sec: float, breaks: list[Break], settings: Settings) -> list[Bre
             if total < best[j]:
                 best[j], back[j] = total, i
     chosen, j = [], len(points) - 1
+    if best[j] == float("inf"):
+        return None
     while back[j] > 0:
         j = back[j]
         chosen.append(points[j])
@@ -217,6 +238,18 @@ def make_parts(total_sec: float, chosen: list[Break], pieces: list[tuple[float, 
                           flagged=ends[n - 1] == "forced" or quests[n - 1] is not None,
                           mission=quests[n - 1], story=stories[n - 1]))
     return parts
+
+
+def leftover_note(parts: list[Part], settings: Settings) -> str | None:
+    """Why the last part is short, when it is (the splitter found no way round it)."""
+    lp = settings.lets_play
+    if len(parts) < 2 or parts[-1].length >= lp.leftover.min_standalone_min * 60:
+        return None
+    last, before = parts[-1], parts[-2]
+    return (f"Part {last.number} is only {last.length / 60:.0f} minutes: joined to Part "
+            f"{before.number} it would be {(last.length + before.length) / 60:.0f} minutes, over "
+            f"the {lp.story_extension_hard_max_min:.0f}-minute limit, and no split could move "
+            "to make room. Check it on the parts bar.")
 
 
 def pieces_of_part(pieces: list[tuple[float, float]], part: Part) -> list[tuple[float, float]]:

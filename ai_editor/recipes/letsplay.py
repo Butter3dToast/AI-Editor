@@ -252,7 +252,7 @@ class LetsPlayResult:
 def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Row) -> LetsPlayResult:
     """Trim one recording, split it into parts, and save it as a draft plan."""
     from ..analysis.quests import story_of
-    from .parts import break_points, make_parts, range_pieces, split
+    from .parts import break_points, leftover_note, make_parts, range_pieces, split
 
     episode = load_episode(conn, settings, row)
     story = story_of(conn, row["id"])
@@ -295,6 +295,8 @@ def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Ro
                    for p in parts if p.mission]
     plan.notes += [f"Part {p.number} ends at a forced split: nothing cleaner within the length limit. "
                    "Check it." for p in parts if p.flagged and not p.mission]
+    if note := leftover_note(parts, settings):
+        plan.notes.append(note)
     save_plan(conn, plan)
     return LetsPlayResult(plan, cuts, duration, parts, pieces)
 

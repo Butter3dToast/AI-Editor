@@ -27,7 +27,6 @@ def test_shipped_defaults_match_the_spec():
     assert lp.story_extension_hard_max_min == 60
     assert lp.trim_level == "light"
     assert lp.leftover.min_standalone_min == 15
-    assert lp.leftover.default_action == "carry_to_next_session"
 
 
 def test_highlights_and_shorts_defaults():

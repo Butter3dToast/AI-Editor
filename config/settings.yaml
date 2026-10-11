@@ -183,8 +183,7 @@ lets_play: # Spec section 7.6 Recipe A
     split_inside_cutscene_dialogue_fight: forbidden
   bonus_hook_ending: -5.0
   leftover:
-    min_standalone_min: 15
-    default_action: carry_to_next_session # carry_to_next_session | merge_into_previous
+    min_standalone_min: 15 # a last part shorter than this joins the part before it
   recap_at_start: false
   recap_max_sec: 15
   hook_endings: true
