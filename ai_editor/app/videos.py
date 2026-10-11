@@ -268,6 +268,10 @@ def shown_in_preview(settings: Settings, plan: EditPlan, part: int | None = None
     # Added in 2C-3b, only when used, so previews made before still match.
     if between(settings, plan) != "cut" or off:
         key += f":{between(settings, plan)}:{off}"
+    # Moments ticked from Review's suggestions, each with its own effects (2H-1).
+    picked = (plan.source or {}).get("effects_picked")
+    if picked:
+        key += ":" + ",".join(f"{k}={'+'.join(v)}" for k, v in sorted(picked.items()))
     return key
 
 

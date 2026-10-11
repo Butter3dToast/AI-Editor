@@ -219,6 +219,13 @@ class Clips(BaseModel):
     fight_level: float = Field(0.2, ge=0.0, le=1.0)
     fight_gap_sec: float = Field(10.0, ge=1.0, le=60.0)
     fight_extend_sec: float = Field(30.0, ge=0.0, le=120.0)
+    # Nor open in the middle of one (Phase 2H-1, the creator's tip "ensure the
+    # action is always within the clip"): a video's clip starts before a fight
+    # already going, as far as its length allows (analysis/fights.py). The
+    # game's sound counts as fighting in its loudest seconds: on League, the
+    # seconds around kills sit at its 90th percentile.
+    keep_fights_whole: bool = True
+    fight_loud_percentile: float = Field(90.0, ge=50.0, le=99.9)
     # A scene change only stops a clip if it stands alone: more than this
     # many others within scene_busy_window_sec either side means camera
     # editing (a cutscene), not a menu or loading screen.
@@ -527,6 +534,10 @@ class Effects(BaseModel):
     # sliding in over the old one (render/slide.py). The creator's choice
     # (2026-10-10): hard cut, slide optional.
     between_clips: Literal["cut", "slide"] = "cut"
+    # Review lists each big moment with the effects that suit it, none ticked
+    # (Phase 2H-1, the creator's tip "suggest where an effect can work and which
+    # effect"). Ticking one uses them there; nothing is on until then.
+    suggest: bool = True
 
     @field_validator("between_clips", mode="before")
     @classmethod
@@ -563,6 +574,11 @@ class Render(BaseModel):
     # talking (render/music.py). The creator plays DMCA-free music and wants
     # it in every video (2026-10-10); each video can switch it off in Review.
     include_stream_music: bool = True
+    # The game's sound turned down where it would cover your voice (Phase 2H-1,
+    # the creator's tip "make sure the video sound is never over my voice"),
+    # like the music: only as far as needed (render/music.py). Only with a
+    # separate game track.
+    game_under_voice: bool = True
 
     @model_validator(mode="after")
     def _known_preset(self) -> "Render":

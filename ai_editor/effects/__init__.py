@@ -14,13 +14,22 @@ that video (``plan.source["effects"]``), when changed from the Settings, and
 the single moments switched off in Review (``plan.source["effects_off"]``,
 by recording and time, so they stay off however the clips are moved).
 
+**Suggestions** (Phase 2H-1, the creator's tip "suggest where an effect can
+work and which effect"): Review lists every big moment with the effects that
+suit it -- all the kinds placed, as placement.py would with every one on --
+none ticked until the creator ticks them. A ticked moment gets exactly those
+(``plan.source["effects_picked"]``: its kinds, by recording and time); the
+video's kinds become the ones its ticked moments use, and every other moment
+is switched off. Ticking kinds for the whole video in Review goes back to the
+same kinds everywhere.
+
 Sliding between clips is in render/slide.py.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..config import Settings
 from ..recipes.plan import EditPlan
@@ -28,6 +37,9 @@ from ..recipes.plan import EditPlan
 KINDS = ("flash", "shake", "sfx", "zoom", "replay")
 LABELS = {"flash": "Flash", "shake": "Screen shake", "sfx": "Sound effects",
           "zoom": "Punch-in zoom", "replay": "Slow-motion replay"}
+# A moment placed with every kind on and with fewer is the same moment within
+# this: a zoom keeps its moment further in from a clip's end (placement.py).
+NEAR_SEC = 1.0
 
 
 @dataclass(frozen=True)
@@ -58,7 +70,10 @@ def switches(settings: Settings, plan: EditPlan) -> list[str]:
 
 
 def set_switches(plan: EditPlan, kinds: list[str]) -> None:
+    """The kinds for the whole video: the same everywhere, so moments picked
+    with their own effects (suggestions) go back to them."""
     plan.source["effects"] = [k for k in KINDS if k in kinds]
+    plan.source.pop("effects_picked", None)
 
 
 def moment_key(recording_id: int, at: float) -> str:
@@ -78,45 +93,151 @@ def _placed(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> lis
     return place(conn, settings, plan, on)
 
 
+def _picked(plan: EditPlan) -> list[tuple[int, float, set[str]]]:
+    """The moments ticked from suggestions: (recording, time, their kinds)."""
+    found = []
+    for key, kinds in ((plan.source or {}).get("effects_picked") or {}).items():
+        recording, _, at = key.partition(":")
+        found.append((int(recording), float(at), set(kinds)))
+    return found
+
+
+def _kept(plan: EditPlan, every: list[list[Effect]]) -> list[list[Effect]]:
+    """Without the moments switched off in Review, and a picked moment's effects
+    only the ones it was picked with."""
+    off = set((plan.source or {}).get("effects_off", []))
+    picked = _picked(plan)
+    out = []
+    for seg, effects in zip(plan.segments, every):
+        kept = []
+        for e in effects:
+            if moment_key(seg.recording_id, e.at) in off:
+                continue
+            own = next((kinds for rid, at, kinds in picked
+                        if rid == seg.recording_id and abs(at - e.at) <= NEAR_SEC), None)
+            if own is None or e.kind in own:
+                kept.append(e)
+        out.append(kept)
+    return out
+
+
 def for_plan(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> list[list[Effect]]:
     """Each segment's effects, in order, without the moments switched off in Review."""
-    off = set((plan.source or {}).get("effects_off", []))
-    return [[e for e in effects if moment_key(seg.recording_id, e.at) not in off]
-            for seg, effects in zip(plan.segments, _placed(conn, settings, plan))]
+    return _kept(plan, _placed(conn, settings, plan))
+
+
+def _begins(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
+            kept: list[list[Effect]]) -> tuple[list[float], list]:
+    """Where each clip starts in the finished video, and its replays, for labels."""
+    from ..publish import placed
+    from ..render.final import frame_exact
+    from ..render.replay import extra, for_plan as replays_for
+    from ..render.slide import overlaps
+
+    fps = settings.render.presets[settings.render.preset].fps
+    slides = overlaps(settings, plan, [frame_exact(s.length, fps) for s in plan.segments], fps)
+    replays = replays_for(conn, settings, plan, fps, kept)   # as the video will have them
+    return [start for start, _ in placed(plan, fps, slides, extra(replays))], replays
+
+
+def _said(effects: list[Effect]) -> str:
+    """'shake + boom'."""
+    return " + ".join([e.kind for e in effects if e.kind != "sfx"]
+                      + [e.sound for e in effects if e.kind == "sfx" and e.sound])
 
 
 def moments(conn: sqlite3.Connection, settings: Settings,
             plan: EditPlan) -> list[tuple[str, str]]:
     """Every moment with effects, switched off or not, for Review: (label, key).
     'Clip 3 at 1:42: shake + boom'."""
-    from ..publish import clock, placed
-    from ..render.final import frame_exact
-    from ..render.slide import overlaps
+    from ..publish import clock
+    from ..render.replay import shift
 
-    fps = settings.render.presets[settings.render.preset].fps
     found = []
-    from ..render.replay import extra, for_plan as replays_for, shift
-
-    slides = overlaps(settings, plan, [frame_exact(s.length, fps) for s in plan.segments], fps)
     every = _placed(conn, settings, plan)
-    off = set((plan.source or {}).get("effects_off", []))
-    kept = [[e for e in fx if moment_key(seg.recording_id, e.at) not in off]
-            for seg, fx in zip(plan.segments, every)]
-    replays = replays_for(conn, settings, plan, fps, kept)   # as the video will have them
-    begins = [start for start, _ in placed(plan, fps, slides, extra(replays))]
+    begins, replays = _begins(conn, settings, plan, _kept(plan, every))
     for index, (seg, effects) in enumerate(zip(plan.segments, every)):
         start = begins[index]
         times = sorted({e.at for e in effects})
         for at in times:
             here = [e for e in effects if e.at == at]
-            what = [e.kind for e in here if e.kind != "sfx"] + [e.sound for e in here
-                                                                  if e.kind == "sfx" and e.sound]
             label = next((e.label for e in here if e.label), None)
             later = shift(at - seg.src_in, replays[index]) - (at - seg.src_in)
             found.append((f"Clip {index + 1} at {clock(start + at - seg.src_in + later)}: "
-                          + (f"{label}: " if label else "") + " + ".join(what),
+                          + (f"{label}: " if label else "") + _said(here),
                           moment_key(seg.recording_id, at)))
     return found
+
+
+@dataclass
+class Suggestion:
+    """One big moment, and the effects that suit it (2H-1)."""
+    key: str                     # moment_key: its recording and time
+    recording_id: int
+    at: float
+    kinds: list[str]             # the effects that suit it, in KINDS order
+    text: str                    # 'Clip 3 at 1:42: Triple kill: shake + replay + boom'
+    on: bool = False             # it has effects in the video now
+    now: list[str] = field(default_factory=list)   # which
+
+    @property
+    def label(self) -> str:
+        if self.on and self.now and set(self.now) != set(self.kinds):
+            return f"{self.text} (now: {' + '.join(self.now)})"
+        return self.text
+
+
+def suggestions(conn: sqlite3.Connection, settings: Settings,
+                plan: EditPlan) -> list[Suggestion]:
+    """Every big moment with the effects that suit it, and whether it has them
+    now. None for Let's Plays (no effects there: the creator's choice)."""
+    from ..publish import clock
+    from ..render.replay import shift
+    from ..style.apply import styled
+    from .placement import place
+
+    if plan.recipe == "letsplay":
+        return []
+    every = place(conn, styled(settings, plan), plan, list(KINDS))
+    kept = for_plan(conn, settings, plan)
+    begins, replays = _begins(conn, settings, plan, kept)
+    found = []
+    for index, (seg, effects) in enumerate(zip(plan.segments, every)):
+        for at in sorted({e.at for e in effects}):
+            here = [e for e in effects if e.at == at]
+            label = next((e.label for e in here if e.label), None)
+            later = shift(at - seg.src_in, replays[index]) - (at - seg.src_in)
+            has = [e for e in kept[index] if abs(e.at - at) <= NEAR_SEC]
+            found.append(Suggestion(
+                moment_key(seg.recording_id, at), seg.recording_id, at,
+                [k for k in KINDS if any(e.kind == k for e in here)],
+                f"Clip {index + 1} at {clock(begins[index] + at - seg.src_in + later)}: "
+                + (f"{label}: " if label else "") + _said(here),
+                on=bool(has), now=[k for k in KINDS if any(e.kind == k for e in has)]))
+    return found
+
+
+def use_suggestions(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
+                    ticked: list[str]) -> None:
+    """Effects on the ticked moments only: each the ones suggested for it (or,
+    ticked already, the ones it has)."""
+    every = suggestions(conn, settings, plan)
+    want = set(ticked)
+    before = dict((plan.source or {}).get("effects_picked") or {})
+    picked = {s.key: before.get(s.key) or (s.now if s.on else s.kinds)
+              for s in every if s.key in want}
+    plan.source = dict(plan.source or {})
+    plan.source["effects"] = [k for k in KINDS if any(k in kinds for kinds in picked.values())]
+    plan.source["effects_picked"] = picked
+    plan.source["effects_off"] = []
+    chosen = [s for s in every if s.key in want]
+    off = set()
+    for seg, effects in zip(plan.segments, _placed(conn, settings, plan)):
+        for e in effects:
+            if not any(s.recording_id == seg.recording_id and abs(s.at - e.at) <= NEAR_SEC
+                       for s in chosen):
+                off.add(moment_key(seg.recording_id, e.at))
+    plan.source["effects_off"] = sorted(off)
 
 
 def set_moments_on(plan: EditPlan, all_keys: list[str], kept: list[str]) -> None:

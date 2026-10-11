@@ -1145,6 +1145,7 @@ The preview is only for judging the choices. The finished video, in full quality
 | **Minimum clip score** | 0.55 | The quality bar: clips below it aren't picked, even if the video comes up short. Clips you 👍 and moments you marked always go in, whatever their score. |
 | **Fill order** | Oldest first | When one stream runs out of good clips: *Oldest first* uses up the earliest stream before moving to the next; *Best first* takes the highest-scoring clips from any stream. |
 | **Lead-in / longest clip** | 15 s / 50 s | How much of the build-up each clip keeps, and the most any one clip can run, so the video keeps its pace. |
+| **Start clips before a fight that's already going** | On | When a fight is already going where a clip would start (the game's sound among its loudest, gunfire, or League champions dying), the clip starts a second before the fight began instead, as long as it stays within the longest clip. When it can't, Review's clip list marks it **⚠ starts mid-fight (8 s already gone)**: click it and use **Adjust the cut** (18.3) if it needs it. Shorts too. Clips whose cut you adjusted are left as they are. **Settings → Highlights**. |
 | **Hook** | On | Opens with a 5–15 second teaser of the best moment. |
 | **Ordering** | Timeline | *Timeline* (as it happened, the teaser's clip saved for the end; with no teaser, simply as it happened), *Chronological* (strictly as it happened), *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
 | **Allow reused clips** | Off | Whether clips already used in other highlight videos can appear. |
@@ -1347,6 +1348,7 @@ What the render does:
 - **Full quality from your original recording**, not the preview copy: 1920×1080 at 60 fps, encoded on your graphics card. The picture and sound are exact to the frame at every join.
 - **Clean joins.** The sound fades over a few thousandths of a second at every cut, too short to hear as a dip but enough to stop a click.
 - **YouTube loudness, without squashing.** The whole video is turned up or down in one go toward about −14 LUFS (YouTube's level), so a quiet moment stays quieter than a loud one, the way it was. Only the loudest peaks are held down, by 3 dB at most, which you can't hear. A recording made very quiet (EP 1 was −25 LUFS) is raised only as far as that allows, so it ends up a little under YouTube's level, but never distorted. Turn it up in your player if it's too quiet.
+- **Never blasting.** A video is never turned up past where your normal talking would be at YouTube's level (on your League streams, about 10 dB). A Short with no talking in it would otherwise have its music and game raised to where your voice usually is: Short_09 (10 Oct) was raised 31 dB and its music blasted, next to 07 and 08 at about 9. Now it plays its music and game as loud as your other videos of that stream do; it's quieter overall, because there's no voice in it. The render says so when this happens.
 - **Rebuilt from your separate tracks** when the recording has them (chapter 7.3): your mic, the game and Discord, each handled on its own, with **the music from your stream** added back underneath (19.2e). A recording without real separate tracks (a Twitch VOD, or an OBS recording from before your tracks were set up) uses the mixed track, exactly as the stream sounded, music and all. The render says which it used.
 - **Marker beeps are taken out.** On the 26 Sep stream the Companion's click reached your microphone. Each click is found by its sound, only near a marker you pressed, and that one pitch is filtered out for half a second, leaving your voice and the game around it untouched. The click is off now (chapter 24), so new recordings don't have any.
 
@@ -1423,7 +1425,10 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 **Switching them on and off:**
 
 - **For one video:** in **Review**, under **Finish it**, tick or untick **Flash**, **Screen shake**, **Sound effects**, **Punch-in zoom** and **Slow-motion replay**. Make a quick preview to see and hear them; a kept preview says when the effects have changed since it was made.
-- **One moment at a time:** **Each effect**, under **Finish it**, lists every moment with effects, like "Clip 5 at 2:48: shake + boom" (the time is where it is in the video). Untick one to leave just that moment out. It stays off even if you move or trim its clip.
+- **Suggested, one moment at a time:** **Suggested effects on the big moments**, under **Finish it**, lists every big moment with the effects that suit it, like "Clip 3 at 1:42: Triple kill: shake + replay + boom" (the time is where it is in the video). Nothing is ticked until you tick it. Tick a moment and it gets exactly those effects; the rest get none. A moment already ticked keeps the effects it has: "(now: shake)" says when that's fewer than suggested. It stays as you set it even if you move or trim its clip.
+  - Ticking **Flash**, **Screen shake** and the rest above it instead puts those kinds on every ticked moment: the same everywhere again.
+  - The suggestions come from what AI-Editor knows about each moment: a jump in the game's sound suits a shake and a boom (and a replay when it's one of your biggest), you reacting suits a flash, a zoom and a hit.
+  - To go back to the list as it was before 2H (only the moments with effects, all ticked, untick to leave one out), untick **Suggest effects in Review** in **Settings → Effects**.
 - **For every new video:** **Settings → Effects**, per kind of video. All off for now; Let's Plays have none unless you tick some there.
 - **How many:** **Settings → Effects**, big moments per minute.
 
@@ -1445,10 +1450,11 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
 The DMCA-free music you play on stream goes in your finished videos, as viewers heard it: highlights, Shorts and Let's Plays.
 
 - **Out of the way of talking.** While you or a Discord friend talks, the music is kept at least 15 dB under the voice, lowered only as much as that needs and only there (never more than 12 dB), easing down and back up. Your music usually sits about 17 dB under your voice already, so mostly it plays exactly as on stream. A blip at the mic with nothing said never dips it.
+- **The game under your voice, too.** While *you* talk, the game's sound is kept at least 10 dB under your voice, the same way: only as far as needed, only there (never more than 12 dB), and straight back up after. A Discord friend talking doesn't lower it. On your League streams the game sits far under your voice (about 45 dB), so it's never lowered there; on Dawnwalker it is now and then, by about 4 dB, mostly over cutscenes and fights you talk through. It needs the game on its own track in OBS (7.3), so recordings with only one track keep it as recorded. Switch it off in **Settings → Captions and sound** (**Keep the game under my voice**).
 - **Smooth at cuts.** Each clip of a highlight video comes from a different point in the song, so the music alone fades in and out over a third of a second at each cut, while your voice and the game still cut cleanly.
 - **Where it comes from.** From track 5 when your recording has one (7.3). Older recordings: AI-Editor takes everything else out of the mixed track, which leaves just the music. Recordings with only one track keep it exactly as recorded.
 - **Switching it off:** for one video, untick **Music from your stream** in **Review → Finish it**; for every video, **Settings → Captions and sound**.
-- **Quick previews** have the stream's sound as it was (the preview copy has only the mixed track), so the lowering and the cut fades are in the finished video only.
+- **Quick previews** have the stream's sound as it was (the preview copy has only the mixed track), so the lowering (of the music and the game) and the cut fades are in the finished video only.
 
 Only use music you're allowed to use on YouTube: commercial songs usually get a video claimed (chapter 27).
 
@@ -1724,6 +1730,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Scoring | Black screen level | 24 (0–255) | A picture this dark counts as a black screen (loading, setting up a scene). It is never a moment, whatever is said over it, and clips don't start or end on one. |
 | Scoring | Black screen length | 10 s | A black screen must last this long to count: a loading screen or setting up a scene. Shorter ones are part of the moment, like the screen going black when you crash or die, or a blinking effect. |
 | Clips | Ending pause / run-on | 1 s / 10 s | A clip only ends where you then stay quiet for at least this long (a breath between sentences doesn't count), and may run up to 10 s longer to get there, so it never cuts you off mid-thought. |
+| Clips | Start before a fight (`clips.keep_fights_whole`, `fight_loud_percentile`) | On, 90 | A video's clip starts before a fight already going (16.2). The game's sound counts as fighting in its loudest seconds: the top 10% of that recording (90). |
 | Clips | Busy scene changes | More than 3 within 30 s | Scene changes closer together than this are camera editing (cutscenes), so they don't stop a clip. Lower it if clips run into menus; raise it if cutscene clips start too late. |
 | Analysis | Spelling fixes | talk of → Tarkov, tarkoff → Tarkov, war dogs → Wardogs | Words the speech recognition mishears, and what you really said. Game and friends' names it doesn't know come out as ordinary words that sound alike. Add your own in `settings.yaml` under `spellings:` as `heard: meant`; they apply the next time you analyse, without transcribing again. (Telling the AI the names beforehand was tried and dropped: it started "hearing" the names, and "Thank you for watching", over game noise.) |
 | Analysis | Scene threshold | 5.0 | How different the picture must look to count as a scene change. Lower finds more (including fast camera turns); higher misses quick menus. Changing it re-runs only scene detection. |
@@ -1742,10 +1749,12 @@ You can change the recordings and output folders there. The cache and models fol
 | Twitch | VOD keep days | 14 (1–365) | How long Twitch keeps your VODs: 7 days for regular accounts, 14 for Affiliates, 60 for Partners, Turbo and Prime. AI-Editor warns when a VOD is within 3 days of being deleted. |
 | Twitch | Download quality | `1080p60` | The quality AI-Editor downloads VODs in. |
 | Render | Music from your stream in videos (`render.include_stream_music`) | On | Your stream's music under the talking (19.2e). Only for DMCA-free music. |
+| Render | Keep the game under my voice (`render.game_under_voice`) | On | The game's sound kept at least 10 dB under your voice, only where needed (19.2e). Needs the game on its own track. |
 | Effects | Which are on (`effects.highlights`, `shorts`, `lets_play`) | none, until Phase 2E | Per kind of video; each video can change its own in Review (19.2d). |
 | Effects | Effects per minute (`effects.highlights_per_min`, `shorts_per_min`) | 1.5 / 3 | At most: one per moment you marked with the Stream Companion. |
 | Effects | Sound effects volume (`effects.sfx_volume_db`) | -3 dB | Against the moment they're on. |
 | Effects | Between clips (`effects.between_clips`) | `cut` | Highlights: `cut`, or `slide` (the next clip slides in over the last, 19.2d). |
+| Effects | Suggest effects in Review (`effects.suggest`) | On | Review lists each big moment with the effects that suit it, none ticked (19.2d). |
 | Effects | Flash / shake strength (`effects.flash_strength`, `shake_strength`) | 0.35 / 0.02 | 1 would flash white; the shake's swing as a share of the picture's height. |
 | Shorts | Suggestions per stream (`shorts.per_recording`) | 5 (1–20) | Your Numpad − moments always, then the best others up to this (17.1). |
 | Shorts | Length (`shorts.min_length_sec`, `max_length_sec`) | 15–60 s | How long a Short may be. |

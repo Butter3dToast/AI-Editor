@@ -12,7 +12,9 @@ the recording itself, full size and frame rate, encoded on the graphics card
    measured and set in one go (about -14 LUFS, what YouTube plays at). One
    setting for the whole video, so a quiet clip stays quieter than a loud one
    the way it was, and no clip's level jumps. A limiter keeps the loudest
-   peaks from going over (loudness_filter).
+   peaks from going over (loudness_filter). Never turned up past where your
+   normal talking would be at that level (boost_limit): a Short with no
+   talking would otherwise have its music and game raised to it.
 
 The video appears under its real name only once it's complete: a render
 stopped half-way never looks finished.
@@ -39,7 +41,8 @@ from ..analysis.clips import load_words
 from .audio import AudioChoice, beep_filters, plan_audio
 from .captions import short_document, write_ass
 from . import replay, slide
-from .music import graph as music_graph, levels as music_levels, lowering, stretches
+from .music import (GAME_KEEP_UNDER_DB, graph as music_graph, levels as music_levels, lowering,
+                    stretches, voice_levels, volume_text)
 from .vertical import Vertical, picture_graph
 
 log = get_logger(__name__)
@@ -132,7 +135,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
                  music_fades: tuple[bool, bool] = (True, True),
                  lowered: list[tuple[float, float, float]] | None = None,
                  edge_fades: tuple[bool, bool] = (True, True),
-                 music_skip: float = 0.0) -> list[str]:
+                 music_skip: float = 0.0,
+                 game_lowered: list[tuple[float, float, float]] | None = None) -> list[str]:
     """FFmpeg arguments for one segment: picture, rebuilt sound, beeps out, soft edges.
 
     ``captions``: an ASS file's name, in the folder FFmpeg runs in. A bare name
@@ -146,6 +150,7 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     the piece carries straight on into the next (render/slide.py).
     ``music_skip``: the music runs this far ahead, after a slow-motion replay
     earlier in the clip (render/replay.py).
+    ``game_lowered``: where to keep the game (``audio.game``) under your voice.
     """
     finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
     moves = picture_fx.graph(effects or [], seg_in, preset.height, fx or Effects(),
@@ -168,6 +173,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
         chain = [f"aresample={AUDIO_RATE}", "aformat=sample_fmts=fltp:channel_layouts=stereo"]
         if stream == audio.voice:
             chain += notches
+        if stream == audio.game and game_lowered:
+            chain.append(volume_text(game_lowered))
         graph.append(f"[0:{stream}]{','.join(chain)}[a{n}]")
     inputs = "".join(f"[a{n}]" for n in range(len(audio.streams)))
     if audio.music is not None:
@@ -254,7 +261,30 @@ def replay_args(source: Path, window_in: float, length: float, insert_at: float,
     ]
 
 
-def loudness_filter(measured_lufs: float, true_peak_db: float, target_lufs: float) -> str:
+def boost_limit(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> float | None:
+    """The most a video may be turned up: as far as brings your normal talking
+    to the loudness target, on the loudest-talking of its streams. None when
+    there's no talking to go by.
+
+    The creator, 11 Oct: Short_09 was "just blasting in my ears" next to 07
+    and 08. All three from the 10 Oct League stream, with the stream's music
+    about 10 dB over League's game sound. 07 and 08 each had a shout, which
+    held their boost to about 9 dB; 09 had no talking, so its music and game
+    were raised 31 dB, the music to where a voice would be. The creator's
+    talking sits at -23.7 dB on that stream, so 9.7 dB at most: 07 and 08 as
+    they were, 09 with them. Of every video rendered to 11 Oct, only the six
+    Shorts without talking (raised 27-35 dB) would have come out different."""
+    from .audio import talking_level
+
+    levels = [level for rid in plan.recording_ids
+              if (level := talking_level(conn, rid)) is not None]
+    if not levels:
+        return None
+    return settings.render.loudness_target_lufs - max(levels)
+
+
+def loudness_filter(measured_lufs: float, true_peak_db: float, target_lufs: float,
+                    most: float | None = None) -> str:
     """One gain for the whole video, and a limiter for the few peaks it pushes too high.
 
     FFmpeg's own loudness leveller (loudnorm) can't raise a video whose peaks
@@ -267,10 +297,12 @@ def loudness_filter(measured_lufs: float, true_peak_db: float, target_lufs: floa
     which the video is left quieter rather than squashed: a quiet recording
     stays a little quiet, but never distorts. It works at 4x the sample rate
     so it catches the peaks between samples too, and lets go slowly so it
-    doesn't pump.
+    doesn't pump. ``most``: never turned up more than this (boost_limit).
     """
     gain = target_lufs - measured_lufs
     gain = min(gain, TRUE_PEAK_DB - true_peak_db + MAX_LIMITING_DB)
+    if most is not None:
+        gain = min(gain, most)
     limit = 10 ** (TRUE_PEAK_DB / 20)
     return (f"volume={gain:.2f}dB,aresample={AUDIO_RATE * 4},"
             f"alimiter=limit={limit:.4f}:attack=10:release=200:level=0:latency=1,"
@@ -453,6 +485,11 @@ def render_plan(
         if audio[segment.recording_id].music is not None:
             found = music_levels(audio[segment.recording_id].music, seg_in, seg_in + length)
             lowered = stretches(lowering(*found)) if found else []
+        game_lowered = []
+        if audio[segment.recording_id].game is not None:
+            choice = audio[segment.recording_id]
+            found = voice_levels(choice.game_path, choice.mic_path, seg_in, seg_in + length)
+            game_lowered = stretches(lowering(*found, keep_under=GAME_KEEP_UNDER_DB))                 if found else []
         sounds = sfx.within_piece(clip_sounds[index], piece.offset, length)
         # The music fades at a hard cut only; across a slide the sound crossfades.
         music_edges = (piece.cut_in and fades[index][0], piece.cut_out and fades[index][1])
@@ -465,7 +502,7 @@ def render_plan(
                                 music_fades=music_edges, lowered=lowered,
                                 edge_fades=(piece.cut_in or piece.soft_in,
                                             piece.cut_out or piece.soft_out),
-                                music_skip=piece.music_skip)
+                                music_skip=piece.music_skip, game_lowered=game_lowered)
             try:
                 run_ffmpeg(args, duration_sec=length, what="rendering part of a video", cwd=work,
                            on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length)
@@ -531,8 +568,15 @@ def render_plan(
         stats = measure_loudness(joined, target_lufs=target_lufs, true_peak=TRUE_PEAK_DB)
         if on_progress:
             on_progress(0.9)
+        most = boost_limit(conn, settings, plan)
         loudness = "anull" if stats is None else loudness_filter(
-            float(stats["input_i"]), float(stats["input_tp"]), target_lufs)
+            float(stats["input_i"]), float(stats["input_tp"]), target_lufs, most)
+        if stats is not None and most is not None and \
+                most + 0.5 < min(target_lufs - float(stats["input_i"]),
+                                 TRUE_PEAK_DB - float(stats["input_tp"]) + MAX_LIMITING_DB):
+            notes.append("Hardly any talking in it, so it's turned up only as far as your "
+                         "talking would be: its music and game are as loud as in your other "
+                         "videos of that stream, not blasting.")
         run_ffmpeg([*joined, "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
                     "-af", loudness, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
                     "-movflags", "+faststart", str(unfinished)],

@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..analysis import fights
 from ..analysis.ai_rating import scores_for
 from ..analysis.captions import Word
 from ..analysis.clips import (
@@ -178,6 +179,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
         score = load_signal(conn, row["id"], "hype")
         signals = load_signals(conn, row["id"], int(row["duration_sec"]))
         action = action_signal(signals)
+        fight = fights.fighting(signals, settings)
         dark = dark_seconds(signals, int(row["duration_sec"]), settings.scoring.dark_level,
                             settings.scoring.dark_min_sec)
         timeline = game_timeline(conn, row["id"])
@@ -229,6 +231,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                 candidate.src_in, candidate.src_out = trim(
                     candidate, words, cuts, float(row["duration_sec"]), score, settings,
                     action=action, dark=dark)
+                whole_fight(candidate, fight, h.max_clip_sec, words, bounds, starts, settings)
             if timeline and not adjusted:
                 # Never into "BRB" or the ending screen: the clip stays in the
                 # scene its moment is in, ending at the last word before the switch
@@ -271,6 +274,26 @@ def inside(src_in: float, src_out: float, start: float, end: float, bounds: list
         if word_at(src_out, words, starts):
             src_out = nearest_bound(bounds, src_out, src_in, src_out, outward=-1)
     return src_in, src_out
+
+
+def whole_fight(c: Candidate, fight: np.ndarray | None, longest: float, words: list[Word],
+                bounds: list[float], starts: list[float], settings: Settings) -> None:
+    """Start before a fight already going where the clip starts (2H-1), as far
+    as ``longest`` allows: when it can't, Review marks the clip. Never before
+    the library clip (its start is clean: no menu or loading screen in between),
+    never mid-word."""
+    if not settings.clips.keep_fights_whole:
+        return
+    wanted = fights.start_before(fight, c.src_in, settings)
+    if wanted is None:
+        return
+    low = max(c.start, c.src_out - longest)
+    start = max(wanted, low)
+    if start >= c.src_in - 0.5:
+        return
+    if word_at(start, words, starts):
+        start = nearest_bound(bounds, start, low, c.src_in, outward=-1)
+    c.src_in = min(c.src_in, start)
 
 
 def trim(c: Candidate, words: list[Word], cuts: list[float], duration: float,

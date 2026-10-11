@@ -105,7 +105,13 @@ def build(settings: Settings, worker: Worker) -> None:
                                    label="Quality bar",
                                    info="Clips under it aren't picked. 👍 clips and marked "
                                         "moments always go in.")
-            hl_order = gr.Radio(ORDERS, value=h.ordering, label="Order of the clips")
+            with gr.Row():
+                hl_order = gr.Radio(ORDERS, value=h.ordering, label="Order of the clips")
+                whole_fights = gr.Checkbox(
+                    value=settings.clips.keep_fights_whole,
+                    label="Start clips before a fight that's already going",
+                    info="Highlights and Shorts. When that would make a clip too long, Review "
+                         "marks it with ⚠.")
         with gr.Accordion("Captions and sound", open=True):
             with gr.Row():
                 cap_hl = gr.Checkbox(value=c.highlights, label="Burn in captions on highlights")
@@ -115,6 +121,11 @@ def build(settings: Settings, worker: Worker) -> None:
                     label="Music from your stream in videos",
                     info="Lowered where it would cover talking. Only for DMCA-free music: "
                          "commercial music gets YouTube videos claimed.")
+                game_under = gr.Checkbox(
+                    value=settings.render.game_under_voice,
+                    label="Keep the game under my voice",
+                    info="Turned down only where it would cover you, only as far as needed. "
+                         "Needs the game on its own track in OBS.")
             # Fixes the creator asked to remember in Review's captions (Phase 2D-2).
             fixes_tbl = gr.Dataframe(headers=FIX_COLUMNS, interactive=False, wrap=True,
                                      label="Spelling fixes you asked to remember (Review → "
@@ -149,11 +160,16 @@ def build(settings: Settings, worker: Worker) -> None:
                 fx_volume = gr.Slider(-15.0, 6.0, value=settings.effects.sfx_volume_db, step=1.0,
                                       label="Sound effects volume (dB)",
                                       info="Against the moment they're on. 0: as loud as it.")
-            fx_between = gr.Radio([("Hard cut", "cut"), ("Slide", "slide")],
-                                  value=settings.effects.between_clips,
-                                  label="Highlights: between clips",
-                                  info="Slide: the next clip slides in over the last, like a "
-                                       "sliding door.")
+            with gr.Row():
+                fx_between = gr.Radio([("Hard cut", "cut"), ("Slide", "slide")],
+                                      value=settings.effects.between_clips,
+                                      label="Highlights: between clips",
+                                      info="Slide: the next clip slides in over the last, like "
+                                           "a sliding door.")
+                fx_suggest = gr.Checkbox(
+                    value=settings.effects.suggest, label="Suggest effects in Review",
+                    info="Each big moment with the effects that suit it, none ticked: tick the "
+                         "ones you want.")
             with gr.Row():
                 fx_folder = gr.Button("Open my sound effects folder")
                 fx_msg = gr.Markdown("Put your own sounds in its **boom** and **hit** folders "
@@ -321,7 +337,8 @@ def build(settings: Settings, worker: Worker) -> None:
 
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
-             effects_lp, rate_hl, rate_sh, sfx_db, between):
+             effects_lp, rate_hl, rate_sh, sfx_db, between, fights_whole, game_voice,
+             suggest):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -353,6 +370,9 @@ def build(settings: Settings, worker: Worker) -> None:
             ("effects", "shorts_per_min"): float(rate_sh),
             ("effects", "sfx_volume_db"): float(sfx_db),
             ("effects", "between_clips"): between or "cut",
+            ("effects", "suggest"): bool(suggest),
+            ("clips", "keep_fights_whole"): bool(fights_whole),
+            ("render", "game_under_voice"): bool(game_voice),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -374,7 +394,7 @@ def build(settings: Settings, worker: Worker) -> None:
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
                           pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume,
-                          fx_between],
+                          fx_between, whole_fights, game_under, fx_suggest],
                  settings_msg)
 
 

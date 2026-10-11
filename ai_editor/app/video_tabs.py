@@ -582,13 +582,28 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     effects_changed = effects_box.input(set_effects, [plan_pick, effects_box], review_msg)
 
+    def suggesting(plan) -> bool:
+        return settings.effects.suggest and plan is not None and plan.recipe != "letsplay"
+
     def show_moments(plan_id):
-        """Each moment with effects, ticked unless switched off; hidden when there are none."""
-        from ..effects import moments
+        """Each moment with effects, ticked unless switched off; hidden when there are none.
+        With suggestions (2H-1): every big moment and the effects that suit it,
+        ticked where it has them."""
+        from ..effects import moments, suggestions
 
         conn = init_db(settings.db_path)
         try:
             plan, _ = videos.get_plan(conn, plan_id)
+            if suggesting(plan):
+                found = suggestions(conn, settings, plan)
+                if not found:
+                    return gr.CheckboxGroup(choices=[], value=[], visible=False)
+                return gr.CheckboxGroup(
+                    choices=[(s.label, s.key) for s in found],
+                    value=[s.key for s in found if s.on], visible=True,
+                    label="Suggested effects on the big moments",
+                    info="The effects that suit each moment. Tick one to use them there: "
+                         "nothing is used until you tick it.")
             found = [] if plan is None else moments(conn, settings, plan)
         finally:
             conn.close()
@@ -596,7 +611,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             return gr.CheckboxGroup(choices=[], value=[], visible=False)
         off = set((plan.source or {}).get("effects_off", []))
         return gr.CheckboxGroup(choices=found, value=[k for _, k in found if k not in off],
-                                visible=True)
+                                visible=True, label="Each effect",
+                                info="Untick one to leave just that moment out.")
 
     for event in (plan_pick.change, review_tab.select, ui.load):
         event(show_moments, plan_pick, moments_box)
@@ -605,13 +621,22 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         list_view, [plan_pick, sel], list_outputs)
 
     def set_moments(plan_id, kept):
-        from ..effects import moments, set_moments_on
+        from ..effects import moments, set_moments_on, summary, for_plan, use_suggestions
 
         conn = init_db(settings.db_path)
         try:
             plan, status = videos.get_plan(conn, plan_id)
             if plan is None:
                 return "Pick a plan first."
+            if suggesting(plan):
+                with history.step(conn, plan_id, "the suggested effects"):
+                    use_suggestions(conn, settings, plan, kept or [])
+                    save_plan(conn, plan, status)
+                if not kept:
+                    return "No effects in this video."
+                return (f"{len(kept)} moment{'s' if len(kept) != 1 else ''} with effects: "
+                        f"{summary(for_plan(conn, settings, plan))}. Make a quick preview to "
+                        "see and hear them.")
             every = [k for _, k in moments(conn, settings, plan)]
             with history.step(conn, plan_id, "each effect's ticks"):
                 set_moments_on(plan, every, kept or [])
@@ -622,7 +647,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return (f"{len(every) - left_out} of {len(every)} moments keep their effects. Make a quick "
                 "preview to see and hear them.")
 
+    # Ticking suggestions changes the video's kinds too: show them, and the list again.
     moments_box.input(set_moments, [plan_pick, moments_box], review_msg).then(
+        show_effects, plan_pick, effects_box).then(
+        show_moments, plan_pick, moments_box).then(
         list_view, [plan_pick, sel], list_outputs)
 
     def show_between(plan_id):

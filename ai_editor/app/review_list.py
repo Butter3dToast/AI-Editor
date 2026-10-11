@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from html import escape
 
+from ..analysis import fights
 from ..analysis.captions import clock
 from ..config import Settings
 from ..recipes.plan import EditPlan
@@ -137,20 +138,35 @@ def clip_rows(conn, plan: EditPlan, settings: Settings, selected: int | None = N
             "<span>From</span><span>Starts at</span><span>Length</span><span>Score</span>"
             "<span>Why</span></div>")
     rows = []
+    flagged = 0
     for n, s in enumerate(plan.segments):
         teaser = s.kind == "teaser"
+        # A fight already going where the clip starts, and no room to start
+        # earlier within its length (2H-1): Adjust the cut can.
+        cut_off = None if teaser else fights.missed(conn, settings, s.recording_id, s.src_in)
+        flagged += cut_off is not None
+        said = why(s.reasons)
+        if cut_off is not None:
+            # Followed back as far as it goes: a longer fight is "30+".
+            far = cut_off >= settings.clips.fight_extend_sec - 1
+            gone = f"{settings.clips.fight_extend_sec:.0f}+" if far else f"{cut_off:.0f}"
+            said = f"⚠ starts mid-fight ({gone} s already gone) · {said}"
         drag = "" if teaser else " draggable='true' data-clip='1'"
         handle = "" if teaser else "<span class='aie-handle' title='Drag to move'>⠿</span>"
         cells = [str(n + 1), "Teaser" if teaser else short_clock(starts[n]),
                  f"#{s.recording_id} · {days.get(s.recording_id, '')}", clock(s.src_in),
                  f"{s.length:.0f}s", f"{s.score:.2f}" if s.score is not None else "-",
-                 why(s.reasons)]
+                 said]
         sel = " sel" if n == selected else ""
         rows.append(f"<div class='aie-row{' teaser' if teaser else ''}{sel}' data-row='{n}'{drag}>"
                     f"{handle or '<span></span>'}"
                     + "".join(f"<span>{escape(c)}</span>" for c in cells) + "</div>")
     tip = ("<div class='aie-tip'>Click a clip to watch it and adjust its cut. Drag a clip by its "
            "row to move it; the teaser always opens the video.</div>") if len(rows) > 1 else ""
+    if flagged:
+        tip += ("<div class='aie-tip'>⚠ A fight was already going when that clip starts, and "
+                "starting earlier would make it too long. Click it, and use Adjust the cut "
+                "to start it earlier if it needs it.</div>")
     return f"{tip}<div class='aie-rows'>{head}{''.join(rows)}</div>"
 
 

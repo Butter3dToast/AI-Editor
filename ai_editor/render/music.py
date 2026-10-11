@@ -21,6 +21,16 @@ be added back as a layer of its own:
 the music is kept at least KEEP_UNDER_DB under them, lowered only as much
 as that needs, and only there. Mostly it plays exactly as on stream.
 
+**The game, too** (Phase 2H-1, the creator's tip "make sure the video sound
+is never over my voice"): kept at least GAME_KEEP_UNDER_DB under the
+creator's own voice, the same way. Less than the music: the game's sound is
+part of what's happening. Measured on the creator's streams with separate
+tracks (11 Oct): on League the game sits 45 dB under their talking (19 dB at
+the closest), so it's never lowered; on Dawnwalker it came within 6 dB in
+4% of the talking, and is lowered about 16 times in 40 minutes, by about
+4 dB (0.1% of the time).
+Discord friends don't lower it (the creator's choice).
+
 **At cuts.** Each clip of a highlight video comes from a different point in
 the song, so the music alone fades in and out over MUSIC_FADE_SEC at a cut,
 while voices and game still cut cleanly. Where one piece carries straight
@@ -36,6 +46,7 @@ from pathlib import Path
 import numpy as np
 
 KEEP_UNDER_DB = 15.0        # music this far under talking, at least
+GAME_KEEP_UNDER_DB = 10.0   # the game this far under your voice, at least
 MAX_LOWER_DB = 12.0         # and never lowered by more than this
 # Someone talking: louder than this, for at least MIN_TALK_SEC in any second.
 # The creator talks at about -26 dB (-40 at the quiet end); a 50 ms blip of
@@ -133,6 +144,20 @@ def levels(source: MusicSource, start: float, end: float) -> tuple[np.ndarray, n
     return _levels(music, rate), _levels(voice, rate)
 
 
+def voice_levels(under: Path | None, voice: Path | None, start: float,
+                 end: float) -> tuple[np.ndarray, np.ndarray] | None:
+    """(a track, the voice over it) loudness in dB per WINDOW_SEC over a
+    stretch, for lowering one track under one voice. None when either
+    extracted track is gone: then nothing is lowered."""
+    if under is None or voice is None:
+        return None
+    a, b = _read(under, start, end), _read(voice, start, end)
+    if a is None or b is None:
+        return None
+    n = min(len(a[0]), len(b[0]))
+    return _levels(a[0][:n], a[1]), _levels(b[0][:n], b[1])
+
+
 def _around(x: np.ndarray, width: int) -> np.ndarray:
     """Each window's total over the ``width`` windows around it, the same length
     as ``x`` even when it's shorter than ``width`` (a slide's 0.8 s ends)."""
@@ -140,8 +165,10 @@ def _around(x: np.ndarray, width: int) -> np.ndarray:
     return full[width // 2:width // 2 + len(x)]
 
 
-def lowering(music_db: np.ndarray, voice_db: np.ndarray) -> np.ndarray:
-    """How far to lower the music in each window (dB, 0 or less)."""
+def lowering(music_db: np.ndarray, voice_db: np.ndarray,
+             keep_under: float = KEEP_UNDER_DB) -> np.ndarray:
+    """How far to lower the music (or the game) in each window (dB, 0 or less)
+    to keep it ``keep_under`` under the talking."""
     loud = (voice_db > TALKING_DB).astype(float)
     second = max(1, int(round(1.0 / WINDOW_SEC)))
     talking = (loud > 0) & (_around(loud, second) * WINDOW_SEC
@@ -153,7 +180,7 @@ def lowering(music_db: np.ndarray, voice_db: np.ndarray) -> np.ndarray:
     voice = np.where(talking, voice_db, -np.inf)
     around = np.array([voice[max(0, i - hold):i + hold + 1].max() for i in range(len(voice))])
     need = np.where(held & np.isfinite(around),
-                    np.clip((around - KEEP_UNDER_DB) - music_db, -MAX_LOWER_DB, 0.0), 0.0)
+                    np.clip((around - keep_under) - music_db, -MAX_LOWER_DB, 0.0), 0.0)
     return np.where(need <= -MIN_CHANGE_DB, need, 0.0)
 
 

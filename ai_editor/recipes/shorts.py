@@ -26,11 +26,13 @@ import json
 import sqlite3
 from dataclasses import dataclass, field
 
+from ..analysis import fights
 from ..analysis.ai_rating import notes_for
+from ..analysis.hype import load_signals
 from ..analysis.captions import clock
 from ..config import Settings
 from ..analysis.clips import load_words, realistic, word_boundaries
-from .highlights import Candidate, gather, has_video, inside
+from .highlights import Candidate, gather, has_video, inside, whole_fight
 from .plan import DRAFT, EditPlan, Segment, new_plan_id, save_plan, used_in
 
 # Shorter than this share of shorts.min_length_sec (a clip that can't grow
@@ -176,11 +178,16 @@ def build_shorts(conn: sqlite3.Connection, settings: Settings, recording_id: int
     clips = {c["clip_id"]: c for c in conn.execute(
         "SELECT * FROM clips WHERE recording_id = ?", (recording_id,))}
     presses = short_presses(conn, recording_id)
+    fight = fights.fighting(load_signals(conn, recording_id, int(row["duration_sec"] or 0) + 1),
+                            settings)
     for c in candidates:
         summary = json.loads(clips[c.clip_id]["signals_json"] or "{}")
-        if "marker_short" in summary and not summary.get("adjusted"):
+        adjusted = bool(summary.get("adjusted"))   # your own cut
+        if "marker_short" in summary and not adjusted:
             around_mark(c, presses, settings, words, bounds, starts)
         within_limit(c, settings.shorts.max_length_sec, words, bounds, starts)
+        if not adjusted:
+            whole_fight(c, fight, settings.shorts.max_length_sec, words, bounds, starts, settings)
     notes = notes_for(conn, recording_id, list(clips.values()))
     picks, rated = choose(candidates, clips, notes, settings)
     discard_short_drafts(conn, recording_id)

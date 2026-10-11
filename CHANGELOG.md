@@ -3,6 +3,41 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.24.0 — Phase 2H-1: Your three tips — 11 October 2026
+
+Your test tips for the Rules tab, built in first so the basic edit gets
+cleaner. Each has its own switch in Settings; plans you already reviewed and
+clips you adjusted are left as they are.
+
+**New**
+
+- **"Ensure the action is always within the clip."** When a fight is already
+  going where a highlight or Short clip would start (the game's sound among
+  its loudest, gunfire, or League champions dying), the clip starts a second
+  before the fight began, as long as it stays within its length. When it
+  can't, Review's list marks it **⚠ starts mid-fight (4 s already gone)**, for
+  Adjust the cut. On your League streams: 1 clip in 230 moves, about 7 are
+  marked. Settings → Highlights.
+- **"Make sure the video sound is never over my voice."** While you talk, the
+  game is kept at least 10 dB under your voice, only as far as needed, and
+  straight back up after (Discord friends don't lower it). On your League
+  streams the game is far under you already, so it's never touched; on
+  Dawnwalker it's lowered now and then, by about 4 dB. Finished renders only,
+  with the game on its own track. Settings → Captions and sound.
+- **"Suggest where an effect can work and which effect."** Review's **Suggested
+  effects on the big moments** lists every big moment with the effects that
+  suit it ("Clip 12 at 5:35: Double kill: shake + replay"), none ticked. Tick
+  one and that moment gets exactly those. Settings → Effects.
+
+**Fixed**
+
+- **A Short without talking blasted.** Short_09 was turned up 31 dB to
+  YouTube's level, raising your stream's music with it, next to 07 and 08 at
+  about 9. A video is now never turned up past where your normal talking would
+  be at that level (about 10 dB on your League streams): its music and game
+  sound as they do in your other videos. Of everything rendered so far, only
+  six Shorts without talking would have come out differently.
+
 ## 0.23.0 — Phase 2G-2: Using a style profile — 11 October 2026
 
 **New**

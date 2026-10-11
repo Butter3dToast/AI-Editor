@@ -59,14 +59,20 @@ class AudioChoice:
     separate: bool                     # rebuilt from separate tracks
     beeps: list[tuple[float, float]] = field(default_factory=list)  # recording time
     music: MusicSource | None = None   # the stream's music, as a layer of its own
+    # The game, to keep under your voice (render/music.py): its stream, and the
+    # extracted game and mic tracks to measure. None: left as it is.
+    game: int | None = None
+    game_path: Path | None = None
+    mic_path: Path | None = None
 
     def describe(self) -> str:
+        game = ", the game kept under your voice" if self.game is not None else ""
         if self.separate and self.music is not None:
             where = "its own track" if self.music.own_track else "the stream's mix"
-            return (f"your separate mic, game and Discord tracks, with the music from your stream "
-                    f"(from {where}) kept under the talking")
+            return (f"your separate mic, game and Discord tracks{game}, with the music from your "
+                    f"stream (from {where}) kept under the talking")
         if self.separate:
-            return "your separate mic, game and Discord tracks (music on stream left out)"
+            return f"your separate mic, game and Discord tracks{game} (music on stream left out)"
         return "the stream's mixed track, as viewers heard it, music and all"
 
 
@@ -134,9 +140,29 @@ def choose_tracks(conn: sqlite3.Connection, settings: Settings, recording_id: in
               if role != "voice_chat" or settings.render.include_voice_chat]
     mic = by_role["mic"]["stream_index"]
     choice = AudioChoice([by_role[role]["stream_index"] for role in wanted], mic, True)
+    if settings.render.game_under_voice:
+        choice.game = by_role["game"]["stream_index"]
+        choice.game_path, choice.mic_path = paths["game"], paths["mic"]
     if music:
         choice.music = source_of(conn, recording_id, parts)
     return choice
+
+
+# Talking: seconds at least this much speech, and enough of them to go by.
+TALKING_SHARE = 0.5
+MIN_TALKING_SEC = 30
+
+
+def talking_level(conn: sqlite3.Connection, recording_id: int) -> float | None:
+    """How loud your normal talking is in a recording (dB): the middle of the
+    seconds you talk in. None with under MIN_TALKING_SEC of talking."""
+    rows = conn.execute(
+        "SELECT v.value FROM signals v JOIN signals s ON s.recording_id = v.recording_id "
+        "AND s.t_sec = v.t_sec AND s.name = 'speech' WHERE v.recording_id = ? "
+        "AND v.name = 'voice_db' AND s.value >= ?", (recording_id, TALKING_SHARE)).fetchall()
+    if len(rows) < MIN_TALKING_SEC:
+        return None
+    return float(np.median([r[0] for r in rows]))
 
 
 def beep_match(x: np.ndarray, rate: int, hz: float) -> np.ndarray:
