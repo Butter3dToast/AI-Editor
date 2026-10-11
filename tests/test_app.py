@@ -283,5 +283,6 @@ def test_the_tab_bar_holds_only_tabs(settings):
     ui = build(settings, Worker())
     tabs = next(b for b in ui.blocks.values() if isinstance(b, gr.Tabs))
     assert [c.label for c in tabs.children] == [
-        "Library", "Import", "Clips", "Create video", "Review", "Storage", "Settings"]
+        "Library", "Import", "Clips", "Create video", "Review", "Style Profiles", "Storage",
+        "Settings"]
     assert all(isinstance(c, gr.Tab) for c in tabs.children)

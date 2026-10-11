@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 _V1 = """
@@ -352,7 +352,30 @@ CREATE TABLE quest_reads (
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6}
+# Phase 2G-1: style profiles. A profile is an editing look measured from
+# reference videos (style/measure.py) and set with sliders. Only the numbers
+# and the AI's notes are kept: never the videos, frames or sound. The table
+# from version 1 is used as it is: games_json, applies_to_json (the kinds of
+# video) and profile_json (the sliders as saved; {} until then); the draft
+# comes from the references' measurements.
+_V7 = """
+ALTER TABLE style_profiles ADD COLUMN notes_json TEXT NOT NULL DEFAULT '[]';
+CREATE TABLE style_references (
+    id              INTEGER PRIMARY KEY,
+    profile_id      INTEGER NOT NULL REFERENCES style_profiles(id) ON DELETE CASCADE,
+    source          TEXT    NOT NULL,          -- a YouTube link or a file on this PC
+    title           TEXT,
+    duration_sec    REAL,
+    measured_json   TEXT,                      -- empty until analysed
+    notes_json      TEXT,                      -- what the AI saw in its frames
+    error           TEXT,
+    analysed_at     TEXT,
+    UNIQUE (profile_id, source)
+);
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

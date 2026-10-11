@@ -98,7 +98,7 @@ Because analysis only happens once, you can make a Let's Play, a highlight video
 | **Score** | How strong AI-Editor thinks a moment is, from 0 (boring) to 1 (amazing). |
 | **Keep score** | In Let's Plays, how important a section is to keep. |
 | **Style Profile** | A saved editing look: how fast the cuts are, how often it zooms, caption style, and so on. |
-| **Reference video** | A YouTube video whose editing you like, used to build a Style Profile. |
+| **Reference video** | A video whose editing you like (a YouTube link or a file on this PC), used to build a Style Profile. |
 | **Rule** | A tip you write in plain English, like "never cut boss fights." |
 | **Recipe** | The type of video: Let's Play, Highlights, or Short. |
 | **Edit Plan** | AI-Editor's full plan for a video, before it's rendered. |
@@ -839,58 +839,57 @@ Clips are rated at the end of each analysis. For recordings analysed earlier, pi
 
 ## 13. Style Profiles (teaching AI-Editor a look)
 
-A Style Profile is a saved editing look. You can have as many as you like, such as "Tarkov Hype Highlights," "League Shorts," and "Dawnwalker Chill Let's Play."
+A Style Profile is a saved editing look, measured from videos whose editing you like: how fast the cuts are, how much silence is left in, the opening teaser, zooms, sound effects and captions. You can have as many as you like, such as "League Highlights" and "League Shorts".
+
+**What a profile does, and doesn't.** It sets the *pace and the amounts*: how fast, how often, how strong, how captions look. It **never switches an effect or burned-in captions on**: they stay off by default, and you switch them on per video in Review or in Settings. A profile only decides how often and how strong they are when you do.
+
+**Not built yet:** choosing a profile when you make a video (Phase 2G-2). For now you build and save profiles.
 
 ### 13.1 Creating a profile from reference videos
 
-1. Go to **Style Profiles → New profile**.
-2. Give it a name.
-3. Choose which **games** and **recipes** it's for.
-4. Paste links to **2–5 YouTube videos** whose editing you like, or add local video files. Pick videos similar to what you want to make (same kind of game, same length).
-5. Click **Analyze references**. This takes a few minutes per video.
-6. AI-Editor shows a **draft profile** with sliders and a list of techniques it noticed.
-7. Adjust anything you want (chapter 13.2).
-8. Click **Save**.
+1. Go to the **Style Profiles** tab. Type a name under **New profile** and click **Create**.
+2. Choose which **games** and which **videos** (Highlights, Shorts, Let's Plays) it's for.
+3. Add **2–5 reference videos**:
+   - **YouTube links**: paste them, one per line, and click **Add links**.
+   - **A video file on this PC**: click **Add a video file...** and pick it.
+4. Click **Analyse references**. It runs under **Jobs**: about **4–6 minutes per 10 minutes of video**. Long videos are measured over their first 30 minutes.
+5. When it's done, the reference table shows what each video measured, and the sliders show the middle of them. The AI's notes are underneath.
+6. Adjust anything you want (13.2) and click **Save profile**.
 
-**Tip:** 2–3 videos from the *same* creator gives a clearer, more consistent style than mixing lots of different creators.
+**Tip:** 2–3 videos from the *same* creator give a clearer style than mixing lots of creators. Pick videos like the ones you want to make: same kind of game, same kind of video (tall Shorts for a Shorts profile).
 
-**Note:** AI-Editor's measurements are estimates. Always check the sliders feel right.
+**Your videos and files:**
+
+- A YouTube link is downloaded small (480p) into AI-Editor's working folder, measured, then **deleted**. Only the numbers and the AI's notes are kept. Downloading uses yt-dlp. If YouTube links stop working after YouTube changes something, updating it usually fixes it: in the AI-Editor folder, run `.venv\Scripts\python -m pip install -U yt-dlp`.
+- A file on this PC is only **read**, never copied, changed or deleted. **Take off the list** removes it from the profile only.
+- Downloading may conflict with YouTube's terms. If you'd rather not, save the video yourself and add it as a file.
+
+**The AI's notes** (Gemma) come at the end: it looks at 8 frames of each video and lists the editing techniques it sees, such as "text pop-ups on kills" or "facecam in the bottom-left". They're for you to read; they don't change any video. They use the graphics card, so run Analyse when you're not playing. If a game has the card, the AI stops and the measurements are kept; **Measure them all again** later gets the notes.
 
 ### 13.2 Profile settings explained
 
-| Setting | What it controls | Lower value | Higher value |
-|---|---|---|---|
-| **Cuts per minute** | How often the shot changes | Relaxed, natural pacing | Fast, energetic pacing |
-| **Max dead air** | Longest silence allowed before cutting (seconds) | Tight, snappy | More breathing room |
-| **Zooms per minute** | How often it punches in | Subtle | Very dynamic |
-| **Zoom triggers** | What causes zooms (shout, laughter, kill, marker) | — | — |
-| **Zoom strength** | How far it zooms in (1.1 = slight, 1.5 = strong) | Subtle | Dramatic |
-| **Captions** | On or off | — | — |
-| **Caption style** | Word pop, full sentence, karaoke highlight | — | — |
-| **Caption position** | Where captions sit | — | — |
-| **Caption size** | Small, medium, large | Less intrusive | Easier to read on phones |
-| **Sound effects per minute** | How often SFX play | Clean | Meme-heavy |
-| **SFX categories** | Which folders from your SFX library to use | — | — |
-| **Music** | Background music on or off | — | — |
-| **Music volume under speech** | How much music drops when you talk (dB) | Music stays loud | Music ducks away |
-| **Hook length** | Seconds for the opening teaser | Quick start | Longer tease |
-| **Technique notes** | Extra ideas found in references (e.g., "freeze frame on deaths") | — | — |
+Every measurement is an estimate, which is why there are sliders. Under each slider, **Your references** lists what each video measured, so you can spot an odd one out.
 
-**Preview:** click **Preview on a sample clip** to see the profile applied before saving.
+| Setting | What it measures and controls | How it's measured |
+|---|---|---|
+| **Cuts per minute** | How often the picture jumps to another moment | Picture changes, leaving out a game's own shop, scoreboard and camera jumps (the HUD carries straight on across those) |
+| **Longest silence left in** | How long nobody talks before the editor cuts (seconds) | The long end of the gaps between talking |
+| **Opening teaser** | How long the first shot runs before the first cut (seconds; 0 = none) | The first cut in the first 25 seconds |
+| **Zooms per minute**, **Zoom strength** | How often it punches in, and how far (0.2 = 1.2 times). Only used when zooms are on | Each frame against the one before, blown up: a quick, exact match is an editor's zoom. A game's own camera zoom (a scope, League's mouse wheel) creeps in over seconds and isn't counted |
+| **Sound effects per minute** | How often a sound effect plays. Only used when sound effects are on | Meme sounds only: whoosh, boing, air horn, ding, record scratch. Booms and hits can't be told apart from a game's own sounds or music |
+| **Caption size** | How tall caption text is (% of the picture's height). Only used when captions are on | Text read off the screen: big, near the middle, and changing. A game's own text, menus and scoreboards are left out |
+| **Caption height above the bottom** | Where captions sit (%) | The same |
+| **Caption words on screen at once** | A few words at a time, or whole sentences | The same |
 
-### 13.3 Recommended starting points
+**Also measured** (shown under the sliders): how much of each video has talking, how long a shot usually lasts, which meme sounds were heard, and whether it's a tall video.
 
-| Video type | Cuts/min | Zooms/min | Captions | SFX/min | Music |
-|---|---|---|---|---|---|
-| Dawnwalker Let's Play | Low (3–6) | Low (0.5–1) | Commentary only, medium | Very low (0–0.5) | Off (game music is part of the experience) |
-| Highlights | High (10–16) | Medium (2–4) | Word pop, large | Medium (1–3) | Low, ducked |
-| Shorts | Very high (15–25) | High (3–6) | Word pop, large, center | Medium (2–4) | Optional |
+**Back to the measured values** puts the sliders back to what the references measured (or your own settings if nothing is measured yet). Click **Save profile** to keep them.
 
-### 13.4 Editing, copying, and deleting
+### 13.3 Editing, renaming, and deleting
 
-- **Edit** — change sliders anytime. Existing videos aren't affected until you recreate them.
-- **Duplicate** — copy a profile to make a variation.
-- **Delete** — removes the profile. Videos already rendered are untouched.
+- **Edit**: change the sliders, games or videos anytime and click **Save profile**.
+- **Add or remove references**, then **Analyse references** again. Only new ones are measured, unless you tick **Measure them all again**.
+- **Rename or delete**: under **Rename or delete**. Deleting removes the profile and its measurements; no video or file is touched.
 
 ---
 
@@ -972,7 +971,7 @@ Each rule has a switch. Turn a rule off to test a video without it, without dele
 4. Review lists the **parts**: how long each is, and where it is in the recording. **Click a part** to watch how it starts. **Quick preview of the selected part** makes a watchable version of the whole part, cuts included, in seconds.
 5. Check the **Episode number** (read from the recording's name, e.g. "EP 1"). Choose **All parts** or one part. Then **Render the finished video** (chapter 19).
 
-**Not built yet:** Style Profiles. To move where parts end, use the Part Planner (15.4).
+To move where parts end, use the Part Planner (15.4).
 
 ### 15.1a From the command line (until the app window arrives)
 

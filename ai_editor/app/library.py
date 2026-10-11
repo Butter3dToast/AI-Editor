@@ -250,18 +250,18 @@ root = tkinter.Tk()
 root.withdraw()
 root.attributes("-topmost", True)
 name = filedialog.askopenfilename(
-    parent=root, title="Pick a recording to import", initialdir=sys.argv[1],
+    parent=root, title=sys.argv[2], initialdir=sys.argv[1],
     filetypes=[("Videos", "*.mkv *.mp4 *.mov *.flv *.ts *.m4v *.webm"), ("All files", "*.*")])
 print(name or "", end="")
 """
 
 
-def browse_for_video(start: Path) -> str:
+def browse_for_video(start: Path, title: str = "Pick a recording to import") -> str:
     """Windows' own Open dialog, on top of the browser. '' if cancelled.
 
     Run as a separate small program: the dialog needs a thread of its own
     that the web server can't give it.
     """
-    result = subprocess.run([sys.executable, "-c", _PICKER, str(start)], capture_output=True,
+    result = subprocess.run([sys.executable, "-c", _PICKER, str(start), title], capture_output=True,
                             text=True, encoding="utf-8", timeout=600)
     return str(Path(result.stdout)) if result.stdout.strip() else ""

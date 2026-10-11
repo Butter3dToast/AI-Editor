@@ -3,6 +3,43 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.22.0 — Phase 2G-1: Style profiles from reference videos — 11 October 2026
+
+**New**
+
+- **Style Profiles tab.** Give AI-Editor 2-5 videos whose editing you like
+  (YouTube links, or video files on this PC) and press **Analyse references**.
+  It measures how each one is edited and makes a draft profile with sliders:
+  cuts per minute, the longest silence left in, the opening teaser, zooms
+  (how often, how strong), sound effects, and caption size, height and words
+  on screen. Adjust and save.
+- What it measures, per video, is in a table, and under each slider, so an odd
+  one out is easy to spot.
+- The local AI looks at 8 frames of each video and notes editing techniques
+  the numbers can't show (meme images, emojis, the facecam's place). It's told
+  what was measured so it doesn't guess; expect a short list or none.
+- A profile never switches effects or captions on: it sets how often and how
+  strong they are when you do. Choosing a profile when making a video is next
+  (2G-2).
+
+**How the measuring was checked** (on the creator's own videos)
+
+- Cuts: a game's shop, scoreboard and camera jumps aren't counted, only real
+  edits (10.7 a minute on a League highlight before, 1.8 after; right).
+- Zooms: all 6 of 6 added punch-ins found at the right strength; none in 30
+  minutes of plain gameplay but League's own "DEFEAT" zoom.
+- Captions: right size, height and word count; a game's own text and menus
+  left out.
+- Sound effects: only meme sounds (whoosh, boing, air horn, ding) are counted.
+  Booms and hits can't be told from a game's own sounds or the music.
+
+**Your videos**
+
+- A YouTube link is downloaded small, measured, and deleted; only the numbers
+  are kept. A file on this PC is only read, never changed or deleted.
+- New: yt-dlp (downloads the YouTube references). If YouTube links stop
+  working, updating it usually fixes it (manual chapter 13).
+
 ## 0.21.0 — Phase 2F-3: Short leftovers join the last part — 11 October 2026
 
 **Changed**

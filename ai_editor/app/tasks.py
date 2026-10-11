@@ -521,3 +521,83 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
             conn.close()
 
     return run
+
+
+# --- Phase 2G-1: style profiles ----------------------------------------------------------
+
+
+def analyse_references(settings: Settings, profile_id: int, *, again: bool = False) -> Job:
+    """Measure a style profile's reference videos (those not measured yet, or all
+    ``again``), then the AI's notes on what it sees in them."""
+
+    def run(report: Reporter) -> None:
+        from ..style import profiles
+        from ..style.references import ReferenceProblem, analyse
+
+        conn = init_db(settings.db_path)
+        try:
+            profile = profiles.load(conn, profile_id)
+            if profile is None:
+                raise TaskFailed("That style profile has been deleted.")
+            todo = [r for r in profile.references if again or r.measured is None]
+            if not todo:
+                report.say("Every reference is measured already. Tick \"Measure them all "
+                           "again\" to redo them.")
+                return
+            frames: dict[int, tuple[list[bytes], object]] = {}
+            for n, ref in enumerate(todo, start=1):
+                head = f"Video {n} of {len(todo)}"
+                try:
+                    result = analyse(settings, ref, lambda step, f, head=head:
+                                     report.progress(f"{head}: {step}", f))
+                except ReferenceProblem as exc:
+                    profiles.store_error(conn, ref.id, str(exc))
+                    report.say(f"{ref.name}: {exc}")
+                    continue
+                profiles.store_measured(conn, ref.id, title=result.title, measured=result.measured)
+                frames[ref.id] = (result.frames, result.measured)
+                m = result.measured
+                report.say(f"{result.title or ref.name}: {m.cuts_per_min:g} cuts a minute, "
+                           f"{m.zooms_per_min:g} zooms a minute, captions "
+                           f"{m.caption_share:.0%} of the time.")
+            _style_notes(conn, settings, profile_id, frames, report)
+            report.say("Done. The draft profile is in Style Profiles.")
+            report.keep(style_profile=profile_id)
+        finally:
+            conn.close()
+
+    return run
+
+
+def _style_notes(conn, settings: Settings, profile_id: int, frames: dict, report: Reporter) -> None:
+    """The AI's look at the frames just taken (``frames``: reference id -> (JPEGs,
+    what it measured)), then its summing up for the profile. A video whose answer
+    can't be used is skipped; the others still get their notes."""
+    from .. import llm
+    from ..errors import AiAnswerUnreadable, AiTooSlow
+    from ..style import notes, profiles
+
+    if not any(shots for shots, _ in frames.values()):
+        return
+    why_not = notes.available(settings, _try_start)
+    if why_not:
+        report.say(f"No AI notes this time: {why_not}. The measurements are kept.")
+        return
+    try:
+        with llm.session(settings):
+            for n, (ref_id, (shots, measured)) in enumerate(frames.items(), start=1):
+                report.progress("AI looking at the references", (n - 1) / len(frames))
+                try:
+                    profiles.store_notes(conn, ref_id, notes.look(settings, shots, measured))
+                except AiAnswerUnreadable:
+                    report.say(f"Video {n}: the AI's answer couldn't be used, so it has no "
+                               "notes this time.")
+            report.progress("AI looking at the references", 1.0)
+            profile = profiles.load(conn, profile_id)
+            summed = notes.sum_up(settings, [r.notes for r in profile.references if r.notes])
+            profiles.store_profile_notes(conn, profile_id, summed)
+    except AiTooSlow:
+        report.say("The AI was far too slow, so it stopped: probably a game has the graphics "
+                   "card. The measurements are kept; Measure them all again later for its notes.")
+    except AIEditorError as exc:
+        report.say(f"No AI notes this time: {exc.user_message()} The measurements are kept.")
