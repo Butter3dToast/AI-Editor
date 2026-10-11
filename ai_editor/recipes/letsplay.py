@@ -260,8 +260,8 @@ def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Ro
     duration = float(row["duration_sec"])
     pieces = kept_pieces(cuts, duration)
     total = sum(b - a for a, b in pieces)
-    parts = make_parts(total, split(total, break_points(episode, cuts, pieces, settings, story),
-                                    settings), pieces)
+    breaks = break_points(episode, cuts, pieces, settings, story)
+    parts = make_parts(total, split(total, breaks, settings), pieces)
 
     game = row["game"]
     discard_drafts(conn, "letsplay", game, [row["id"]])
@@ -274,10 +274,13 @@ def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Ro
         segments=[Segment(row["id"], round(a, 3), round(b, 3), kind="piece", game=game, part=p.number)
                   for p in parts for a, b in range_pieces(pieces, p.start, p.end)],
     )
-    # What each part ends on, for Review (and the Part Planner).
+    from .planner import stored
+
+    # What each part ends on, for Review; the safe breaks, for the Part Planner.
     plan.source = {"parts": [{"number": p.number, "ends_on": p.ends_on, "hook": p.hook,
                               "story": p.story, "mission": p.mission, "flagged": p.flagged}
-                             for p in parts]}
+                             for p in parts],
+                   "breaks": stored(breaks)}
     removed = sum(c.length for c in cuts)
     plan.notes.append(f"Trimmed {removed / 60:.1f} of {duration / 60:.1f} minutes in {len(cuts)} cuts; "
                       f"{len(parts)} part(s).")

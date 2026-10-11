@@ -44,8 +44,8 @@ a hard rule, not a preference.
 | **2D-1** | Review: drag clips to reorder, a length bar against the target, Undo and Redo kept after closing | **Complete** |
 | **2D-2** | Review: fixing captions line by line (fixes go everywhere, originals kept, hide a line, remembered fixes) | **Complete** |
 | **2F-1** | Dawnwalker story missions: the quest tracker read from the screen, parts never split mid-quest if it can be helped | **Complete** |
-| 2F-2 | Part Planner: drag split points on the parts bar | Next |
-| 2F-3 | Leftovers carried to the next session | Not started |
+| **2F-2** | Part Planner: drag split points on the parts bar, double-click to add, × to join (real-footage test pending) | **Complete** |
+| 2F-3 | Leftovers carried to the next session | Next |
 | 2G | Style profiles from reference videos | Not started |
 | 2H | Plain-English rules | Not started |
 | 2 | Speaker identification for voice chat | Not started |

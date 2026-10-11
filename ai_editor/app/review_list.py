@@ -23,8 +23,10 @@ from ..recipes.plan import EditPlan
 from .videos import recorded_days, short_clock, timeline, why
 
 
-def _bar(blocks: list[dict], scale: float, target: float | None, note: str, tone: str) -> str:
-    """The bar: blocks as wide as their share of ``scale`` seconds, and a target line."""
+def _bar(blocks: list[dict], scale: float, target: float | None, note: str, tone: str, *,
+         inside: str = "", attrs: str = "", cls: str = "") -> str:
+    """The bar: blocks as wide as their share of ``scale`` seconds, and a target line.
+    ``inside``, ``attrs``, ``cls``: more in the bar, on it, and its class (the Part Planner)."""
     parts = []
     for b in blocks:
         width = max(0.0, b["sec"]) / scale * 100 if scale > 0 else 0
@@ -38,7 +40,7 @@ def _bar(blocks: list[dict], scale: float, target: float | None, note: str, tone
         marker = (f"<div class='aie-target' style='left:{at:.3f}%' "
                   f"title='Target {short_clock(target)}'></div>")
     return (f"<div class='aie-bar-note {tone}'>{note}</div>"
-            f"<div class='aie-bar'>{''.join(parts)}{marker}</div>")
+            f"<div class='aie-bar{cls}'{attrs}>{''.join(parts)}{marker}{inside}</div>")
 
 
 def length_bar(conn, plan: EditPlan, settings: Settings, selected: int | None = None) -> str:
@@ -81,9 +83,18 @@ def length_bar(conn, plan: EditPlan, settings: Settings, selected: int | None = 
 
 
 def _parts_bar(plan: EditPlan, settings: Settings, selected: int | None) -> str:
+    """A Let's Play's parts, with the Part Planner on top (Phase 2F-2): a handle at
+    each split to drag, an x to join two parts, double-click to add a split."""
+    import json
+
+    from ..recipes.parts import to_output, to_source
+    from ..recipes.planner import pieces_of, splits_of
+
     numbers = sorted({s.part for s in plan.segments if s.part is not None})
     lengths = [sum(s.length for s in plan.segments if s.part == n) for n in numbers]
+    total = sum(lengths)
     low, high = settings.lets_play.normal_range_min
+    flags = {p["number"]: p for p in (plan.source or {}).get("parts", [])}
     blocks = [{"row": i, "sec": sec, "kind": f"clip c{i % 2}", "label": f"Part {n}",
                "title": f"Part {n} · {short_clock(sec)}", "selected": i == selected}
               for i, (n, sec) in enumerate(zip(numbers, lengths))]
@@ -91,7 +102,31 @@ def _parts_bar(plan: EditPlan, settings: Settings, selected: int | None) -> str:
     note = (f"<b>{len(numbers)} part{'s' if len(numbers) != 1 else ''}</b>: "
             + " · ".join(short_clock(sec) for sec in lengths)
             + f" (aim for {low:.0f}-{high:.0f} min each)")
-    return _bar(blocks, sum(lengths), None, note, "under" if off else "ok")
+    # Where a dragged split can land, so it snaps as it moves (the planner decides).
+    pieces = pieces_of(plan)
+    safe = sorted({round(at) for at in (to_output(pieces, b[0])
+                                        for b in (plan.source or {}).get("breaks", []))
+                   if at is not None})
+    handles = []
+    for k, at in enumerate(splits_of(plan)):
+        warn = " warn" if flags.get(k + 1, {}).get("flagged") else ""
+        handles.append(
+            f"<div class='aie-split{warn}' data-split='{k}' style='left:{at / total * 100:.3f}%' "
+            f"title='Part {k + 1} ends at {short_clock(to_source(pieces, at))} in the "
+            f"recording: drag to move'>"
+            f"<span class='aie-split-x' data-join='{k}' "
+            f"title='Join parts {k + 1} and {k + 2}'>×</span>"
+            f"<span class='aie-split-at'>{short_clock(to_source(pieces, at))}</span></div>")
+    bar = _bar(blocks, total, None, note, "under" if off else "ok", inside="".join(handles),
+               attrs=(f" data-total='{total:.1f}' "
+                      f"data-breaks='{escape(json.dumps(safe), quote=True)}' "
+                      f"data-pieces='{escape(json.dumps([[round(a, 1), round(b, 1)] for a, b in pieces]), quote=True)}'"),
+               cls=" aie-parts")
+    tip = ("<div class='aie-tip'>Drag a split's handle to move where a part ends: it snaps to "
+           "the nearest safe break (a loading screen, a pause in talking, where a quest ends). "
+           "Double-click the bar to add a split; × joins two parts. Times are in the "
+           "recording, as in the table.</div>")
+    return bar + tip
 
 
 def clip_rows(conn, plan: EditPlan, settings: Settings, selected: int | None = None) -> str:
@@ -167,6 +202,22 @@ LIST_CSS = """
 .aie-row.dragging { opacity: 0.4; }
 .aie-row.drop-before { box-shadow: inset 0 3px 0 var(--color-accent); }
 .aie-row.drop-after { box-shadow: inset 0 -3px 0 var(--color-accent); }
+.aie-parts { margin-top: 22px; user-select: none; -webkit-user-select: none; }
+.aie-split { position: absolute; top: -6px; bottom: -6px; width: 14px; margin-left: -7px;
+             cursor: ew-resize; touch-action: none; z-index: 2; background: transparent; }
+.aie-split::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 3px;
+                     background: var(--body-text-color); border-radius: 2px; }
+.aie-split.warn::before { background: #dc2626; }
+.aie-split.dragging::before { background: var(--color-accent); }
+.aie-split-x { position: absolute; top: -20px; left: -2px; width: 18px; height: 18px;
+               line-height: 16px; text-align: center; border-radius: 9px; font-size: 13px;
+               cursor: pointer; color: var(--body-text-color);
+               background: var(--background-fill-secondary);
+               border: 1px solid var(--border-color-primary); }
+.aie-split-x:hover { background: #dc2626; color: #fff; }
+.aie-split-at { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+                font-size: 11px; white-space: nowrap; color: var(--body-text-color-subdued); }
+.aie-split.dragging .aie-split-at { color: var(--body-text-color); font-weight: 600; }
 """
 
 # Clicks and drags, read in the page and handed to Python with trigger().
@@ -215,4 +266,53 @@ element.addEventListener('drop', (e) => {
     if (to !== moving) trigger('submit', {from: moving, to: to});
 });
 element.addEventListener('dragend', () => { from = null; clear(); });
+// The Part Planner (Phase 2F-2): drag a split, x to join, double-click to add.
+let moving = null;
+const clock = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60),
+    x = String(s % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
+element.addEventListener('pointerdown', (e) => {
+    const x = e.target.closest('.aie-split-x');
+    if (x) { e.preventDefault(); e.stopPropagation();
+             trigger('submit', {action: 'join', split: parseInt(x.dataset.join)}); return; }
+    const h = e.target.closest('.aie-split');
+    if (!h) return;
+    e.preventDefault();
+    const bar = h.closest('.aie-parts');
+    moving = {h, bar, k: parseInt(h.dataset.split), total: parseFloat(bar.dataset.total),
+              breaks: JSON.parse(bar.dataset.breaks || '[]'),
+              pieces: JSON.parse(bar.dataset.pieces || '[]'), at: null};
+    h.classList.add('dragging');
+    h.setPointerCapture(e.pointerId);
+});
+element.addEventListener('pointermove', (e) => {
+    if (!moving) return;
+    const box = moving.bar.getBoundingClientRect();
+    let at = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)) * moving.total;
+    let best = null;
+    for (const b of moving.breaks) if (Math.abs(b - at) <= 300 && (best === null
+        || Math.abs(b - at) < Math.abs(best - at))) best = b;
+    if (best !== null) at = best;
+    moving.at = at;
+    moving.h.style.left = (at / moving.total * 100) + '%';
+    // Shown as the time in the recording, like the table under the bar.
+    let left = at, source = at;
+    for (const [a, b] of moving.pieces) { if (left <= b - a) { source = a + left; break; }
+                                          left -= b - a; }
+    const label = moving.h.querySelector('.aie-split-at');
+    if (label) label.textContent = clock(source);
+});
+element.addEventListener('pointerup', () => {
+    if (!moving) return;
+    const done = moving;
+    moving = null;
+    done.h.classList.remove('dragging');
+    if (done.at !== null) trigger('submit', {action: 'move', split: done.k, at: done.at});
+});
+element.addEventListener('dblclick', (e) => {
+    const bar = e.target.closest('.aie-parts');
+    if (!bar || e.target.closest('.aie-split')) return;
+    const box = bar.getBoundingClientRect();
+    trigger('submit', {action: 'add',
+                       at: (e.clientX - box.left) / box.width * parseFloat(bar.dataset.total)});
+});
 """

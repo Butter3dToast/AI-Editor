@@ -972,7 +972,7 @@ Each rule has a switch. Turn a rule off to test a video without it, without dele
 4. Review lists the **parts**: how long each is, and where it is in the recording. **Click a part** to watch how it starts. **Quick preview of the selected part** makes a watchable version of the whole part, cuts included, in seconds.
 5. Check the **Episode number** (read from the recording's name, e.g. "EP 1"). Choose **All parts** or one part. Then **Render the finished video** (chapter 19).
 
-**Not built yet:** Style Profiles, and the Part Planner for moving split points by hand (15.4).
+**Not built yet:** Style Profiles. To move where parts end, use the Part Planner (15.4).
 
 ### 15.1a From the command line (until the app window arrives)
 
@@ -1037,15 +1037,15 @@ AI-Editor follows these rules, in order:
 
 ### 15.4 The Part Planner
 
-The Part Planner shows your session as a long bar with split points.
+In **Review**, a Let's Play's parts bar is also the Part Planner: one block per part, sized by its length, with a handle at each split.
 
-- Each **part** shows its number, length, and a one-line summary.
-- Parts over 35 minutes show a 📖 **story extension** badge explaining why.
-- Flagged splits (inside a mission) show a ⚠️ icon.
-- **Drag a split point** left or right to move it. It snaps to the nearest safe break point. Hold `Shift` to move it freely.
-- **Add split** — click on the bar where you want a new split.
-- **Remove split** — right-click a split point → **Remove**. The two parts join.
-- **Re-plan** — click to let AI-Editor recalculate everything after your change.
+- **Drag a split's handle** left or right to move where a part ends. It snaps to the nearest **safe break** as you drag (a loading screen, a menu, a pause in talking, where a quest ends), never mid-word, mid-talk or mid-cutscene, and shows where it will land.
+- **Double-click the bar** to add a split there (at the nearest safe break).
+- **×** above a split joins the two parts either side of it.
+- A split drawn **red** ends a part in the middle of a quest; the **Ends on** column under the bar says which.
+- Times under the handles are in the recording, the same as the table.
+- A part is never longer than 60 minutes or shorter than 2: a move that would break that is refused, and the message says why.
+- **↶ Undo** takes back any of these, like every change in Review. Make a quick preview of a part to watch it as it now is.
 
 ### 15.5 Numbering and series
 

@@ -919,15 +919,60 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             list_view, [plan_pick, sel], list_outputs)
 
     def dropped(plan_id, evt: gr.EventData):
-        """A clip dragged to a new place in the list: ``from`` and ``to`` are rows."""
+        """A clip dragged to a new place in the list (``from`` and ``to`` are rows), or
+        the Part Planner: a split moved, added or joined on a Let's Play's parts bar."""
         data = getattr(evt, "_data", None) or {}
+        if data.get("action") in ("move", "add", "join"):
+            return plan_parts(plan_id, data)
         if not isinstance(data.get("from"), (int, float)) or not isinstance(data.get("to"),
                                                                               (int, float)):
             return (gr.skip(),) * len(edit_outputs)
         return edit("move_to")(plan_id, int(data["from"]), int(data["to"]) + 1)
 
+    def plan_parts(plan_id, data):
+        """The Part Planner (Phase 2F-2): one undo step per change."""
+        from ..recipes import planner
+
+        skip = (gr.skip(),) * 3
+        try:
+            split = int(data.get("split", -1))
+            at = float(data.get("at", -1))
+        except (TypeError, ValueError):
+            return (gr.skip(), gr.skip(), "That didn't work: try again.", *skip)
+        conn = init_db(settings.db_path)
+        try:
+            plan, status = videos.get_plan(conn, plan_id)
+            if plan is None or plan.recipe != "letsplay":
+                return (gr.skip(),) * len(edit_outputs)
+            before = list(plan.segments)
+            had_breaks = "breaks" in (plan.source or {})
+            what = {"move": f"moving where part {split + 1} ends", "add": "adding a split",
+                    "join": f"joining parts {split + 1} and {split + 2}"}[data["action"]]
+            with history.step(conn, plan_id, what):
+                if data["action"] == "move":
+                    change = planner.move_split(conn, settings, plan, split, at)
+                elif data["action"] == "add":
+                    change = planner.add_split(conn, settings, plan, at)
+                else:
+                    change = planner.remove_split(settings, plan, split)
+                if plan.segments != before:
+                    save_plan(conn, plan, status)
+            if plan.segments == before and not had_breaks:
+                save_plan(conn, plan, status)   # its safe breaks, found once: not a change
+        finally:
+            conn.close()
+        return (videos.plan_summary(plan, status), table_for(plan), change.message, None,
+                gr.skip(), gr.skip())
+
+    def parts_choices(plan_id):
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None or plan.recipe != "letsplay":
+            return gr.skip()
+        parts = [f"Part {n}" for n in sorted({s.part for s in plan.segments if s.part})]
+        return gr.update(choices=[ALL_PARTS, *parts], value=ALL_PARTS)
+
     clip_list.submit(dropped, plan_pick, edit_outputs).then(
-        list_view, [plan_pick, sel], list_outputs)
+        list_view, [plan_pick, sel], list_outputs).then(parts_choices, plan_pick, part_pick)
 
     # --- Deleting a plan: the creator's doing only, asked once more -----------------------
 

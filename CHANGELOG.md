@@ -3,6 +3,24 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.20.0 — Phase 2F-2: The Part Planner — 11 October 2026
+
+**New**
+
+- **Move where a Let's Play's parts end**, on Review's parts bar: drag a
+  split's handle and it snaps to the nearest safe break (a loading screen, a
+  menu, a pause in talking, where a quest ends), never mid-word, mid-talk or
+  mid-cutscene. Double-click the bar to add a split; × joins two parts.
+- A split in the middle of a quest is drawn red, and the Ends on column names
+  the quest. Times under the handles are in the recording, like the table.
+- A part is never over 60 minutes or under 2: a move that would break that
+  is refused, saying why. Undo and Redo cover every move.
+- New plans keep their safe breaks; a plan made earlier finds them the first
+  time you move a split (a few seconds).
+
+Tested on a copy of the library; the creator tests it on real footage next
+Saturday.
+
 ## 0.19.0 — Phase 2F-1: Story missions in Let's Plays — 11 October 2026
 
 **New**
