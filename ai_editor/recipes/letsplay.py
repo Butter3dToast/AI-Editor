@@ -251,15 +251,17 @@ class LetsPlayResult:
 
 def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Row) -> LetsPlayResult:
     """Trim one recording, split it into parts, and save it as a draft plan."""
+    from ..analysis.quests import story_of
     from .parts import break_points, make_parts, range_pieces, split
 
     episode = load_episode(conn, settings, row)
+    story = story_of(conn, row["id"])
     cuts = trim(conn, settings, row, episode)
     duration = float(row["duration_sec"])
     pieces = kept_pieces(cuts, duration)
     total = sum(b - a for a, b in pieces)
-    parts = make_parts(total, split(total, break_points(episode, cuts, pieces, settings), settings),
-                       pieces)
+    parts = make_parts(total, split(total, break_points(episode, cuts, pieces, settings, story),
+                                    settings), pieces)
 
     game = row["game"]
     discard_drafts(conn, "letsplay", game, [row["id"]])
@@ -272,11 +274,24 @@ def build_letsplay(conn: sqlite3.Connection, settings: Settings, row: sqlite3.Ro
         segments=[Segment(row["id"], round(a, 3), round(b, 3), kind="piece", game=game, part=p.number)
                   for p in parts for a, b in range_pieces(pieces, p.start, p.end)],
     )
+    # What each part ends on, for Review (and the Part Planner).
+    plan.source = {"parts": [{"number": p.number, "ends_on": p.ends_on, "hook": p.hook,
+                              "story": p.story, "mission": p.mission, "flagged": p.flagged}
+                             for p in parts]}
     removed = sum(c.length for c in cuts)
     plan.notes.append(f"Trimmed {removed / 60:.1f} of {duration / 60:.1f} minutes in {len(cuts)} cuts; "
                       f"{len(parts)} part(s).")
+    if story is not None:
+        plan.notes.append(f"Quest tracker read: {len(story.missions)} quest(s) followed"
+                          + (f" ({', '.join(m.name for m in story.missions[:6])}"
+                             + (", ..." if len(story.missions) > 6 else "") + ")"
+                             if story.missions else "")
+                          + ". Parts aren't split in the middle of one if it can be helped.")
+    plan.notes += [f"Part {p.number} ends in the middle of the quest \"{p.mission}\": it ran "
+                   "past the 60-minute limit with no better place. Check it."
+                   for p in parts if p.mission]
     plan.notes += [f"Part {p.number} ends at a forced split: nothing cleaner within the length limit. "
-                   "Check it." for p in parts if p.flagged]
+                   "Check it." for p in parts if p.flagged and not p.mission]
     save_plan(conn, plan)
     return LetsPlayResult(plan, cuts, duration, parts, pieces)
 

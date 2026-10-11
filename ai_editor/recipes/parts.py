@@ -11,9 +11,12 @@ possible part has a cost too, by how far its length is from the target. The
 cheapest way through the whole episode wins (dynamic programming, as the spec
 suggests), so an early long part is balanced by the ones after it.
 
-Story missions (never split inside one) need the screen read for "quest
-started / completed", which comes later. Until then talking, fights and
-cutscenes are what's protected.
+Story missions (Phase 2F-1): Dawnwalker's quest tracker, read from the
+screen (analysis/quests.py), says which quest is going on. A break inside one
+costs settings.lets_play.penalties.split_inside_story_mission, so a part
+stretches toward 45 minutes (60 at most) to finish it, and is flagged when it
+can't. A break just after a quest ends, or as the time of day turns, is a
+good place to end.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..analysis.quests import Story
 from ..config import Settings
 from .letsplay import Cut, Episode
 
@@ -37,6 +41,9 @@ HOOK_SCORE = 0.7
 FORCED_COST = 50.0
 # Prefer lengths close to the target even inside the normal range.
 NEAR_TARGET_COST_PER_MIN = 0.1
+# Where the story turns: just after a quest ends, or as the time of day changes.
+QUEST_END_COST = -3.0
+DAY_TURN_COST = -1.5
 
 
 @dataclass
@@ -46,6 +53,8 @@ class Break:
     cost: float
     kind: str            # "loading", "menu", "silence", "stream_screen", "pause", "forced"
     hook: bool = False
+    mission: str | None = None   # the quest it would split
+    story: str | None = None     # "quest end" or "time of day": where the story turns
 
 
 @dataclass
@@ -58,6 +67,8 @@ class Part:
     ends_on: str         # what the break at its end is ("end" for the last part)
     hook: bool = False
     flagged: bool = False  # split somewhere it'd rather not: check it
+    mission: str | None = None   # the quest its end splits, if it had to
+    story: str | None = None     # it ends where the story turns
 
     @property
     def length(self) -> float:
@@ -84,8 +95,9 @@ def to_source(pieces: list[tuple[float, float]], at: float) -> float:
 
 
 def break_points(episode: Episode, cuts: list[Cut], pieces: list[tuple[float, float]],
-                 settings: Settings) -> list[Break]:
-    """Everywhere a part could end, with what it costs to end there."""
+                 settings: Settings, story: Story | None = None) -> list[Break]:
+    """Everywhere a part could end, with what it costs to end there. ``story``:
+    the episode's quests, when its tracker has been read."""
     lp = settings.lets_play
     seconds = episode.seconds
     hud = episode.signals.get("hud")
@@ -123,7 +135,25 @@ def break_points(episode: Episode, cuts: list[Cut], pieces: list[tuple[float, fl
         else:
             # Only used if nothing better exists for a whole part's length.
             breaks.append(Break(at, middle, FORCED_COST, "forced"))
+    if story is not None:
+        with_story(breaks, story, settings)
     return sorted(breaks, key=lambda b: b.at)
+
+
+def with_story(breaks: list[Break], story: Story, settings: Settings) -> list[Break]:
+    """What the quests do to each break's cost: dear inside one, cheap where one ends."""
+    for b in breaks:
+        quest = story.inside(b.source)
+        if quest is not None:
+            b.cost += settings.lets_play.penalties.split_inside_story_mission
+            b.mission = quest.name
+        elif story.quest_ended(b.source):
+            b.cost += QUEST_END_COST
+            b.story = "quest end"
+        elif story.day_turned(b.source):
+            b.cost += DAY_TURN_COST
+            b.story = "time of day"
+    return breaks
 
 
 def part_cost(minutes: float, settings: Settings, *, last: bool) -> float | None:
@@ -177,11 +207,15 @@ def make_parts(total_sec: float, chosen: list[Break], pieces: list[tuple[float, 
     edges = [0.0] + [b.at for b in chosen] + [total_sec]
     ends = [b.kind for b in chosen] + ["end"]
     hooks = [b.hook for b in chosen] + [False]
+    quests = [b.mission for b in chosen] + [None]
+    stories = [b.story for b in chosen] + [None]
     parts = []
     for n, (a, b) in enumerate(zip(edges, edges[1:]), start=1):
         mine = range_pieces(pieces, a, b)
         parts.append(Part(n, a, b, mine[0][0] if mine else 0.0, mine[-1][1] if mine else 0.0,
-                          ends[n - 1], hook=hooks[n - 1], flagged=ends[n - 1] == "forced"))
+                          ends[n - 1], hook=hooks[n - 1],
+                          flagged=ends[n - 1] == "forced" or quests[n - 1] is not None,
+                          mission=quests[n - 1], story=stories[n - 1]))
     return parts
 
 

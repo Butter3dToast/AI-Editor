@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 _V1 = """
@@ -331,7 +331,28 @@ ALTER TABLE plan_history ADD COLUMN words_json TEXT;
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5}
+# Phase 2F-1: what Dawnwalker's quest tracker said, read every few seconds
+# from the preview copy (analysis/quests.py), so parts aren't split mid-quest.
+# quest_reads says a recording has been read, even if nothing was legible.
+_V6 = """
+CREATE TABLE quest_log (
+    recording_id    INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    t_sec           REAL    NOT NULL,
+    time_of_day     TEXT,
+    quest           TEXT,
+    step            TEXT,
+    PRIMARY KEY (recording_id, t_sec)
+);
+CREATE TABLE quest_reads (
+    recording_id    INTEGER PRIMARY KEY REFERENCES recordings(id) ON DELETE CASCADE,
+    every_sec       REAL    NOT NULL,
+    reader          TEXT    NOT NULL,
+    read_at         TEXT    NOT NULL
+);
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

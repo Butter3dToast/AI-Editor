@@ -35,7 +35,7 @@ EFFECT_CHOICES = [("Flash", "flash"), ("Screen shake", "shake"), ("Sound effects
 BETWEEN_CHOICES = [("Hard cut", "cut"), ("Slide", "slide")]
 ONE_PART = "Quick preview of the selected part"
 PLAN_WIDTHS = ["6%", "10%", "16%", "12%", "9%", "8%", "39%"]
-PART_WIDTHS = ["10%", "20%", "45%", "25%"]
+PART_WIDTHS = ["8%", "14%", "30%", "48%"]
 # Adjust the cut: earlier or later by 5 or 1 seconds.
 NUDGES = ("◀ 5 s", "◀ 1 s", "1 s ▶", "5 s ▶")
 

@@ -22,7 +22,11 @@ from ..recipes.plan import APPROVED, EditPlan, load_plan, used_in
 CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "AI says", "You said",
                 "Rated", "Used"]
 PLAN_COLUMNS = ["#", "In the video", "From", "Starts at", "Length", "Score", "Why"]
-PART_COLUMNS = ["Part", "Length", "In the recording", "Pieces"]
+PART_COLUMNS = ["Part", "Length", "In the recording", "Ends on"]
+# What a part can end on, in plain words.
+ENDS_ON = {"loading": "loading screen", "menu": "menu or map", "silence": "a quiet stretch",
+           "stream_screen": "a starting/BRB screen", "pause": "a pause in talking",
+           "forced": "⚠ no clean break: check it", "end": "the end of the recording"}
 SHOW = ["Not used yet", "All", "Rated"]
 RATINGS = {1: "👍", -1: "👎"}
 
@@ -391,13 +395,28 @@ def plan_table(conn, plan: EditPlan, settings: Settings | None = None) -> list[l
     return rows
 
 
+def ends_on(info: dict | None) -> str:
+    """'loading screen · quest ends · hook', or a warning when it splits a quest."""
+    if not info:
+        return "-"
+    if info.get("mission"):
+        return f"⚠ in the middle of \"{info['mission']}\": check it"
+    words = [ENDS_ON.get(info.get("ends_on"), info.get("ends_on") or "-")]
+    words += [{"quest end": "quest ends", "time of day": "time of day changes"}.get(
+        info.get("story"), info.get("story"))] if info.get("story") else []
+    words += ["hook"] if info.get("hook") else []
+    return " · ".join(words)
+
+
 def part_table(plan: EditPlan) -> list[list]:
     """A Let's Play's parts, PART_COLUMNS."""
+    known = {p["number"]: p for p in (plan.source or {}).get("parts", [])}
     rows = []
     for number in sorted({s.part for s in plan.segments if s.part is not None}):
         pieces = [s for s in plan.segments if s.part == number]
         rows.append([number, short_clock(sum(s.length for s in pieces)),
-                     f"{clock(pieces[0].src_in)}-{clock(pieces[-1].src_out)}", len(pieces)])
+                     f"{clock(pieces[0].src_in)}-{clock(pieces[-1].src_out)}",
+                     ends_on(known.get(number))])
     return rows
 
 

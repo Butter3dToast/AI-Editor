@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-editor"
-version = "0.18.0"
+version = "0.19.0"
 description = "AI-Editor - a local assistant editor that turns stream and Let's Play recordings into YouTube content"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,6 +36,14 @@ dependencies = [
     # Gradio's pandas, held below 3: Windows Smart App Control blocked the
     # brand-new 3.0 files ("An Application Control policy has blocked this file").
     "pandas>=2.2,<3",
+    # Reading Dawnwalker's quest tracker (analysis/quests.py, Phase 2F): RapidOCR,
+    # offline, on the processor. Its own requirements add a second OpenCV
+    # (opencv-python-headless) that clashes with scenedetect's, so it goes in
+    # without them, after these:  pip install --no-deps rapidocr==3.10.0
+    "pyclipper>=1.3",
+    "shapely>=2.0",
+    "omegaconf>=2.3",
+    "colorlog>=6.0",
 ]
 
 [project.optional-dependencies]

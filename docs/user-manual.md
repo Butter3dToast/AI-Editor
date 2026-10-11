@@ -999,7 +999,9 @@ It also makes a **splits reel**: the last 20 seconds of each part and the first 
 
 Happy with the parts? Render them as finished videos with `ai-editor render <plan>` (chapter 19.2a).
 
-Not yet: story missions. The tool can't yet read "quest started" and "quest complete" from the screen, so until then it protects talking, fights and cutscenes, but not whole missions. Drag split points in the Part Planner (15.4) when the app window arrives.
+**Story missions (The Blood of Dawnwalker).** The first time you make an episode's plan, AI-Editor reads the game's **quest tracker** (top right: the time of day, then the quest you're following, such as "Where Loyalty Lies") every 15 seconds, from the preview copy. That takes about 4-5 minutes for a 2-hour episode, shows under Jobs as **Reading the quest tracker**, and is kept, so it never runs twice for the same episode (it works even after you've deleted the recording). It uses a small text reader that runs offline on the processor, leaving the graphics card alone.
+
+With that, a part is **never split in the middle of a quest** if it can be helped: it ends just before the quest begins, or runs on to its end (up to 45 minutes, 60 at most). Every quest the tracker shows counts; the "Rescue your family" line above it doesn't. Just after a quest ends, and as the time of day changes (Noon → Afternoon), are good places to end a part. A quest longer than an hour still has to be split: that part is flagged, with the quest's name, for you to check. The plan's notes list the quests it found.
 
 ### 15.2 Length settings explained
 
@@ -1024,7 +1026,7 @@ Not yet: story missions. The tool can't yet read "quest started" and "quest comp
 AI-Editor follows these rules, in order:
 
 1. **Never** splits during a cutscene, dialogue, choice, or fight.
-2. **Avoids** splitting in the middle of a main story mission. Side quests and exploration can be split anywhere sensible.
+2. **Avoids** splitting in the middle of a quest (Dawnwalker: any quest its tracker shows, read from the screen). Exploration between quests can be split anywhere sensible.
 3. Looks for the best break between **25 and 35 minutes**: a quest completion, day/night change, the end of a fight, or a loading screen.
 4. If a story mission is still going, the part is **extended** until the mission ends, ideally by **45 minutes**.
 5. If the mission still isn't over at **60 minutes**, it splits at the gentlest point available (between scenes or at a fade), adds a "To be continued" card, and flags it for you to check.

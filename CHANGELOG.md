@@ -3,6 +3,32 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.19.0 — Phase 2F-1: Story missions in Let's Plays — 11 October 2026
+
+**New**
+
+- **AI-Editor reads Dawnwalker's quest tracker** (top right: the time of day,
+  then the quest you're following) every 15 seconds, the first time you make
+  an episode's plan: about 4-5 minutes for a 2-hour episode, once, shown in
+  Jobs as "Reading the quest tracker". It reads the preview copy, offline,
+  on the processor only.
+- **Parts aren't split in the middle of a quest** if it can be helped: a part
+  ends just before a quest begins, or runs on to its end (up to 45 minutes,
+  60 at most). Every quest the tracker shows counts; "Rescue your family"
+  doesn't. Just after a quest ends, and as the time of day changes, are good
+  places to end. A quest longer than an hour still has to be split: that part
+  is flagged with the quest's name.
+- **Review shows what each part ends on**: "loading screen · quest ends ·
+  hook", or a warning when a part ends mid-quest. The plan's notes list the
+  quests found.
+
+On your 10 October episode, the old split ended Part 2 a minute and a half
+into "What Moves the Dead" and Part 4 halfway through "Who Pulls the
+Strings"; now all five parts end between quests.
+
+**Installed:** RapidOCR, a small offline text reader (without its second
+copy of OpenCV, which would clash with the one already used).
+
 ## 0.18.0 — Phase 2D-2: Fixing captions — 11 October 2026
 
 **New**

@@ -377,6 +377,12 @@ def make_letsplay(settings: Settings, recording_id: int) -> Job:
 
             if not has_video(row):
                 raise TaskFailed(f"Recording #{recording_id}: {GONE}")
+            from ..analysis.quests import ensure_read, is_read, plays
+
+            if plays(row["game"]) and not is_read(conn, row["id"]):
+                # Once per episode, a few minutes: the quests, so no part
+                # is split in the middle of one.
+                ensure_read(conn, row, lambda f: report.progress("Reading the quest tracker", f))
             report.progress("Trimming and splitting into parts", 0.0)
             result = build_letsplay(conn, settings, row)
             report.progress("Trimming and splitting into parts", 1.0)

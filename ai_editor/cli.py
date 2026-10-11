@@ -1712,6 +1712,16 @@ def letsplay_command(
             console.print(f"Recording #{row['id']} hasn't been analysed yet. "
                           f"Run: ai-editor analyze {row['id']}")
             raise typer.Exit(code=1)
+        from .analysis.quests import ensure_read, is_read, plays
+
+        if plays(row["game"]) and not is_read(conn, row["id"]):
+            progress = _progress_bar()
+            task = progress.add_task("Reading the quest tracker", total=1.0)
+            progress.start()
+            try:
+                ensure_read(conn, row, lambda f: progress.update(task, completed=f))
+            finally:
+                progress.stop()
         result = build_letsplay(conn, settings, row)
         cuts, duration, plan = result.cuts, result.duration_sec, result.plan
         removed = sum(c.length for c in cuts)
@@ -1741,7 +1751,9 @@ def letsplay_command(
             table.add_column(column)
         for p in result.parts:
             table.add_row(str(p.number), clock(p.length), f"{clock(p.source_start)} – {clock(p.source_end)}",
-                          ends.get(p.ends_on, p.ends_on) + (" [green](hook)[/green]" if p.hook else ""))
+                          ends.get(p.ends_on, p.ends_on) + (" [green](hook)[/green]" if p.hook else "")
+                          + (f" ({p.story})" if p.story else "")
+                          + (f" [red]mid-quest: {p.mission}[/red]" if p.mission else ""))
         console.print(table)
         for note in plan.notes:
             console.print(f"[yellow]{note}[/yellow]" if "Check it" in note else note)
