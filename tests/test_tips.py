@@ -166,9 +166,9 @@ def test_only_the_game_track_is_turned_down_in_the_mix(settings, tmp_path):
                         settings.render.presets["youtube_1080p60"], (1920, 1080), [],
                         tmp_path / "o.mkv", gpu_decode=False, game_lowered=[(1.0, 3.0, -4.0)])
     graph = args[args.index("-filter_complex") + 1].split(";")
-    game = next(g for g in graph if g.startswith("[0:3]"))
-    assert "volume='1-" in game
-    assert not any("volume='1-" in g for g in graph if g.startswith(("[0:2]", "[0:4]")))
+    game = next(g for g in graph if g.startswith("[1:3]"))   # the sound: the second input
+    assert "volume='if(isnan(t),1,1-" in game
+    assert not any("volume='if(isnan(t),1,1-" in g for g in graph if g.startswith(("[1:2]", "[1:4]")))
     assert "the game kept under your voice" in choice.describe()
 
 
@@ -347,3 +347,46 @@ def test_a_video_is_never_turned_up_past_where_your_talking_would_be(settings):
     connection.execute("DELETE FROM signals WHERE name = 'speech' AND t_sec >= 20")
     assert boost_limit(connection, settings, plan) is None
     connection.close()
+
+
+# --- The frozen EP 4 (19 Oct): a piece whose picture stops early is never kept ----------------
+
+
+@needs_ffmpeg
+def test_a_piece_whose_picture_stops_early_is_caught(tmp_path):
+    import subprocess
+
+    from ai_editor.errors import MediaProcessingFailed
+    from ai_editor.ffmpeg import stream_lengths
+    from ai_editor.render.final import check_whole
+
+    def piece(name: str, picture: float, sound: float):
+        out = tmp_path / name
+        subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i",
+                        f"testsrc=size=160x90:rate=60:duration={picture}", "-f", "lavfi", "-i",
+                        f"sine=frequency=440:duration={sound}:sample_rate=48000",
+                        "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "pcm_f32le", str(out)],
+                       check=True)
+        return out
+
+    whole = piece("whole.mkv", 5.0, 5.0)
+    assert stream_lengths(whole) == {"video": pytest.approx(5.0, abs=0.05),
+                                     "audio": pytest.approx(5.0, abs=0.05)}
+    check_whole(whole, 5.0)
+    frozen = piece("frozen.mkv", 3.0, 5.0)        # the sound carries on: a freeze
+    with pytest.raises(MediaProcessingFailed):
+        check_whole(frozen, 5.0)
+
+
+def test_the_picture_and_the_sound_are_read_from_separate_openings(settings, tmp_path):
+    """Read once, with four sound tracks mixed, FFmpeg ended long pieces' picture early."""
+    from ai_editor.render.audio import AudioChoice
+    from ai_editor.render.final import segment_args
+
+    choice = AudioChoice([2, 3, 4, 5], 2, True)
+    args = segment_args(tmp_path / "r.mkv", 1784.0, 910.0, choice,
+                        settings.render.presets["youtube_1080p60"], (1920, 1080), [],
+                        tmp_path / "o.mkv", gpu_decode=True)
+    assert args.count("-i") == 2 and args.count(str(tmp_path / "r.mkv")) == 2
+    graph = args[args.index("-filter_complex") + 1]
+    assert graph.startswith("[0:v:0]") and "[1:2]" in graph and "[0:2]" not in graph

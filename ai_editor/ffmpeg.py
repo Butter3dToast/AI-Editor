@@ -172,7 +172,9 @@ def run_ffmpeg(
     command = [
         str(find_binary("ffmpeg")),
         "-hide_banner", "-nostdin", "-y",
-        "-loglevel", "error",
+        # Warnings too: a render that "worked" can still have gone wrong (19 Oct:
+        # the picture of every long EP 4 piece stopped early, FFmpeg exiting fine).
+        "-loglevel", "warning",
         "-nostats", "-progress", "pipe:1",
         *args,
     ]
@@ -218,9 +220,33 @@ def run_ffmpeg(
             extra=FILE_ONLY,
         )
         raise MediaProcessingFailed(f"This happened while {what}")
+    said = "".join(errors).strip()
+    if said:
+        log.warning("FFmpeg said, while %s:\n%s", what, said, extra=FILE_ONLY)
 
     if on_progress:
         on_progress(1.0)
+
+
+def stream_lengths(path: str | Path) -> dict[str, float]:
+    """How long a file's picture and sound run, in seconds: {"video": ..., "audio": ...},
+    the longest stream of each kind. Matroska keeps them as DURATION tags."""
+    result = _run(find_binary("ffprobe"), [
+        "-v", "error", "-print_format", "json", "-show_entries",
+        "stream=codec_type,duration:stream_tags=DURATION", str(path)])
+    lengths: dict[str, float] = {}
+    for stream in json.loads(result.stdout or "{}").get("streams", []):
+        text = (stream.get("tags") or {}).get("DURATION") or stream.get("duration")
+        if not text or text == "N/A":
+            continue
+        if ":" in str(text):
+            h, m, s = str(text).split(":")
+            seconds = int(h) * 3600 + int(m) * 60 + float(s)
+        else:
+            seconds = float(text)
+        kind = stream.get("codec_type")
+        lengths[kind] = max(lengths.get(kind, 0.0), seconds)
+    return lengths
 
 
 def measure_loudness(inputs: list[str], *, target_lufs: float, true_peak: float) -> dict[str, str] | None:

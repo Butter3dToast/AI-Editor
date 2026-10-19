@@ -70,7 +70,7 @@ def test_lowered_stretches_close_together_become_one():
 
 def test_the_lowering_eases_down_and_back_up():
     text = music.volume_text([(2.0, 4.0, -6.0)])
-    assert text.startswith("volume='1-") and text.endswith("':eval=frame")
+    assert text.startswith("volume='if(isnan(t),1,1-") and text.endswith("':eval=frame")
     assert "(t-1.850)/0.15" in text and "(4.500-t)/0.5" in text
     assert music.volume_text([]) is None
 

@@ -33,7 +33,7 @@ from ..config import Effects, RenderPreset, Settings
 from ..effects import Effect, for_plan as effects_for_plan, summary as effects_summary
 from ..effects import picture as picture_fx, sfx
 from ..errors import LowDiskSpace, MediaFileNotFound, MediaProcessingFailed
-from ..ffmpeg import measure_loudness, nvenc_encoders, run_ffmpeg
+from ..ffmpeg import measure_loudness, nvenc_encoders, run_ffmpeg, stream_lengths
 from ..logging_setup import get_logger
 from ..recipes.plan import EditPlan
 from ..analysis.captions import Cue, realistic_timing, segment_cues
@@ -52,6 +52,8 @@ SHORTS_FOLDER = "shorts"
 AUDIO_RATE = 48000
 AUDIO_BITRATE = "320k"
 FADE_SEC = 0.015      # at every join: too short to hear as a dip, long enough to stop a click
+# The recording's sound is read from a second opening of it (segment_args).
+SOUND_INPUT = 1
 TRUE_PEAK_DB = -1.5   # headroom so YouTube's own encoding doesn't clip
 # The most any peak is held down to reach YouTube's loudness. 9 dB made the
 # characters' voices in EP 1 sound distorted (raised 11 dB from -25 LUFS, its
@@ -151,6 +153,13 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     ``music_skip``: the music runs this far ahead, after a slow-motion replay
     earlier in the clip (render/replay.py).
     ``game_lowered``: where to keep the game (``audio.game``) under your voice.
+
+    The recording is opened twice: the picture from the first, the sound from
+    the second (SOUND_INPUT). Read once, with four separate sound tracks mixed
+    (mic, game, Discord, music), FFmpeg 9.0.1 read the sound far ahead and then
+    ended the picture early: every EP 4 piece longer than about 6.5 minutes
+    lost its picture there while the sound carried on, so the video froze
+    (19 Oct). Picture alone, or with one track, was fine; so is this.
     """
     finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
     moves = picture_fx.graph(effects or [], seg_in, preset.height, fx or Effects(),
@@ -175,15 +184,15 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
             chain += notches
         if stream == audio.game and game_lowered:
             chain.append(volume_text(game_lowered))
-        graph.append(f"[0:{stream}]{','.join(chain)}[a{n}]")
+        graph.append(f"[{SOUND_INPUT}:{stream}]{','.join(chain)}[a{n}]")
     inputs = "".join(f"[a{n}]" for n in range(len(audio.streams)))
     if audio.music is not None:
         pieces, label = music_graph(audio.music, lowered or [], length, AUDIO_RATE,
                                     fade_in=music_fades[0], fade_out=music_fades[1],
-                                    skip=music_skip)
+                                    input=SOUND_INPUT, skip=music_skip)
         graph += pieces
         inputs += label
-    extra, labels = sfx.chains(sounds or [], 1, AUDIO_RATE)
+    extra, labels = sfx.chains(sounds or [], SOUND_INPUT + 1, AUDIO_RATE)
     graph += extra
     inputs += "".join(labels)
     count = len(audio.streams) + len(labels) + (audio.music is not None)
@@ -196,6 +205,7 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
 
     return [
         *(["-hwaccel", "cuda"] if gpu_decode else []),
+        "-ss", f"{seg_in:.3f}", "-i", str(source),
         "-ss", f"{seg_in:.3f}", "-i", str(source), *sfx.input_args(sounds or []),
         "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]",
         "-t", f"{length:.4f}",
@@ -259,6 +269,22 @@ def replay_args(source: Path, window_in: float, length: float, insert_at: float,
         "-c:a", "pcm_f32le", "-ar", str(AUDIO_RATE),
         str(target),
     ]
+
+
+# A piece whose picture is this much shorter than it should be is made again.
+SHORT_PICTURE_SEC = 0.25
+
+
+def check_whole(path: Path, length: float) -> None:
+    """Raise MediaProcessingFailed when a rendered piece's picture stops early,
+    so it's made again the slower way rather than finishing as a frozen video
+    (EP 4, 19 Oct: FFmpeg stopped the picture and exited as if all was well)."""
+    picture = stream_lengths(path).get("video", 0.0)
+    if picture < length - SHORT_PICTURE_SEC:
+        log.warning("A rendered piece's picture stopped at %.1f s of %.1f s", picture, length)
+        raise MediaProcessingFailed(
+            f"The picture of part of the video stopped at {picture:.0f} s of {length:.0f} s, "
+            "so it was made again the slower way, and that stopped short too")
 
 
 def boost_limit(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> float | None:
@@ -508,6 +534,7 @@ def render_plan(
                            on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length)
                                                                       / work_sec))
                            if on_progress else None)
+                check_whole(path, length)
                 break
             except MediaProcessingFailed:
                 if len(attempts) == 1:
@@ -534,6 +561,7 @@ def render_plan(
             try:
                 run_ffmpeg(args, duration_sec=item.length, what="making a slow-motion replay",
                            cwd=work)
+                check_whole(path, item.length)
                 break
             except MediaProcessingFailed:
                 if len(attempts) == 1:

@@ -3,6 +3,28 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.24.1 — Fix: Let's Play parts froze — 19 October 2026
+
+**Fixed**
+
+- **The picture froze partway through EP 4** while the sound carried on. Every
+  piece of a part longer than about 6½ minutes lost its picture there. FFmpeg,
+  reading the picture and your four separate sound tracks (mic, game, Discord,
+  music) from the recording in one go, ran ahead on the sound and gave up on
+  the picture. The recording is now opened twice, once for the picture and
+  once for the sound. EP 4 Part 2 now renders whole (37:06, picture and sound).
+  Highlights and Shorts were never long enough to be hit.
+- The game or the music could go silent for a split second at the start of a
+  piece.
+
+**New**
+
+- **A safety check on every render.** After each piece, AI-Editor checks the
+  picture runs as long as the sound. If it doesn't, the piece is made again
+  the slower way; if that fails too, the render stops and says so, instead of
+  saving a frozen video as finished.
+- FFmpeg's warnings now go in the log even when a render succeeds.
+
 ## 0.24.0 — Phase 2H-1: Your three tips — 11 October 2026
 
 Your test tips for the Rules tab, built in first so the basic edit gets

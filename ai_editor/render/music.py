@@ -222,7 +222,9 @@ def volume_text(lowered: list[tuple[float, float, float]]) -> str | None:
     deepest = terms[0]
     for term in terms[1:]:
         deepest = f"max({deepest},{term})"
-    return f"volume='1-{deepest}':eval=frame"
+    # A frame without a time (now and then the first of a piece) would make it NaN,
+    # which FFmpeg turns into silence: leave that one as it is.
+    return f"volume='if(isnan(t),1,1-{deepest})':eval=frame"
 
 
 # --- Into the mix ------------------------------------------------------------------------
