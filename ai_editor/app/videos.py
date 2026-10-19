@@ -439,8 +439,11 @@ def plan_summary(plan: EditPlan, status: str) -> str:
              + f" · {'rendered' if status == APPROVED else 'draft'} · `{plan.plan_id}`"]
     from ..style.apply import summary as style_summary
 
+    from ..rules.store import summary as rules_summary
+
     style = style_summary(plan)   # Phase 2G-2: which style profile, and what it changed
-    lines += [f"- {note}" for note in ([style] if style else []) + list(plan.notes)]
+    rules = rules_summary(plan)   # 2H-2: the rules it was made with
+    lines += [f"- {note}" for note in [x for x in (style, rules) if x] + list(plan.notes)]
     return "\n\n".join(lines[:2]) + ("\n\n" + "\n".join(lines[2:]) if lines[2:] else "")
 
 

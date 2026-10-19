@@ -913,69 +913,65 @@ Every measurement is an estimate, which is why there are sliders. Under each sli
 
 ## 14. Rules (your editing tips)
 
-Rules are tips you write in normal English. AI-Editor turns each into a precise instruction and shows you how it understood it.
+Rules are tips you write in normal English, like *"Keep League highlight clips under 20 seconds"*. Your local AI (Gemma) turns each one into a rule AI-Editor knows, and AI-Editor tells you in its own words exactly what it will do. Nothing is saved until you say so.
 
 ### 14.1 Adding a rule
 
-1. Go to **Rules → New rule**.
-2. Type your tip, for example: *"Never cut during boss fights in Dawnwalker."*
-3. Choose the **scope**: all videos, a specific game, a specific recipe, or both.
-4. Click **Interpret**.
-5. AI-Editor shows its understanding in plain words, for example: *"In The Blood of Dawnwalker, protect any section tagged as a boss fight from being cut."*
-6. If it's right, click **Save**. If not, click **Rephrase** and try different wording, or adjust the fields manually.
+1. Open the **Rules** tab.
+2. Type your tip under **Your tip**, for example: *"No teaser in League highlights."*
+3. Click **Understand it** (or press Enter). It takes a second or two; the first time a few seconds more, while the AI loads. It uses the graphics card, so don't do it mid-game.
+4. AI-Editor says what it will do, for example: **AI-Editor will:** *League of Legends highlights: no opening teaser.* That sentence is written by AI-Editor from the rule itself, not by the AI, so it's exactly what will happen.
+5. Check **For these games** and **For these videos** underneath. The AI fills them in from your tip; change them if it got them wrong. Empty means everywhere.
+6. If it's right, click **Save**. If not, click **Try again** and say it differently, ideally with a number.
 
-### 14.2 Writing good rules
+### 14.2 What a rule can change
 
-- **Be specific.** "Cut silences over 2 seconds" works better than "cut boring bits."
-- **One idea per rule.** Split "cut loading screens and add zooms on kills" into two rules.
-- **Use numbers where you can.** Seconds, minutes, how often.
-- **Say which game** if it only applies to one.
+| Kind of rule | You might write | What it changes |
+|---|---|---|
+| Clip length | "Keep League highlight clips under 20 seconds", "Shorts between 20 and 40 seconds" | How long each clip may be (highlights and Shorts) |
+| Video length | "Highlights at least 12 minutes", "Dawnwalker parts about 40 minutes" | The length of a highlight video, or of each Let's Play part (the range around it moves too, 15.2) |
+| Teaser | "No teaser in League highlights", "An 8 second teaser" | Whether a video opens with a teaser, and how long (highlights, Shorts) |
+| Clip order | "Clips in the order they happened" | The order of a highlight video's clips (16.2) |
+| Quality bar | "Only really good clips for Wardogs" | How good a clip must be to go into highlights. "Really good" became 0.90, only the very best: say a number ("quality bar 0.7") if that's too strict |
+| Let's Play silences | "Cut silences longer than 10 seconds in Dawnwalker" | How long a silence may run before it's cut down |
+| Caption look | "Bigger captions on Shorts", "2 words at a time" | Size, height and words at a time. Only when captions are on |
+| Effect amounts | "At most 1 zoom a minute" | How many effects at most. Only when they're on |
+| Your three tips (16.2, 19.2d, 19.2e) | "Ensure the action is always within the clip", "Make sure the video sound is never over my voice", "Suggest where an effect can work and which effect" | Their switches, so you can turn one off for one game: "Don't keep the game under my voice in League" |
 
-### 14.3 Example rules
+**What a rule can't do:**
+- **Speed anything up:** you chose never to (2C). AI-Editor says so and saves nothing.
+- **Switch effects or captions on:** you tick those in Review, to be sure they went in right. Kept as a 📝 note.
+- **Choose moments**, like "Always include pentakills", "Never use clips where I die" or "Add a zoom on pentakills": those are moment rules, coming in 2H-3. Kept as a 📝 note until then.
+- **Anything AI-Editor can't see yet**, like boss fights or horse riding. Kept as a 📝 note.
 
-**Everywhere**
-- "Cut any silence longer than 1.5 seconds in highlights and Shorts."
-- "Never cut in the middle of a sentence."
-- "Don't use the same clip in more than one Short."
+### 14.3 Writing good rules
 
-**The Blood of Dawnwalker**
-- "Never cut cutscenes or dialogue."
-- "Speed up horseback travel longer than 30 seconds to 4 times speed."
-- "If I die to the same boss more than twice, keep only the first and last attempt and show an attempt counter."
-- "Don't caption in-game dialogue."
+- **Use numbers where you can.** "Under 20 seconds" works; "short clips" is kept as a note, because AI-Editor won't make up a number you didn't give.
+- **One idea per rule.** Split "no teaser and shorter clips" into two rules.
+- **Say which game** if it's for one game only, and which kind of video if it's only for one.
 
-**Escape from Tarkov**
-- "Cut stash and flea market time completely."
-- "Speed up looting when I'm not talking."
-- "Always keep the 30 seconds before a raid ends."
-
-**League of Legends**
-- "Cut champion select except the last 10 seconds."
-- "Always include multikills in highlights."
-- "Add a slow-motion replay on pentakills."
-
-**Wardogs**
-- "Cut the loadout menu."
-- "Speed up helicopter flights with no fighting."
-- "Zoom on my face when a vehicle explodes near me."
+On 19 Oct these all came out right: your three tips (every time, five tries each), "Keep League highlight clips under 20 seconds", "Dawnwalker parts about 40 minutes", "No teaser in League highlights", "Cut silences longer than 10 seconds in Dawnwalker", "Only use the really good clips for Wardogs", "Shorts between 20 and 40 seconds" and "Make the captions bigger on Shorts". "Speed up horse riding" was refused, and "Add a zoom on pentakills" kept as a note for 2H-3.
 
 ### 14.4 Which rule wins?
 
 When instructions disagree, AI-Editor follows this order (top wins):
 
-1. **Your rules**
-2. Game defaults
-3. Style Profile
-4. What AI-Editor learned from your feedback
-5. General defaults
+1. **Your rules.** Two rules that disagree (the same thing, for the same game and videos): the **newer** one wins, and the list says so: *⚠ r002 (newer) says otherwise, so that one wins.*
+2. **The style profile** chosen in Create video (chapter 13).
+3. **Settings.**
 
-### 14.5 Rules AI-Editor can't fully understand
+### 14.5 When rules are used
 
-If a tip doesn't match anything AI-Editor can do precisely, it saves it as a **note**. The AI still reads notes when choosing clips, so they still help. Notes are shown with a 📝 icon.
+- **By themselves**, on every new video they match: its game and its kind of video. Review's summary lists them on a **Rules:** line, like *Rules: r001 League of Legends highlights: clips 20 seconds long at most.*
+- **A plan keeps a copy** of the rules it was made with. Changing, switching off or deleting a rule later never changes a plan you've already reviewed; to use the new rules, make the plan again.
 
-### 14.6 Turning rules on and off
+### 14.6 Your rules: on, off and delete
 
-Each rule has a switch. Turn a rule off to test a video without it, without deleting it.
+**Your rules** lists every rule and note, newest first: its number (r001, r002...), **✅ On** or **⬜ Off**, what it does, and your own words.
+
+- **On and off:** pick a rule under **Rule**; the **On** tick box shows whether it's on. Untick it to make new videos without the rule (it stays in the list), tick it to use it again.
+- **Delete:** pick it, click **Delete**, then **Yes, delete it**. Only you can delete a rule; AI-Editor never removes one by itself.
+- **Notes** (📝) don't change the edit. They're kept so nothing you wrote is lost, ready for when AI-Editor can act on them.
 
 ---
 

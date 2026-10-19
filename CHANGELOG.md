@@ -3,6 +3,36 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.25.0 — Phase 2H-2: Rules from your tips — 19 October 2026
+
+**New**
+
+- **The Rules tab.** Type a tip the way you'd say it ("Keep League highlight
+  clips under 20 seconds") and press **Understand it**. Your local AI turns it
+  into a rule, and AI-Editor says back exactly what it will do, in its own
+  words: *League of Legends highlights: clips 20 seconds long at most.* Change
+  which games and videos it's for if needed, then **Save**. Nothing is saved
+  before that.
+- **What a rule can change:** clip length, video or part length, the teaser,
+  clip order, the quality bar, Let's Play silences, how captions look, how
+  many effects at most, and your three tips' switches (per game too).
+- **What it can't:** speed anything up (never: your choice), switch effects or
+  captions on (you tick those in Review), or choose moments (2H-3). Those, and
+  anything AI-Editor can't act on yet, are kept as 📝 notes.
+- **Your rules** are listed newest first, **✅ On** or **⬜ Off**. Pick one and
+  untick **On** to make new videos without it, or delete it. Two rules that
+  disagree: the newer wins, and the list says so.
+- Rules apply by themselves to every new video they match, and win over the
+  style profile. A plan keeps a copy of the rules it was made with; Review's
+  summary lists them on a **Rules:** line. There are no rules until you save
+  one.
+- Tested on 19 Oct: your three tips and nine others all came out right; your
+  three every time (five tries each).
+
+**Changed**
+
+- Your Instagram, X, TikTok and YouTube links are under every description.
+
 ## 0.24.1 — Fix: Let's Play parts froze — 19 October 2026
 
 **Fixed**

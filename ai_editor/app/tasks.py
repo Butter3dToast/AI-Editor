@@ -334,30 +334,42 @@ def download_model(settings: Settings) -> Job:
 # --- Phase 1H-2: making, previewing and rendering videos ------------------------------
 
 
-def _with_style(conn, settings: Settings, profile: int | None, recipe: str):
-    """(settings to make the plan with, the profile or None): a style profile's
-    values in, if one was chosen (Phase 2G-2)."""
+def _with_style(conn, settings: Settings, profile: int | None, recipe: str,
+                game: str | None = None):
+    """(settings to make the plan with, (the profile or None, the rules)): a style
+    profile's values in, if one was chosen (Phase 2G-2), then your rules for this
+    game and kind of video (2H-2), which win over the profile."""
+    from ..rules import store
     from ..style import profiles
     from ..style.apply import apply
 
     found = profiles.load(conn, profile) if profile is not None else None
-    if found is None:
-        return settings, None
-    return apply(settings, found.current(settings), recipe), found
+    if found is not None:
+        settings = apply(settings, found.current(settings), recipe)
+    settings, rules = store.with_rules(conn, settings, game, recipe)
+    return settings, (found, rules)
 
 
-def _stamp(conn, settings: Settings, plans, profile, report: Reporter) -> None:
-    """Keep the profile's values in each plan just made, and say what they changed."""
+def _stamp(conn, settings: Settings, plans, used, report: Reporter) -> None:
+    """Keep the profile's values and the rules in each plan just made, and say
+    what they changed."""
     from ..recipes.plan import save_plan
+    from ..rules import store
     from ..style.apply import stamp, summary
 
-    if profile is None:
+    profile, rules = used
+    if profile is None and not rules:
         return
     for plan in plans:
-        stamp(plan, profile, settings)
+        if profile is not None:
+            stamp(plan, profile, settings)
+        if rules:
+            store.stamp(plan, rules)
         save_plan(conn, plan)
     if plans:
-        report.say(summary(plans[0]))
+        for said in (summary(plans[0]), store.summary(plans[0])):
+            if said:
+                report.say(said)
 
 
 def make_highlights(settings: Settings, *, game: str | None, recording_ids: list[int] | None,
@@ -370,7 +382,7 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
         conn = init_db(settings.db_path)
         try:
             report.progress("Choosing the best clips", 0.0)
-            used, style = _with_style(conn, settings, profile, "highlights")
+            used, style = _with_style(conn, settings, profile, "highlights", game)
             result = build_highlights(conn, used, game=game, recording_ids=recording_ids,
                                       target_min=minutes, reuse=reuse)
             report.progress("Choosing the best clips", 1.0)
@@ -412,7 +424,7 @@ def make_letsplay(settings: Settings, recording_id: int, profile: int | None = N
                 # is split in the middle of one.
                 ensure_read(conn, row, lambda f: report.progress("Reading the quest tracker", f))
             report.progress("Trimming and splitting into parts", 0.0)
-            used, style = _with_style(conn, settings, profile, "letsplay")
+            used, style = _with_style(conn, settings, profile, "letsplay", row["game"])
             result = build_letsplay(conn, used, row)
             report.progress("Trimming and splitting into parts", 1.0)
             _stamp(conn, settings, [result.plan], style, report)
@@ -438,7 +450,10 @@ def make_shorts(settings: Settings, recording_id: int, profile: int | None = Non
         conn = init_db(settings.db_path)
         try:
             report.progress("Choosing the moments", 0.0)
-            used, style = _with_style(conn, settings, profile, "shorts")
+            row = conn.execute("SELECT game FROM recordings WHERE id = ?",
+                               (recording_id,)).fetchone()
+            used, style = _with_style(conn, settings, profile, "shorts",
+                                      row["game"] if row else None)
             result = build_shorts(conn, used, recording_id)
             report.progress("Choosing the moments", 1.0)
             _stamp(conn, settings, result.plans, style, report)

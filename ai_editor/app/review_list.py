@@ -18,6 +18,7 @@ from __future__ import annotations
 from html import escape
 
 from ..analysis import fights
+from ..style.apply import styled
 from ..analysis.captions import clock
 from ..config import Settings
 from ..recipes.plan import EditPlan
@@ -139,11 +140,12 @@ def clip_rows(conn, plan: EditPlan, settings: Settings, selected: int | None = N
             "<span>Why</span></div>")
     rows = []
     flagged = 0
+    own = styled(settings, plan)   # its rules may switch the fight check off (2H-2)
     for n, s in enumerate(plan.segments):
         teaser = s.kind == "teaser"
         # A fight already going where the clip starts, and no room to start
         # earlier within its length (2H-1): Adjust the cut can.
-        cut_off = None if teaser else fights.missed(conn, settings, s.recording_id, s.src_in)
+        cut_off = None if teaser else fights.missed(conn, own, s.recording_id, s.src_in)
         flagged += cut_off is not None
         said = why(s.reasons)
         if cut_off is not None:

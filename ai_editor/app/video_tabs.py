@@ -583,7 +583,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     effects_changed = effects_box.input(set_effects, [plan_pick, effects_box], review_msg)
 
     def suggesting(plan) -> bool:
-        return settings.effects.suggest and plan is not None and plan.recipe != "letsplay"
+        from ..style.apply import styled
+
+        return (plan is not None and plan.recipe != "letsplay"
+                and styled(settings, plan).effects.suggest)   # a rule may switch it (2H-2)
 
     def show_moments(plan_id):
         """Each moment with effects, ticked unless switched off; hidden when there are none.

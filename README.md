@@ -49,7 +49,8 @@ a hard rule, not a preference.
 | **2G-1** | Style profiles: reference videos (YouTube links or files) measured into a draft profile with sliders | **Complete** |
 | **2G-2** | Style profiles used: picked by itself in Create video, changing pace, teaser, effect amounts and captions | **Complete** |
 | **2H-1** | Your three tips built in: clips start before a fight, the game kept under your voice, effects suggested for you to tick; no more blasting Shorts | **Complete** |
-| 2H-2 | Plain-English rules: the Rules tab | Next |
+| **2H-2** | Plain-English rules: the Rules tab, your tips turned into rules by the local AI and said back before saving | **Complete** |
+| 2H-3 | Moment rules: which moments go in, which effect suits which moment | Next |
 | 2 | Speaker identification for voice chat | Not started |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 

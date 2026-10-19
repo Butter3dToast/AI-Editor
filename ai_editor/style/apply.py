@@ -106,11 +106,17 @@ def apply(settings: Settings, values: dict[str, float], recipe: str) -> Settings
 
 def styled(settings: Settings, plan: "EditPlan | None") -> Settings:
     """The settings to make, refill, preview or render ``plan`` with: its style
-    profile's values in, if it was made with one."""
-    style = ((plan.source or {}).get("style") if plan is not None else None) or {}
-    if not style.get("values"):
+    profile's values in, if it was made with one, then its rules (2H-2), which
+    win over the profile."""
+    from ..rules import kinds, store
+
+    if plan is None:
         return settings
-    return apply(settings, style["values"], plan.recipe)
+    style = (plan.source or {}).get("style") or {}
+    if style.get("values"):
+        settings = apply(settings, style["values"], plan.recipe)
+    rules = store.stamped(plan)
+    return kinds.apply(settings, rules, plan.recipe) if rules else settings
 
 
 def stamp(plan: "EditPlan", profile, settings: Settings) -> None:
