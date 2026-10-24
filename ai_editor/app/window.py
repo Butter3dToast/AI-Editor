@@ -34,7 +34,8 @@ from ..db import init_db  # noqa: E402
 from ..errors import AIEditorError  # noqa: E402
 from ..games import canonical_game  # noqa: E402
 from ..logging_setup import get_logger  # noqa: E402
-from . import companion_panel, library, manage_tabs, rules_tab, style_tab, tasks, video_tabs  # noqa: E402
+from . import (companion_panel, friends_panel, library, manage_tabs, rules_tab,  # noqa: E402
+               style_tab, tasks, video_tabs)
 from ..companion import status as companion_status  # noqa: E402
 from .worker import DONE, FAILED, PAUSED, RUNNING, WAITING, Task, Worker  # noqa: E402
 from .worker import submitted as submitted_message  # noqa: E402
@@ -184,6 +185,7 @@ def build(settings: Settings, worker: Worker):
                     preview_btn = gr.Button("Watch the preview copy")
                     folder_btn = gr.Button("Show the file in Explorer")
                 library_msg = gr.Markdown()
+                friends_panel.build_library(settings, pick)   # Phase 2I-2
 
             # --- Import -------------------------------------------------------
             with gr.Tab("Import", id="import"):

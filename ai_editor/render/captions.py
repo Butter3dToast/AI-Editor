@@ -42,9 +42,11 @@ def ass_text(text: str) -> str:
 
 
 def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Captions,
-                 place: float, title: Cue | None = None) -> str:
+                 place: float, title: Cue | None = None,
+                 cast: dict[str, tuple[str, str]] | None = None) -> str:
     """``title``: a Let's Play part's title card ("Ep 1 – Part 2"), large in the
-    middle of the picture, fading in and out."""
+    middle of the picture, fading in and out. ``cast``: your named friends'
+    {speaker: (name, colour)}, each line of theirs in their own colour (2I-2)."""
     scale = height / BASE_HEIGHT
     colour = "&H00FFFFFF"   # white (ASS colours are &HAABBGGRR)
     edge = "&H00000000"     # black
@@ -59,6 +61,12 @@ def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Caption
     ]
     friend = [*fields]
     friend[0], friend[3], friend[4] = "Friend", *[ass_colour(style.friends_colour)] * 2
+    named = {who: _style_name(who) for who in {c.speaker for c in cues} if who in (cast or {})}
+    own = []
+    for who, style_name in sorted(named.items()):
+        line = [*fields]
+        line[0], line[3], line[4] = style_name, *[ass_colour(cast[who][1])] * 2
+        own.append("Style: " + ",".join(line))
     big = [*fields]
     big[0], big[2] = "Title", str(round(style.size * TITLE_SCALE * scale))
     big[16], big[18] = f"{style.outline * TITLE_SCALE * scale:g}", "5"  # thicker edge, centred
@@ -77,6 +85,7 @@ def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Caption
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         "Style: " + ",".join(fields),
         "Style: " + ",".join(friend),
+        *own,
         "Style: " + ",".join(big),
         "",
         "[Events]",
@@ -86,7 +95,8 @@ def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Caption
     for c in sorted(cues, key=lambda c: c.speaker is not None):
         if c.end > c.start:
             lines.append(f"Dialogue: 0,{ass_time(c.start)},{ass_time(c.end)},"
-                         f"{'Default' if c.speaker is None else 'Friend'},,0,0,0,,{ass_text(c.text)}")
+                         f"{'Default' if c.speaker is None else named.get(c.speaker, 'Friend')},,"
+                         f"0,0,0,,{ass_text(c.text)}")
     if title is not None and title.end > title.start:
         fade = round(min(TITLE_FADE_SEC, (title.end - title.start) / 3) * 1000)
         lines.append(f"Dialogue: 1,{ass_time(title.start)},{ass_time(title.end)},Title,,0,0,0,,"
@@ -102,6 +112,11 @@ SHORT_ABOVE_ZONE = 0.06    # of the height, between the captions and the bottom 
 PHRASE_GAP_SEC = 0.6       # a pause this long starts a new phrase
 PHRASE_MAX_CHARS = 22      # ...and so does a phrase getting too long for one line
 PHRASE_HOLD_SEC = 0.4      # a phrase stays up this long after its last word
+
+
+def _style_name(speaker: str) -> str:
+    """'friend:7' -> 'Friend7': a style name ASS accepts."""
+    return "Friend" + "".join(ch for ch in speaker if ch.isalnum())[len("friend"):]
 
 
 def ass_colour(hex_rgb: str) -> str:
@@ -127,7 +142,7 @@ def phrases(words: Sequence, most: int) -> list[list]:
 
 
 def short_document(words: Sequence, start: float, end: float, *, width: int, height: int,
-                   style: Captions, zone) -> str:
+                   style: Captions, zone, cast: dict[str, tuple[str, str]] | None = None) -> str:
     """ASS captions for one Short: ``words`` with times in the recording,
     ``start``-``end`` the stretch the Short shows. Each phrase is on screen
     while it's said; each word in it is lit while it's being said."""
@@ -155,7 +170,8 @@ def short_document(words: Sequence, start: float, end: float, *, width: int, hei
     # Yours first, then your friends' (Phase 2I), each in phrases of their own.
     for who in sorted({getattr(w, "speaker", None) for w in shown},
                       key=lambda s: (s is not None, s or "")):
-        base = white if who is None else blue
+        name, colour = (cast or {}).get(who, ("", ""))
+        base = white if who is None else ass_colour(colour) if colour else blue
         groups = phrases([w for w in shown if getattr(w, "speaker", None) == who],
                          style.shorts_words)
         for n, group in enumerate(groups):
@@ -166,7 +182,8 @@ def short_document(words: Sequence, start: float, end: float, *, width: int, hei
                 off = group[i + 1].start if i + 1 < len(group) else group_end
                 if off <= on:
                     continue
-                text = (f"{{\\c{base}&}}" if who is not None else "") + " ".join(
+                text = (f"{{\\c{base}&}}" if who is not None else "") + (
+                    f"{ass_text(name)}: " if name else "") + " ".join(
                     f"{{\\c{lit}&}}{ass_text(w.text)}{{\\c{base}&}}" if j == i
                     else ass_text(w.text) for j, w in enumerate(group))
                 lines.append(f"Dialogue: 0,{ass_time(on - start)},{ass_time(off - start)},"

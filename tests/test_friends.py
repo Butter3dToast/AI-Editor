@@ -141,3 +141,149 @@ def test_a_discord_track_that_copies_your_mic_is_left_alone(conn, tmp_path):
     assert friends_track(conn, 1) is None
     tracks("missing.wav")
     assert friends_track(conn, 1) is None
+
+
+def test_never_for_a_lets_play(conn, settings, tmp_path):
+    """No friends on Discord there, and characters' lines must never be captioned as theirs."""
+    import soundfile as sf
+
+    from ai_editor.analysis.pipeline import friends_track
+
+    sf.write(tmp_path / "chat.wav", np.random.default_rng(2).normal(0, 0.1, 48000 * 5), 48000)
+    conn.execute("INSERT INTO audio_tracks (recording_id, stream_index, role, extracted_path) "
+                 "VALUES (1, 3, 'voice_chat', ?)", (str(tmp_path / "chat.wav"),))
+    conn.execute("UPDATE recordings SET game = ?", (settings.lets_play.games[0],))
+    assert friends_track(conn, 1, settings) is None
+    conn.execute("UPDATE recordings SET game = 'Wardogs'")
+    assert friends_track(conn, 1, settings) is not None
+
+
+# --- Telling voices apart (2I-2) ------------------------------------------------------------
+
+
+class FakeVoiceModel:
+    """Stands in for the voice model: a voice's fingerprint is the pitch it's
+    sung at, so two made-up friends sound clearly different."""
+
+    class Stream:
+        def accept_waveform(self, rate, samples):
+            self.rate, self.samples = rate, np.asarray(samples)
+
+        def input_finished(self):
+            pass
+
+    def create_stream(self):
+        return self.Stream()
+
+    def compute(self, stream):
+        spectrum = np.abs(np.fft.rfft(stream.samples, n=stream.rate))[100:900]
+        top = int(np.argmax(spectrum)) if len(spectrum) else 0
+        found = np.zeros(8)
+        found[min(7, top // 100)] = 1.0
+        return found.tolist()
+
+
+def two_friends(tmp_path):
+    """Friend one talks for 20 s, then friend two: their words and the sound."""
+    import soundfile as sf
+
+    rate = 16000
+    sound = np.zeros(rate * 50, dtype=np.float32)
+    said = []
+    for start, pitch in ((2.0, 300), (26.0, 650)):
+        t = np.arange(int(20 * rate)) / rate
+        sound[int(start * rate):int(start * rate) + len(t)] = 0.3 * np.sin(2 * np.pi * pitch * t)
+        said += [{"w": f"w{len(said) + i}", "s": start + i * 0.4, "e": start + i * 0.4 + 0.35,
+                  "p": 0.9} for i in range(48)]
+    sf.write(tmp_path / "friends_16k.wav", sound, rate)
+    return tmp_path / "friends_16k.wav", said
+
+
+def test_two_friends_become_two_voices(tmp_path):
+    from ai_editor.analysis.voices import tell_apart
+
+    wav, said = two_friends(tmp_path)
+    found = tell_apart(FakeVoiceModel(), wav, said)
+    assert set(found["voices"]) == {"A", "B"}
+    assert found["words"][:48] == ["A"] * 48 and found["words"][48:] == ["B"] * 48
+    assert found["voices"]["A"]["seconds"] == pytest.approx(48 * 0.35, abs=0.1)
+    start, end = found["voices"]["B"]["sample"]
+    assert 26.0 <= start < end <= 46.0 and end - start <= 8.0
+
+
+@pytest.fixture
+def library(settings, tmp_path):
+    """Two streams with the same two friends, nobody named yet."""
+    from ai_editor.analysis import voices
+
+    connection = init_db(settings.db_path)
+    wav, said = two_friends(tmp_path)
+    found = voices.tell_apart(FakeVoiceModel(), wav, said)
+    for rid in (1, 2):
+        connection.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                           "duration_sec, imported_at) VALUES (?, ?, 'local_obs', 'r.mkv', 60, "
+                           "'now')", (rid, f"h{rid}"))
+        speakers = voices.store(connection, rid, found)
+        connection.executemany(
+            "INSERT INTO transcript_words (recording_id, idx, word, start_sec, end_sec, speaker, "
+            "voice) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(rid, FRIEND_IDX + i, w["w"], w["s"], w["e"], speakers[v], v)
+             for i, (w, v) in enumerate(zip(said, found["words"]))])
+    connection.commit()
+    yield connection
+    connection.close()
+
+
+def speakers_of(conn, rid):
+    return {r[0] for r in conn.execute("SELECT DISTINCT speaker FROM transcript_words "
+                                       "WHERE recording_id = ?", (rid,))}
+
+
+def test_name_a_voice_once_and_it_is_known_everywhere(library, settings, tmp_path):
+    from ai_editor.analysis import voices
+
+    assert speakers_of(library, 1) == {"voice:A", "voice:B"}
+    said = voices.name_voice(library, 1, "A", "Chris")
+    assert "Found in 1 other stream too" in said
+    chris = voices.friends(library)[0]
+    assert speakers_of(library, 1) == speakers_of(library, 2) == {chris.speaker, "voice:B"}
+    assert voices.cast(library) == {chris.speaker: ("Chris", voices.PALETTE[0])}
+
+    # A new stream: Chris is known straight away; Voice B still waits for a name.
+    wav, said_words = two_friends(tmp_path)
+    found = voices.tell_apart(FakeVoiceModel(), wav, said_words)
+    library.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                    "duration_sec, imported_at) VALUES (3, 'h3', 'local_obs', 'r.mkv', 60, 'now')")
+    assert voices.store(library, 3, found) == {"A": chris.speaker, "B": "voice:B"}
+
+
+def test_take_a_name_back_rename_recolour_and_forget(library):
+    from ai_editor.analysis import voices
+
+    voices.name_voice(library, 1, "B", "Toad")
+    toad = voices.friends(library)[0]
+    voices.unname_voice(library, 2, "B")                     # "That's not them", in stream 2
+    assert speakers_of(library, 2) == {"voice:A", "voice:B"}
+    assert toad.speaker in speakers_of(library, 1)
+    assert "Renamed" in voices.rename(library, toad.id, "Toadie")
+    voices.recolour(library, toad.id, "#123abc")
+    assert voices.cast(library)[toad.speaker] == ("Toadie", "#123ABC")
+    assert "Forgot Toadie" in voices.forget(library, toad.id)
+    assert voices.friends(library) == [] and speakers_of(library, 1) == {"voice:A", "voice:B"}
+    # Their words stay: only the name goes.
+    assert library.execute("SELECT COUNT(*) FROM transcript_words WHERE recording_id = 1"
+                           ).fetchone()[0] == 96
+
+
+def test_captions_say_who_is_talking_in_their_colour():
+    chris = "friend:7"
+    cast = {chris: ("Chris", "#8CFF8C")}
+    mine, theirs = words("we take this fight now.", 1.0), words("let's go get him!", 1.4, chris)
+    cues = segment_cues(mine + theirs, 0.0, 10.0, cast)
+    assert [c.text for c in cues] == ["we take this fight now.", "Chris: let's go get him!"]
+    doc = ass_document(cues, width=1920, height=1080, style=Captions(), place=0.08, cast=cast)
+    green = ass_colour("#8CFF8C")
+    assert f"Style: Friend7,Arial,64,{green},{green}," in doc and ",Friend7,," in doc
+    short = short_document(mine + theirs, 0.0, 10.0, width=1080, height=1920, style=Captions(),
+                           zone=type("Zone", (), {"bottom": 0.1, "right": 0.1})(), cast=cast)
+    assert any("Chris: " in line and green in line for line in short.splitlines())

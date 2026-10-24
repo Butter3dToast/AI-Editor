@@ -46,6 +46,10 @@ class FakeModels:
         self.detector_used: list[bool] = []
         monkeypatch.setattr(pipeline, "transcribe", self.transcribe)
         monkeypatch.setattr(pipeline, "detect_sound_events", self.events)
+        # Never the real voice model: nothing downloaded in a test (2I-2).
+        from .test_friends import FakeVoiceModel
+
+        monkeypatch.setattr("ai_editor.models.voice_model", lambda settings: FakeVoiceModel())
 
     def transcribe(self, settings, wav, duration, on_progress=None, *, use_voice_detector=True):
         self.transcribe_calls += 1

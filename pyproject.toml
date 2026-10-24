@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-editor"
-version = "0.28.0"
+version = "0.29.0"
 description = "AI-Editor - a local assistant editor that turns stream and Let's Play recordings into YouTube content"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -46,6 +46,10 @@ dependencies = [
     "colorlog>=6.0",
     # Phase 2G-1: style profiles download YouTube reference videos (measured, then deleted).
     "yt-dlp>=2026.8.19",
+    # Phase 2I-2: telling friends' voices apart (WeSpeaker model, run on the
+    # processor). Chosen over SpeechBrain, whose torchaudio has no build for
+    # this torch: sherpa-onnx brings nothing else and leaves torch alone.
+    "sherpa-onnx==2.0.0",
 ]
 
 [project.optional-dependencies]

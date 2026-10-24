@@ -53,7 +53,7 @@ a hard rule, not a preference.
 | **2H-3a** | Moment rules: which moments always or never go into highlights and Shorts | **Complete** |
 | **2H-3b** | Effect rules: which effects Review suggests for a moment, never ticked for you | **Complete** |
 | **2I-1** | Your friends on Discord in captions, in their own colour | **Complete** |
-| 2I-2 | Who's who: name each friend's voice once, captions say who's talking | Next |
+| **2I-2** | Who's who: name each friend's voice once, captions say who's talking | **Complete** |
 | 3 | Feedback learning, OCR events, batch processing | Not started |
 
 ---

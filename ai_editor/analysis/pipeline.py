@@ -7,6 +7,8 @@ Steps, each resumable and cached like the import (spec sections 3 and 5):
 2. transcribe     -- Whisper, word by word                        (GPU)
    friends        -- the same for the Discord track, when there is one: your
                      friends' words, for captions only (Phase 2I)  (GPU)
+   voices         -- which friend said each of them: voice fingerprints,
+                     grouped (Phase 2I-2)                          (CPU)
 3. sound_events   -- laughter, shouting, gunfire...              (GPU)
 4. loudness       -- per-second volume of voice and game tracks   (CPU)
 5. scenes         -- where the picture cuts: menus, loading...    (CPU)
@@ -36,7 +38,7 @@ from ..ffmpeg import content_hash, run_ffmpeg
 from ..ingest import recording_cache_dir
 from ..jobs import JobQueue, make_cache_key
 from ..logging_setup import get_logger
-from . import audio_signals, captions
+from . import audio_signals, captions, voices
 from .picture import measure_picture
 from .scenes import detect_scene_cuts
 from .separation import BACKING_FILE, VOCALS_FILE, separate_voices
@@ -51,6 +53,8 @@ ANALYSIS_VERSION = 3
 STEPS = ("prepare_audio", "transcribe", "sound_events", "loudness", "scenes", "picture")
 FRIENDS_STEP = "friends"
 FRIENDS_FILE = "friends_transcript.json"
+VOICES_STEP = "voices"
+VOICES_FILE = "voices.json"
 SCENES_FILE = "scenes.json"
 PICTURE_FILE = "picture.json"
 SEPARATION_STEP = "separate_voices"
@@ -132,12 +136,20 @@ def choose_tracks(conn: sqlite3.Connection, recording_id: int) -> TrackChoice:
     )
 
 
-def friends_track(conn: sqlite3.Connection, recording_id: int) -> tuple[int, Path] | None:
-    """(stream index, file) of the Discord track, when the recording has one of its
-    own: not missing, and not a copy of another track (OBS sending the same sound
-    to two tracks would caption you twice)."""
+def friends_track(conn: sqlite3.Connection, recording_id: int,
+                  settings: Settings | None = None) -> tuple[int, Path] | None:
+    """(stream index, file) of the Discord track, when there is one to caption:
+    not missing, and not a copy of your mic or the mixed track (that would caption
+    you twice). A copy of the game track is fine: on the 22 Sep stream OBS sent the
+    game and Discord to both, and Whisper still heard only your friends' words. Never
+    for a Let's Play game: no friends on Discord there, and the characters' lines
+    must never be captioned as friends'."""
     from ..render.audio import is_copy
 
+    if settings is not None:
+        game = conn.execute("SELECT game FROM recordings WHERE id = ?", (recording_id,)).fetchone()
+        if game and (game[0] or "").lower() in {g.lower() for g in settings.lets_play.games}:
+            return None
     rows = {r["role"]: r for r in conn.execute(
         "SELECT stream_index, role, extracted_path FROM audio_tracks WHERE recording_id = ?",
         (recording_id,))}
@@ -145,7 +157,7 @@ def friends_track(conn: sqlite3.Connection, recording_id: int) -> tuple[int, Pat
     if chat is None or not chat["extracted_path"] or not Path(chat["extracted_path"]).exists():
         return None
     path = Path(chat["extracted_path"])
-    for other in ("mic", "mixed", "game"):
+    for other in ("mic", "mixed"):
         there = rows.get(other)
         if there is not None and there["extracted_path"] and                 Path(there["extracted_path"]).exists() and is_copy(path, Path(there["extracted_path"])):
             return None
@@ -165,6 +177,25 @@ def transcribe_friends(settings: Settings, chat_wav: Path, prepared: Path, durat
                    duration_sec=duration, what="preparing your friends' voices")
         partial.replace(wav)
     return transcribe(settings, wav, duration, on_progress, use_voice_detector=True)
+
+
+def tell_voices_apart(settings: Settings, chat_wav: Path, prepared: Path, friends_json: Path,
+                      duration: float, on_progress: Callable[[float], None] | None) -> dict:
+    """voices.json: which of your friends said each of their words (voices.py)."""
+    from ..models import voice_model
+    from .voices import tell_apart
+
+    heard, _ = accepted_words(json.loads(friends_json.read_text(encoding="utf-8")),
+                              settings.analysis.spellings)
+    wav = prepared / "friends_16k.wav"
+    if not wav.exists():   # made by the friends step; made again if it was cleaned up
+        run_ffmpeg(["-i", str(chat_wav), "-map", "0:a:0", "-ac", "1", "-ar", "16000",
+                    "-c:a", "pcm_s16le", "-rf64", "auto", str(wav)],
+                   duration_sec=duration, what="preparing your friends' voices")
+    found = tell_apart(voice_model(settings), wav, heard)
+    if on_progress:
+        on_progress(1.0)
+    return found
 
 
 def needs_separation(settings: Settings, row: sqlite3.Row, tracks: TrackChoice) -> bool:
@@ -280,8 +311,8 @@ def analyze_recording(
         tracks = replace(tracks, separated=True, voice_role="separated", game_role="separated",
                          voice_wav=separated_dir / VOCALS_FILE, game_wav=separated_dir / BACKING_FILE)
         game_32k = prepared / "game_32k.wav"
-    friends = None if separate else friends_track(conn, recording_id)
-    step_names = ((SEPARATION_STEP,) if separate else ()) + STEPS[:2] +         ((FRIENDS_STEP,) if friends else ()) + STEPS[2:]
+    friends = None if separate else friends_track(conn, recording_id, settings)
+    step_names = ((SEPARATION_STEP,) if separate else ()) + STEPS[:2] +         ((FRIENDS_STEP, VOICES_STEP) if friends else ()) + STEPS[2:]
 
     queue = JobQueue(conn)
     queue.recover_interrupted()
@@ -353,6 +384,16 @@ def analyze_recording(
                 out_dir / FRIENDS_FILE,
                 transcribe_friends(settings, friends[1], prepared, duration,
                                    reporter(FRIENDS_STEP)),
+            )),
+        ), (
+            VOICES_STEP,
+            make_cache_key(digest, VOICES_STEP, ANALYSIS_VERSION, friends[0],
+                           settings.analysis.transcription_model, settings.analysis.language,
+                           "wespeaker-resnet34", voices.GROUP_DISTANCE, voices.MIN_VOICE_SEC),
+            timed(VOICES_STEP, lambda: _write_json(
+                out_dir / VOICES_FILE,
+                tell_voices_apart(settings, friends[1], prepared, out_dir / FRIENDS_FILE,
+                                  duration, reporter(VOICES_STEP)),
             )),
         )] if friends else []),
         (
@@ -505,11 +546,19 @@ def store_results(
         for segment in dropped:
             log.info("Set aside likely mishearing (Discord) at %.1fs: %r", segment["s"],
                      segment["text"])
+        # Which friend said each (2I-2): a named friend, else the stream's Voice A, B...
+        told = out_dir / VOICES_FILE
+        found = json.loads(told.read_text(encoding="utf-8")) if told.exists() else {}
+        letters = found.get("words") or []
+        if len(letters) != len(heard):     # told apart from another transcript: not these words
+            letters, found = [None] * len(heard), {}
+        speakers = voices.store(conn, recording_id, found)
         conn.executemany(
             "INSERT INTO transcript_words (recording_id, idx, word, start_sec, end_sec, "
-            "confidence, source_role, speaker) VALUES (?, ?, ?, ?, ?, ?, 'voice_chat', ?)",
+            "confidence, source_role, speaker, voice) VALUES (?, ?, ?, ?, ?, ?, 'voice_chat', ?, ?)",
             [(recording_id, captions.FRIEND_IDX + i, w["w"], w["s"], w["e"], w["p"],
-              captions.FRIEND) for i, w in enumerate(heard)])
+              speakers.get(letter, captions.FRIEND), letter)
+             for i, (w, letter) in enumerate(zip(heard, letters))])
         log.info("Stored %d words of your friends' for recording #%s", len(heard), recording_id)
     put_fixes_back(conn, recording_id, kept)
 

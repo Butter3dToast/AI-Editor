@@ -55,6 +55,9 @@ def export_plan(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     speaking = {rid for rid in plan.recording_ids if plan.recipe != "letsplay"
                 or choose_tracks(conn, settings, rid).separate}
     words = {rid: load_words(conn, rid, captions=True) for rid in speaking}
+    from ..analysis.voices import cast as friends_cast
+
+    cast = friends_cast(conn)   # your named friends: "Chris: ..." (2I-2)
 
     for job, name, stem in jobs:
         result.saved.append(write_fcpxml(folder / f"{stem}.fcpxml", job, sources, name=name,
@@ -66,7 +69,7 @@ def export_plan(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
             if segment.recording_id in words:
                 cues += [Cue(c.start + offset, c.end + offset, c.text) for c in
                          segment_cues(words[segment.recording_id], segment.src_in,
-                                      segment.src_in + length)]
+                                      segment.src_in + length, cast)]
             offset += length
         if cues:
             result.saved.append(write_srt(cues, folder / f"{stem}.srt"))

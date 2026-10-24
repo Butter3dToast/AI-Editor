@@ -478,6 +478,9 @@ def render_plan(
     unfinished = target.with_name(target.stem + " (rendering).mp4")
     pieces: list[Path] = []
     words: dict[int, list] = {}
+    from ..analysis.voices import cast as friends_cast
+
+    cast = friends_cast(conn)   # your named friends' names and colours (2I-2)
     caption_count = 0
     done = 0.0
     work_sec = sum(lengths) + sum(slides) + replayed   # each slide's ends are rendered alone
@@ -492,7 +495,7 @@ def render_plan(
             if segment.recording_id not in words:
                 words[segment.recording_id] = load_words(conn, segment.recording_id,
                                                          captions=True)
-            cues = segment_cues(words[segment.recording_id], seg_in, seg_in + length)
+            cues = segment_cues(words[segment.recording_id], seg_in, seg_in + length, cast)
             caption_count += len(cues)
         card = (Cue(0.0, min(settings.lets_play.title_card_sec, length), title)
                 if title and index == 0 and piece.offset == 0 else None)
@@ -505,11 +508,12 @@ def render_plan(
             ass.write_text(short_document(
                 realistic_timing(words[segment.recording_id]), seg_in, seg_in + length,
                 width=preset.width, height=preset.height, style=settings.captions,
-                zone=settings.shorts.safe_zone()), encoding="utf-8")
+                zone=settings.shorts.safe_zone(), cast=cast), encoding="utf-8")
             subtitles = ass.name
         elif cues or card:
             subtitles = write_ass(cues, work / f"{name}.ass", width=preset.width,
                                   height=preset.height, style=settings.captions, title=card,
+                                  cast=cast,
                                   place=settings.captions.position.lets_play if lets_play
                                   else settings.captions.position.highlights).name
         lowered = []

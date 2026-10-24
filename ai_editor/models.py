@@ -250,3 +250,25 @@ def sound_model(settings: Settings) -> Iterator[tuple[object, str]]:
     finally:
         del model
         free_gpu_memory()
+
+
+# --- Telling voices apart (Phase 2I-2) -----------------------------------------------
+
+# WeSpeaker's ResNet34, trained on thousands of voices (VoxCeleb), as the
+# sherpa-onnx project publishes it: fetched straight from their GitHub page,
+# then only ever run here, on the processor.
+VOICE_MODEL_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+                   "speaker-recongition-models/wespeaker_en_voxceleb_resnet34.onnx")
+VOICE_MODEL_FILE = "wespeaker_en_voxceleb_resnet34.onnx"
+VOICE_MODEL_MIN_BYTES = 20_000_000
+
+
+def voice_model(settings: Settings):
+    """The voice fingerprint maker (sherpa-onnx), downloaded once."""
+    import sherpa_onnx
+
+    path = download(VOICE_MODEL_URL, settings.folders.models / "voices" / VOICE_MODEL_FILE,
+                    min_bytes=VOICE_MODEL_MIN_BYTES, what="voice model")
+    config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+        model=str(path), num_threads=max(1, min(4, (os.cpu_count() or 2) // 2)), provider="cpu")
+    return sherpa_onnx.SpeakerEmbeddingExtractor(config)

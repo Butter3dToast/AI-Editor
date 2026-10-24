@@ -153,7 +153,8 @@ def build_cues(
     return cues
 
 
-def segment_cues(words: Sequence[Word], src_in: float, src_out: float) -> list[Cue]:
+def segment_cues(words: Sequence[Word], src_in: float, src_out: float,
+                 cast: dict[str, tuple[str, str]] | None = None) -> list[Cue]:
     """Cues for one stretch of a recording, timed from where it starts.
 
     A caption never runs on into the next clip: the one-second minimum on
@@ -162,13 +163,16 @@ def segment_cues(words: Sequence[Word], src_in: float, src_out: float) -> list[C
 
     Each speaker's words make their own lines (Phase 2I): yours first, then
     your friends', so where you talk at once theirs is drawn above yours.
+    ``cast``: {speaker: (name, colour)} of your named friends (voices.cast): their
+    lines start with the name, "Chris: let's go get him!" (2I-2).
     """
     length = src_out - src_in
     inside = [Word(w.text, w.start - src_in, w.end - src_in, w.probability, w.speaker)
               for w in words if w.start >= src_in and w.end <= src_out]
     cues = []
     for who in sorted({w.speaker for w in inside}, key=lambda s: (s is not None, s or "")):
-        cues += [Cue(c.start, min(c.end, length), c.text, who)
+        name = (cast or {}).get(who, ("", ""))[0]
+        cues += [Cue(c.start, min(c.end, length), f"{name}: {c.text}" if name else c.text, who)
                  for c in build_cues([w for w in inside if w.speaker == who]) if c.start < length]
     return cues
 

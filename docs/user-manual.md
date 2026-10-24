@@ -1434,6 +1434,19 @@ To have them on every time, set `captions: highlights: true` (or `lets_play: tru
 
 **Your friends on Discord** are captioned too, whenever captions are on: their lines in **light blue**, yours in white. When you talk at the same time, theirs sits just above yours. In Shorts their words light up one by one like yours. Their words are only used for captions: clip scores, titles, the AI's ratings and "You said" are all yours alone. (In a **quick preview** of a highlight video the captions are plain subtitles, so their lines show in white there; the finished video and Short previews have the colours.) Change the colour with `captions.friends_colour`.
 
+**Who's talking (names).** AI-Editor tells your friends' voices apart (the analysis step **Telling your friends' voices apart**, after their words are written down; on the processor, so it's fine while you game). Each stream's voices are **Voice A, Voice B…**, the one who talks most first. To name them:
+
+1. In the **Library**, pick the stream and open **Who's talking (your friends on Discord)**.
+2. Pick a voice: **Their voice** plays a few seconds of them.
+3. Under **Who is it?** pick a friend or type a new name, and click **Save name**.
+
+That's the only time you name them. AI-Editor keeps a "fingerprint" of their voice with the name, so every stream from then on knows them by itself, and unnamed voices in your other streams that sound the same are named too (it says how many). Captions then read **"Chris: let's go get him!"**, in Chris's own colour (each friend gets one: green, pink, orange, purple…). Voices not named yet stay light blue with no name. Someone who said less than about 8 seconds in a stream isn't listed; their lines stay light blue.
+
+- **The same friend twice?** Over a long stream one friend can come out as two voices (excited and calm, or closer to the mic): your 22 Sep Wardogs stream came out as seven voices, and three pairs of them sound very alike, so they're probably the same friends. Just give both the same name: the second joins their fingerprint, so they're recognised better next time. Two voices are kept apart rather than guessed together, because a wrong name is worse than asking twice.
+- **Got it wrong?** Pick the voice and click **That's not them**: it's unnamed again in that stream only.
+- **Settings → Your friends (Discord):** change a friend's name or caption colour, or **Forget them** (asked once more): their name, colour and fingerprint go, and their lines stay in captions, unnamed.
+- Nothing about their voices leaves your PC: the fingerprints are numbers in AI-Editor's library, made by a small voice model (WeSpeaker, run by sherpa-onnx) on your processor. Older streams get names after **Analyse (or resume)**: only the new steps run (your 2-hour 22 Sep stream: 3 minutes for their words, 21 seconds to tell the voices apart). Streams from before you gave Discord its own track (around 22 Sep) still work: there the Discord track also holds the game, and only your friends' words are written down.
+
 Where their words come from: the analysis step **Writing down your friends' words (Discord)**, from your Discord track (OBS track 4, chapter 7.3). It runs by itself for new streams. For a stream analysed before 24 Oct, click **Analyse (or resume)** in the Library: only the new step runs, a few minutes on the graphics card (not while gaming). A stream with nobody talking on Discord simply gets none, and a Discord track that's a copy of another track is left alone, so you're never captioned twice.
 
 A captioned video is saved as `<plan> captions.mp4`, next to the plain one. Making one never replaces the other, so you can keep both and choose.

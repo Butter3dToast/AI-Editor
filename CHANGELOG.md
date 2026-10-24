@@ -3,6 +3,41 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.29.0 — Phase 2I-2: Who's who — 24 October 2026
+
+**New**
+
+- **A new analysis step, "Telling your friends' voices apart"**: it listens
+  to your friends' talking on the Discord track and groups it into
+  **Voice A, B, C…** (whoever talks most is A). Around 20 seconds for a
+  2-hour stream, on the processor.
+- **Library → Who's talking (your friends on Discord)**: pick a voice, play
+  a few seconds of it, type their name and click **Save name**. Name someone
+  once: matching voices in your other streams get the name too, and new
+  streams know them by themselves.
+- **Captions say who's talking**: "Chris: let's go get him!", in that
+  friend's own colour. Voices you haven't named stay light blue.
+- **That's not them** takes a name off one voice in one stream.
+- **Settings → Your friends (Discord)**: rename a friend, change their
+  caption colour, or forget them (asked once more; their lines stay, unnamed).
+- **Let's Plays are never included**, so game characters' lines can't be
+  captioned as a friend. A Discord track that's a copy of your game sound is
+  now listened to (your 22 Sep stream records it that way).
+- **Privacy:** AI-Editor now tells Gradio and the model download library not
+  to send usage reports. The voice model (26 MB) is downloaded once into your
+  models folder and runs offline.
+- Tested on 24 Oct on your whole 22 Sep Wardogs stream: friends' words in
+  3 minutes, voices told apart in 21 seconds, 7 voices found.
+
+**Good to know**
+
+- Over a long stream one friend can show up as two voices (their voice
+  changes when they shout or laugh). Give both the same name and they join
+  up. AI-Editor never joins them by itself, because a wrong name is worse
+  than naming twice.
+- Installed: `sherpa-onnx` (the voice fingerprinting), nothing else; torch
+  is untouched.
+
 ## 0.28.0 — Phase 2I-1: Your friends in captions — 24 October 2026
 
 **New**

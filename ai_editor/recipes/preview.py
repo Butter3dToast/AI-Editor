@@ -163,6 +163,9 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
     work.mkdir(parents=True, exist_ok=True)
     words = (realistic_timing(load_words(conn, segment.recording_id, captions=True))
              if settings.shorts.captions and segment.captions else None)
+    from ..analysis.voices import cast as friends_cast
+
+    cast = friends_cast(conn)   # your named friends' names and colours (2I-2)
     from ..effects import for_plan, sfx
     from ..ffmpeg import probe
     from ..render import replay, slide
@@ -185,7 +188,7 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
         if words is not None:
             (work / f"{name}.ass").write_text(short_document(
                 words, start, start + piece.length, width=width, height=height,
-                style=settings.captions, zone=zone), encoding="utf-8")
+                style=settings.captions, zone=zone, cast=cast), encoding="utf-8")
             finish.append(f"subtitles=filename={name}.ass")
         mine = sfx.within_piece(sounds, piece.offset, piece.length)
         graph = fx_graph(picture_graph(vertical, size, preset, finish=[], out="pic"),
@@ -263,7 +266,10 @@ def render_preview(
     from ..render import replay, slide
     from ..render.final import frame_exact
 
+    from ..analysis.voices import cast as friends_cast
+
     words: dict[int, list[Word]] = {}
+    cast = friends_cast(conn)   # your named friends: "Chris: ..." (2I-2)
     cues: list[Cue] = []
     parts: list[Path] = []
     total = max(plan.total_sec, 1.0)
@@ -351,7 +357,7 @@ def render_preview(
                                                              captions=True)
                 # After a replay in the clip, its words come that much later.
                 for c in segment_cues(words[segment.recording_id], segment.src_in,
-                                      segment.src_out):
+                                      segment.src_out, cast):
                     later = replay.shift(c.start, replays[index]) - c.start
                     cues.append(Cue(c.start + offset + later, c.end + offset + later, c.text))
 

@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 _V1 = """
@@ -375,7 +375,35 @@ CREATE TABLE style_references (
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7}
+# Phase 2I-2: your friends on Discord, told apart. A friend is a name, a caption
+# colour and a voice fingerprint (the average of every stretch named theirs);
+# each stream's voices are kept with what they sound like, so naming one names
+# the same voice in other streams. transcript_words.voice: the stream's voice a
+# friend's word was heard in ("A", "B"...), so a name can be taken back.
+_V8 = """
+ALTER TABLE transcript_words ADD COLUMN voice TEXT;
+CREATE TABLE friends (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    colour          TEXT    NOT NULL,
+    voice_json      TEXT    NOT NULL,
+    seconds         REAL    NOT NULL DEFAULT 0,   -- how much talking the fingerprint is from
+    created_at      TEXT    NOT NULL
+);
+CREATE TABLE voices (
+    recording_id    INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    label           TEXT    NOT NULL,              -- "A", "B"... most talking first
+    voice_json      TEXT    NOT NULL,
+    seconds         REAL    NOT NULL,
+    sample_start    REAL    NOT NULL,
+    sample_end      REAL    NOT NULL,
+    friend_id       INTEGER REFERENCES friends(id) ON DELETE SET NULL,
+    PRIMARY KEY (recording_id, label)
+);
+"""
+
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

@@ -663,6 +663,7 @@ ANALYSIS_LABELS = {
     "prepare_audio": "Preparing audio",
     "transcribe": "Transcribing speech",
     "friends": "Writing down your friends' words (Discord)",
+    "voices": "Telling your friends' voices apart",
     "sound_events": "Listening for laughter, shouts, gunfire",
     "loudness": "Measuring loudness",
     "scenes": "Finding scene changes (menus, loading)",

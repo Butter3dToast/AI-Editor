@@ -20,7 +20,7 @@ from ..analysis.ai_rating import agreement_text
 from ..config import Settings, save_local_settings
 from ..db import init_db
 from ..errors import AIEditorError
-from . import storage
+from . import friends_panel, storage
 from .worker import Worker, submitted
 
 ORDERS = [("As it happened, the teaser's moment saved for last", "timeline"),
@@ -208,6 +208,7 @@ def build(settings: Settings, worker: Worker) -> None:
                                     label="Let's Play title",
                                     info="{subtitle} is the AI's idea; {game}, {episode} and "
                                          "{part} are filled in.")
+        friends_panel.build_settings(settings)   # Phase 2I-2
         with gr.Accordion("AI (on this PC)", open=True):
             ai_status = gr.Markdown(llm.status(settings))
             with gr.Row():
