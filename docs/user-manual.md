@@ -1245,7 +1245,7 @@ How far it's zoomed is `shorts.crop_fill` (0.75; 1 fills the whole height, lower
 
 **When you get a facecam:** mark where it is in your OBS scene once, under `shorts.facecam` (for example `League of Legends: { x: 0.0, y: 0.7, w: 0.2, h: 0.3 }`, as shares of the picture). From then on that game's Shorts put your facecam across the top third and the game below it. (In the window, you'll draw the box instead.)
 
-**Captions:** off unless you tick **Burn in captions** for the Short in Review, like every video. When on: big, bold, 3 words at a time, the word you're saying lit up in yellow. Only your words. Recordings with just one mixed sound track get none for Let's Play games, because the characters' lines can't be told apart from yours (19.2c). Change them with `captions.shorts_size`, `shorts_words` and `shorts_highlight`.
+**Captions:** off unless you tick **Burn in captions** for the Short in Review, like every video. When on: big, bold, 3 words at a time, the word you're saying lit up in yellow. Your friends on Discord in light blue (19.2c). Recordings with just one mixed sound track get none for Let's Play games, because the characters' lines can't be told apart from yours (19.2c). Change them with `captions.shorts_size`, `shorts_words` and `shorts_highlight`.
 
 ### 17.3 Safe zones (important for TikTok)
 
@@ -1339,7 +1339,7 @@ Saving moves each edge at most half a second, only so it never cuts you off mid-
 
 Speech recognition mishears names and slang ("zonya" for Zhonya's). Click a clip's row, and **Captions for clip N** appears under the player, below Adjust the cut:
 
-- **Caption lines:** the clip's captions as they show in the video, each with where it starts in the clip. ✎ marks a line you've fixed, ⊘ one you've hidden. Click a line to hear it (the player plays just that line) and to fix it.
+- **Caption lines:** the clip's captions as they show in the video, each with where it starts in the clip. ✎ marks a line you've fixed, ⊘ one you've hidden, 👥 a friend's line (19.2c): fix, hide and put those back the same way. A fix to a friend's line never changes "You said". Click a line to hear it (the player plays just that line) and to fix it.
 - **This line:** change the words, then **Save line** (or press Enter). Each word keeps its own time, so the caption stays in sync with your voice; type more or fewer words and they're shared over the line's time.
 - **Hide this line:** it's never shown as a caption, but its words stay in the transcript ("You said", what the AI writes). **Show this line** brings it back.
 - **Put back the original:** the line as it was first heard, shown again.
@@ -1431,6 +1431,10 @@ ai-editor render 2 --captions
 ```
 
 To have them on every time, set `captions: highlights: true` (or `lets_play: true`) in Settings (chapter 24). `--no-captions` turns them off for one video.
+
+**Your friends on Discord** are captioned too, whenever captions are on: their lines in **light blue**, yours in white. When you talk at the same time, theirs sits just above yours. In Shorts their words light up one by one like yours. Their words are only used for captions: clip scores, titles, the AI's ratings and "You said" are all yours alone. (In a **quick preview** of a highlight video the captions are plain subtitles, so their lines show in white there; the finished video and Short previews have the colours.) Change the colour with `captions.friends_colour`.
+
+Where their words come from: the analysis step **Writing down your friends' words (Discord)**, from your Discord track (OBS track 4, chapter 7.3). It runs by itself for new streams. For a stream analysed before 24 Oct, click **Analyse (or resume)** in the Library: only the new step runs, a few minutes on the graphics card (not while gaming). A stream with nobody talking on Discord simply gets none, and a Discord track that's a copy of another track is left alone, so you're never captioned twice.
 
 A captioned video is saved as `<plan> captions.mp4`, next to the plain one. Making one never replaces the other, so you can keep both and choose.
 

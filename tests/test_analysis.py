@@ -184,7 +184,16 @@ def test_multitrack_prepares_a_separate_game_file(conn, settings, tmp_path, monk
     assert game is not None and game.name == "game_32k.wav" and game.exists()
     assert "game_db" in {r[0] for r in conn.execute("SELECT DISTINCT name FROM signals")}
     assert conn.execute("SELECT DISTINCT source_role FROM transcript_words").fetchone()[0] == "mic"
-    assert fakes.detector_used == [True], "clean mic track: the detector is reliable"
+    # Your mic, then your friends on Discord (Phase 2I): both clean voice tracks.
+    assert fakes.detector_used == [True, True], "clean voice tracks: the detector is reliable"
+    friends = conn.execute("SELECT idx, speaker, source_role FROM transcript_words "
+                           "WHERE speaker IS NOT NULL").fetchall()
+    assert friends and all(r[0] >= 1_000_000 and tuple(r[1:]) == ("friend", "voice_chat")
+                           for r in friends)
+    from ai_editor.analysis.clips import load_words
+
+    assert not any(w.speaker for w in load_words(conn, rec_id))          # yours only
+    assert any(w.speaker == "friend" for w in load_words(conn, rec_id, captions=True))
 
 
 @needs_ffmpeg

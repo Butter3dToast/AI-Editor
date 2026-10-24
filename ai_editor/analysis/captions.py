@@ -18,6 +18,7 @@ class Word:
     start: float
     end: float
     probability: float = 1.0
+    speaker: str | None = None   # None: you; "friend": someone on Discord (Phase 2I)
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,14 @@ class Cue:
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
+
+# Your own words in transcript_words: your friends' (Phase 2I) have a speaker.
+# Only captions show theirs; everything else (cutting, the AI, "You said") reads yours.
+YOURS = "speaker IS NULL"
+FRIEND = "friend"
+FRIEND_IDX = 1_000_000   # friends' words are numbered from here, so a line never mixes you
 
 SENTENCE_END = (".", "?", "!", "…")
 CLAUSE_END = SENTENCE_END + (",", ";", ":")
@@ -45,7 +53,8 @@ def realistic_timing(words: Sequence[Word]) -> list[Word]:
     fixed = []
     for w in sorted(words, key=lambda w: w.start):
         longest = min(MAX_WORD_SEC, WORD_BASE_SEC + WORD_PER_CHAR_SEC * len(w.text.strip()))
-        fixed.append(Word(w.text, max(w.start, w.end - longest), w.end, w.probability))
+        fixed.append(Word(w.text, max(w.start, w.end - longest), w.end, w.probability,
+                          w.speaker))
     return fixed
 
 
@@ -150,11 +159,18 @@ def segment_cues(words: Sequence[Word], src_in: float, src_out: float) -> list[C
     A caption never runs on into the next clip: the one-second minimum on
     screen made the last word of one clip (4:03 in the creator's Wardogs
     highlight) appear over the next.
+
+    Each speaker's words make their own lines (Phase 2I): yours first, then
+    your friends', so where you talk at once theirs is drawn above yours.
     """
     length = src_out - src_in
-    inside = [Word(w.text, w.start - src_in, w.end - src_in, w.probability)
+    inside = [Word(w.text, w.start - src_in, w.end - src_in, w.probability, w.speaker)
               for w in words if w.start >= src_in and w.end <= src_out]
-    return [Cue(c.start, min(c.end, length), c.text) for c in build_cues(inside) if c.start < length]
+    cues = []
+    for who in sorted({w.speaker for w in inside}, key=lambda s: (s is not None, s or "")):
+        cues += [Cue(c.start, min(c.end, length), c.text, who)
+                 for c in build_cues([w for w in inside if w.speaker == who]) if c.start < length]
+    return cues
 
 
 def srt_time(seconds: float) -> str:

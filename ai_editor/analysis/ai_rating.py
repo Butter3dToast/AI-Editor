@@ -38,7 +38,7 @@ from ..errors import AiTooSlow
 from ..ffmpeg import find_binary
 from ..games import game_notes
 from ..logging_setup import get_logger
-from .captions import clock
+from .captions import YOURS, clock
 
 log = get_logger(__name__)
 
@@ -250,7 +250,7 @@ def question(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row,
         heard.insert(0, READABLE["marker"])
     words = conn.execute(
         "SELECT word, start_sec, end_sec FROM transcript_words WHERE recording_id = ? "
-        "AND start_sec >= ? AND end_sec <= ? ORDER BY start_sec",
+        f"AND {YOURS} AND start_sec >= ? AND end_sec <= ? ORDER BY start_sec",
         (clip["recording_id"], clip["start_sec"], clip["end_sec"])).fetchall()
     notes = game_notes(game)
     parts = [

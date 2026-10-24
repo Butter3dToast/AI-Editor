@@ -10,9 +10,10 @@ game draws there: League's ability bar along the bottom, and in Let's Plays
 the game's own subtitles (Dawnwalker's sit 9-15% up), which captions must
 never cover (spec 7.6).
 
-Only the creator's words are captioned: the transcript comes from the mic
-track where the recording has one. A recording with only a mixed track can
-include friends on Discord too, until speaker recognition (Phase 2).
+Your words come from the mic track where the recording has one. Your friends
+on Discord (Phase 2I-1) are captioned from the Discord track, in their own
+colour (captions.friends_colour). Their lines are written after yours, so
+where you talk at once libass stacks theirs above yours.
 """
 
 from __future__ import annotations
@@ -56,6 +57,8 @@ def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Caption
         str(round(width * SIDE_MARGIN)), str(round(width * SIDE_MARGIN)), str(round(height * place)),
         "1",
     ]
+    friend = [*fields]
+    friend[0], friend[3], friend[4] = "Friend", *[ass_colour(style.friends_colour)] * 2
     big = [*fields]
     big[0], big[2] = "Title", str(round(style.size * TITLE_SCALE * scale))
     big[16], big[18] = f"{style.outline * TITLE_SCALE * scale:g}", "5"  # thicker edge, centred
@@ -73,13 +76,17 @@ def ass_document(cues: Sequence[Cue], *, width: int, height: int, style: Caption
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         "Style: " + ",".join(fields),
+        "Style: " + ",".join(friend),
         "Style: " + ",".join(big),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    lines += [f"Dialogue: 0,{ass_time(c.start)},{ass_time(c.end)},Default,,0,0,0,,{ass_text(c.text)}"
-              for c in cues if c.end > c.start]
+    # Yours first: the subtitle renderer places lines in the order they're written.
+    for c in sorted(cues, key=lambda c: c.speaker is not None):
+        if c.end > c.start:
+            lines.append(f"Dialogue: 0,{ass_time(c.start)},{ass_time(c.end)},"
+                         f"{'Default' if c.speaker is None else 'Friend'},,0,0,0,,{ass_text(c.text)}")
     if title is not None and title.end > title.start:
         fade = round(min(TITLE_FADE_SEC, (title.end - title.start) / 3) * 1000)
         lines.append(f"Dialogue: 1,{ass_time(title.start)},{ass_time(title.end)},Title,,0,0,0,,"
@@ -126,6 +133,7 @@ def short_document(words: Sequence, start: float, end: float, *, width: int, hei
     while it's said; each word in it is lit while it's being said."""
     scale = height / SHORT_BASE_HEIGHT
     white, edge = "&H00FFFFFF", "&H00000000"
+    blue = ass_colour(style.friends_colour)
     lit = ass_colour(style.shorts_highlight)
     fields = ["Short", style.font, str(round(style.shorts_size * scale)), white, white, edge,
               "&H80000000", "-1", "0", "0", "0", "100", "100", "0", "0", "1",
@@ -144,20 +152,25 @@ def short_document(words: Sequence, start: float, end: float, *, width: int, hei
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
     shown = [w for w in words if w.start >= start and w.end <= end and w.text.strip()]
-    groups = phrases(shown, style.shorts_words)
-    for n, group in enumerate(groups):
-        after = groups[n + 1][0].start if n + 1 < len(groups) else end
-        group_end = min(group[-1].end + PHRASE_HOLD_SEC, after, end)
-        for i, word in enumerate(group):
-            on = group[0].start if i == 0 else word.start
-            off = group[i + 1].start if i + 1 < len(group) else group_end
-            if off <= on:
-                continue
-            text = " ".join(
-                f"{{\\c{lit}&}}{ass_text(w.text)}{{\\c{white}&}}" if j == i else ass_text(w.text)
-                for j, w in enumerate(group))
-            lines.append(f"Dialogue: 0,{ass_time(on - start)},{ass_time(off - start)},Short,,"
-                         f"0,0,0,,{text}")
+    # Yours first, then your friends' (Phase 2I), each in phrases of their own.
+    for who in sorted({getattr(w, "speaker", None) for w in shown},
+                      key=lambda s: (s is not None, s or "")):
+        base = white if who is None else blue
+        groups = phrases([w for w in shown if getattr(w, "speaker", None) == who],
+                         style.shorts_words)
+        for n, group in enumerate(groups):
+            after = groups[n + 1][0].start if n + 1 < len(groups) else end
+            group_end = min(group[-1].end + PHRASE_HOLD_SEC, after, end)
+            for i, word in enumerate(group):
+                on = group[0].start if i == 0 else word.start
+                off = group[i + 1].start if i + 1 < len(group) else group_end
+                if off <= on:
+                    continue
+                text = (f"{{\\c{base}&}}" if who is not None else "") + " ".join(
+                    f"{{\\c{lit}&}}{ass_text(w.text)}{{\\c{base}&}}" if j == i
+                    else ass_text(w.text) for j, w in enumerate(group))
+                lines.append(f"Dialogue: 0,{ass_time(on - start)},{ass_time(off - start)},"
+                             f"Short,,0,0,0,,{text}")
     return "\n".join(lines) + "\n"
 
 

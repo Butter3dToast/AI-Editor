@@ -14,6 +14,9 @@ What the creator chose (2026-10-10):
   ones as they're analysed (word_fixes). Settings lists them; forgetting one
   puts the words it changed back.
 
+Your friends' lines (Phase 2I) are listed too, as their own lines: they're
+fixed, hidden and put back the same way, and never change "You said".
+
 Timing stays tied to the creator's voice: each word row keeps its own time.
 Typing more or fewer words than a line had shares them out over the line's
 words in order, so they stay in sync; a word with no new text left is blank
@@ -27,7 +30,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .captions import Word, _text, build_cues
+from .captions import YOURS, Word, _text, build_cues
 from .transcript import _EDGE_PUNCTUATION, _bare
 
 ROW_FIELDS = ("idx", "word", "original", "hidden", "fixed_by")
@@ -43,6 +46,7 @@ class Line:
     text: str
     hidden: bool
     edited: bool        # any of its words changed from what was heard
+    friend: bool = False   # said by a friend on Discord (Phase 2I)
 
     @property
     def key(self) -> str:
@@ -51,16 +55,25 @@ class Line:
 
 def _rows(conn: sqlite3.Connection, recording_id: int, src_in: float, src_out: float):
     return conn.execute(
-        "SELECT idx, word, start_sec, end_sec, confidence, original, hidden FROM transcript_words "
-        "WHERE recording_id = ? AND start_sec >= ? AND end_sec <= ? ORDER BY start_sec, idx",
+        "SELECT idx, word, start_sec, end_sec, confidence, original, hidden, speaker "
+        "FROM transcript_words WHERE recording_id = ? AND start_sec >= ? AND end_sec <= ? "
+        "ORDER BY start_sec, idx",
         (recording_id, src_in, src_out)).fetchall()
 
 
 def lines(conn: sqlite3.Connection, recording_id: int, src_in: float,
           src_out: float) -> list[Line]:
     """The caption lines of one stretch of a recording, as they show in a video
-    (captions.build_cues), hidden ones included so they can be shown again."""
-    rows = _rows(conn, recording_id, src_in, src_out)
+    (captions.build_cues), hidden ones included so they can be shown again. Yours
+    and each friend's make lines of their own, in time order."""
+    every = _rows(conn, recording_id, src_in, src_out)
+    found: list[Line] = []
+    for who in dict.fromkeys(r["speaker"] for r in every):
+        found += _lines_of([r for r in every if r["speaker"] == who], who is not None)
+    return sorted(found, key=lambda line: (line.start, line.friend))
+
+
+def _lines_of(rows, friend: bool) -> list[Line]:
     words = [Word(r["word"], r["start_sec"], r["end_sec"], r["confidence"] or 1.0) for r in rows]
     found: list[Line] = []
     p = 0
@@ -78,7 +91,7 @@ def lines(conn: sqlite3.Connection, recording_id: int, src_in: float,
         found.append(Line(min(r["idx"] for r in part), max(r["idx"] for r in part),
                           part[0]["start_sec"], part[-1]["end_sec"], cue.text,
                           all(r["hidden"] for r in part if r["word"].strip()),
-                          any(r["original"] is not None for r in part)))
+                          any(r["original"] is not None for r in part), friend))
     return found
 
 
@@ -202,8 +215,8 @@ def _refresh_said(conn: sqlite3.Connection, recording_id: int, idxs: list[int]) 
                              "AND start_sec < ? AND end_sec > ?",
                              (recording_id, span[1], span[0])).fetchall():
         words = conn.execute(
-            "SELECT word FROM transcript_words WHERE recording_id = ? AND start_sec >= ? AND "
-            "end_sec <= ? ORDER BY start_sec, idx",
+            f"SELECT word FROM transcript_words WHERE recording_id = ? AND {YOURS} AND "
+            "start_sec >= ? AND end_sec <= ? ORDER BY start_sec, idx",
             (recording_id, clip["start_sec"], clip["end_sec"])).fetchall()
         said = _text([Word(r["word"], 0.0, 0.0) for r in words])
         conn.execute("UPDATE clips SET transcript = ? WHERE clip_id = ?", (said, clip["clip_id"]))
@@ -312,7 +325,7 @@ def apply_remembered(conn: sqlite3.Connection, recording_id: int) -> int:
 def keep_fixes(conn: sqlite3.Connection, recording_id: int) -> list[dict]:
     """The creator's own fixes and hidden lines, before the transcript is stored again."""
     return [dict(r) for r in conn.execute(
-        "SELECT start_sec, end_sec, word, original, hidden FROM transcript_words "
+        "SELECT start_sec, end_sec, word, original, hidden, speaker FROM transcript_words "
         "WHERE recording_id = ? AND fixed_by IS NULL AND (original IS NOT NULL OR hidden = 1)",
         (recording_id,))]
 
@@ -324,7 +337,8 @@ def put_fixes_back(conn: sqlite3.Connection, recording_id: int, kept: list[dict]
         heard = k["original"] if k["original"] is not None else k["word"]
         conn.execute(
             "UPDATE transcript_words SET word = ?, original = ?, hidden = ? WHERE recording_id = ? "
-            "AND abs(start_sec - ?) < 0.01 AND abs(end_sec - ?) < 0.01 AND word = ?",
+            "AND abs(start_sec - ?) < 0.01 AND abs(end_sec - ?) < 0.01 AND word = ? "
+            "AND speaker IS ?",   # a friend's word at the same moment isn't yours
             (k["word"], k["original"], k["hidden"], recording_id, k["start_sec"], k["end_sec"],
-             heard))
+             heard, k["speaker"]))
     apply_remembered(conn, recording_id)

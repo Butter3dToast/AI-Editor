@@ -1156,7 +1156,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     def line_label(line, src_in: float) -> str:
         mark = " ⊘" if line.hidden else (" ✎" if line.edited else "")
-        return f"{videos.short_clock(max(0.0, line.start - src_in))}{mark}  {line.text}"
+        who = "👥 " if line.friend else ""    # a friend on Discord (Phase 2I)
+        return f"{videos.short_clock(max(0.0, line.start - src_in))}{mark}  {who}{line.text}"
 
     def lines_of(state):
         return read(caption_edit.lines, state["rid"], state["in"], state["out"])

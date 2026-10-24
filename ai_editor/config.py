@@ -497,14 +497,17 @@ class Captions(BaseModel):
     shorts_size: int = Field(88, ge=30, le=200)   # pixels on a 1920-high picture
     shorts_words: int = Field(3, ge=1, le=6)      # words on screen at once, at most
     shorts_highlight: str = "#FFD400"             # the word being said
+    # Your friends on Discord (Phase 2I-1): their lines show whenever captions
+    # are on, in this colour (the creator chose light blue, 24 Oct).
+    friends_colour: str = "#7FD4FF"
 
-    @field_validator("shorts_highlight")
+    @field_validator("shorts_highlight", "friends_colour")
     @classmethod
-    def _colour(cls, v: str) -> str:
+    def _colour(cls, v: str, info) -> str:
         import re
 
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
-            raise ValueError(f"captions.shorts_highlight must look like #FFD400, got {v!r}")
+            raise ValueError(f"captions.{info.field_name} must look like #FFD400, got {v!r}")
         return v.upper()
 
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .audio_signals import top_moments
+from .captions import YOURS
 
 # How sure the sound model must be before a moment is listed.
 EVENT_THRESHOLD = 0.3
@@ -86,7 +87,8 @@ def build_report(conn: sqlite3.Connection, recording_id: int, top: int = 8) -> M
     seconds = len(speech)
 
     word_row = conn.execute(
-        "SELECT COUNT(*) AS n, MAX(source_role) AS role FROM transcript_words WHERE recording_id = ?",
+        f"SELECT COUNT(*) AS n, MAX(source_role) AS role FROM transcript_words WHERE "
+        f"recording_id = ? AND {YOURS}",
         (recording_id,),
     ).fetchone()
 

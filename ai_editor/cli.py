@@ -662,6 +662,7 @@ ANALYSIS_LABELS = {
     "separate_voices": "Separating voices from game sound",
     "prepare_audio": "Preparing audio",
     "transcribe": "Transcribing speech",
+    "friends": "Writing down your friends' words (Discord)",
     "sound_events": "Listening for laughter, shouts, gunfire",
     "loudness": "Measuring loudness",
     "scenes": "Finding scene changes (menus, loading)",

@@ -3,6 +3,33 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.28.0 — Phase 2I-1: Your friends in captions — 24 October 2026
+
+**New**
+
+- **Your friends on Discord are captioned**, whenever captions are on: their
+  lines in light blue, yours in white. When you talk at the same time, theirs
+  sits just above yours. In Shorts their words light up one by one like yours.
+- **A new analysis step, "Writing down your friends' words (Discord)"**, from
+  your Discord track (OBS track 4). It runs by itself for new streams; for one
+  analysed before, click **Analyse (or resume)** and only the new step runs,
+  a few minutes on the graphics card. A Discord track that's a copy of another
+  track is left alone, so you're never captioned twice.
+- **Fixing captions** in Review lists their lines too, marked 👥: fix, hide
+  and put back the same way.
+- **Their words are only for captions.** Clip scores, titles, the AI's
+  ratings and "You said" stay yours alone.
+- Tested on 24 Oct on 10 minutes of your 22 Sep Wardogs stream: 686 words,
+  none set aside as mishearings, transcribed in 30 seconds.
+
+**Good to know**
+
+- In the quick preview of a highlight video, captions are plain subtitles, so
+  your friends' lines show in white there. Finished videos and Short previews
+  have the colours.
+- Two friends talking straight after each other can share a line, until
+  2I-2 tells their voices apart.
+
 ## 0.27.0 — Phase 2H-3b: Effects on a moment — 24 October 2026
 
 **New**

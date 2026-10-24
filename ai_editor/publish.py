@@ -40,6 +40,7 @@ import numpy as np
 
 from . import llm
 from .analysis.ai_rating import SLOW_ANSWER_SEC, notes_for
+from .analysis.captions import YOURS
 from .analysis.moments import load_signal
 from .config import Settings
 from .errors import AiTooSlow
@@ -172,8 +173,8 @@ def describe_sections(conn: sqlite3.Connection, found: list[Section]) -> None:
         words = []
         for piece in pieces:
             words += conn.execute(
-                "SELECT word FROM transcript_words WHERE recording_id = ? AND start_sec >= ? AND "
-                "end_sec <= ? ORDER BY start_sec LIMIT ?",
+                f"SELECT word FROM transcript_words WHERE recording_id = ? AND {YOURS} AND "
+                "start_sec >= ? AND end_sec <= ? ORDER BY start_sec LIMIT ?",
                 (piece.recording_id, piece.src_in, piece.src_out, each)).fetchall()
         said = " ".join(w["word"].strip() for w in words[:WORDS_PER_SECTION])
         section.about = ("; ".join(lines[:4]) or "-") + (f' | Said: "{said}"' if said else "")
