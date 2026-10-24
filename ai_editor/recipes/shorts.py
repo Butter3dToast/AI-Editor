@@ -43,7 +43,7 @@ SHORTEST_SHARE = 0.67
 @dataclass
 class Pick:
     candidate: Candidate
-    why: str              # "marked" | "league" | "liked" | "ai" | "score"
+    why: str              # "marked" | "rule" | "league" | "liked" | "saved" | "ai" | "score"
     summary: str = ""
     rating: float | None = None
 
@@ -95,8 +95,9 @@ def choose(candidates: list[Candidate], clips: dict[str, sqlite3.Row], notes: di
             # A penta speaks for itself: no need for the AI to say it stands alone.
             tiers.append((2, -(rating or 0), -c.score,
                           Pick(c, "league", text or (summary.get("reasons") or [""])[0], rating)))
-        elif c.liked and (alone or not rated):
-            tiers.append((3, -(rating or 0), -c.score, Pick(c, "liked", text, rating)))
+        elif (c.liked or c.saved) and (alone or not rated):
+            tiers.append((3, -(rating or 0), -c.score,
+                          Pick(c, "saved" if c.saved else "liked", text, rating)))
         elif alone or not (s.must_make_sense_alone and rated):
             tiers.append((4, -(rating or 0), -c.score,
                           Pick(c, "ai" if rated else "score", text, rating)))
@@ -163,7 +164,7 @@ def within_limit(c: Candidate, longest: float, words: list, bounds: list[float],
 
 WHY = {"marked": "you marked it as a Short", "rule": "your rule says always",
        "league": "it's a big League moment",
-       "liked": "you gave it a 👍",
+       "liked": "you gave it a 👍", "saved": "you saved it with 🔖",
        "ai": "the AI says it works on its own", "score": "it scored well"}
 
 
@@ -177,7 +178,9 @@ def build_shorts(conn: sqlite3.Connection, settings: Settings, recording_id: int
     if not has_video(row):
         result.notes.append(f"Recording #{recording_id}: " + GONE)
         return result
-    candidates = gather(conn, short_settings(settings), [row], quality_bar=False, reuse=True)
+    # A Short doesn't use a clip up for a video, so 🔖 clips may be Shorts too.
+    candidates = gather(conn, short_settings(settings), [row], quality_bar=False, reuse=True,
+                        saved=True)
     words = realistic(load_words(conn, recording_id))
     bounds, starts = word_boundaries(words), [w.start for w in words]
     clips = {c["clip_id"]: c for c in conn.execute(

@@ -54,7 +54,12 @@ a hard rule, not a preference.
 | **2H-3b** | Effect rules: which effects Review suggests for a moment, never ticked for you | **Complete** |
 | **2I-1** | Your friends on Discord in captions, in their own colour | **Complete** |
 | **2I-2** | Who's who: name each friend's voice once, captions say who's talking | **Complete** |
-| 3 | Feedback learning, OCR events, batch processing | Not started |
+| **3A-1** | How well AI-Editor knows you (measured per game, per week); 🔖 Next video clips; effect ticks and used clips logged | **Complete** |
+| 3A-2 | "Your taste" score per game, learned from your ratings, used to pick clips (switch in Settings) | Next |
+| 3A-3 | Nudges about effects you keep unticking; your rated clips shown to the local AI as examples | |
+| 3B | Overnight work: analysis, draft video, Shorts and Let's Play plans (never renders or deletes) | |
+| 3C | Wardogs and Tarkov results read from the screen, then kill feeds | |
+| 3D | Thumbnail prompts written for Gemini, sent only when you tick them (up to 3) | |
 
 ---
 

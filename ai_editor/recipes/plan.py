@@ -22,6 +22,10 @@ DRAFT = "draft"
 APPROVED = "approved"
 SHORTS_PREFIX = "shorts_"
 
+# clips.user_rating. A 🔖 "Next video" clip is a good one saved for a later
+# video (3A-1): learning counts it like a thumbs up, picking keeps it apart.
+LIKED, SAVED, DISLIKED = 1, 2, -1
+
 
 def is_short(plan_id: str) -> bool:
     return plan_id.startswith(SHORTS_PREFIX)
@@ -178,8 +182,27 @@ def load_plan(conn: sqlite3.Connection, plan_id: str) -> tuple[EditPlan, str] | 
     return (EditPlan.from_json(row["plan_json"]), row["status"]) if row else None
 
 
+def _log_used(conn: sqlite3.Connection, plan: EditPlan, clip_id: str) -> None:
+    row = conn.execute("SELECT clips.signals_json, clips.user_rating, recordings.game "
+                       "FROM clips JOIN recordings ON recordings.id = clips.recording_id "
+                       "WHERE clip_id = ?", (clip_id,)).fetchone()
+    short = is_short(plan.plan_id)
+    if not short and row["user_rating"] == SAVED:
+        conn.execute("UPDATE clips SET user_rating = ? WHERE clip_id = ?", (LIKED, clip_id))
+    game = json.loads(row["signals_json"] or "{}").get("game") or row["game"] or plan.game
+    conn.execute("INSERT INTO feedback (ts, action, clip_id, plan_id, game, features_json, "
+                 "detail_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                  "in_short" if short else "in_video", clip_id, plan.plan_id, game,
+                  row["signals_json"], json.dumps({"rating": row["user_rating"]})))
+
+
 def approve_plan(conn: sqlite3.Connection, plan_id: str) -> int:
-    """Mark a plan final and its clips as used. Returns how many clips were marked."""
+    """Mark a plan final and its clips as used. Returns how many clips were marked.
+
+    Each newly used clip is logged as feedback (in_video or in_short): a clip
+    that made it into something rendered is a small "good" hint for learning
+    (3A-1). A 🔖 clip used in a video becomes a thumbs up: it's been used."""
     found = load_plan(conn, plan_id)
     if found is None:
         return -1
@@ -202,6 +225,7 @@ def approve_plan(conn: sqlite3.Connection, plan_id: str) -> int:
             used.append(plan_id)
             conn.execute("UPDATE clips SET used_in_json = ? WHERE clip_id = ?",
                          (json.dumps(used), clip_id))
+            _log_used(conn, plan, clip_id)
             marked += 1
     conn.execute("UPDATE edit_plans SET status = ?, updated_at = ? WHERE plan_id = ?",
                  (APPROVED, datetime.now(timezone.utc).isoformat(timespec="seconds"), plan_id))

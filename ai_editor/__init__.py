@@ -17,5 +17,5 @@ _os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 _os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 _os.environ.setdefault("DO_NOT_TRACK", "1")
 
-__version__ = "0.29.0"
+__version__ = "0.30.0"
 __product_name__ = "AI-Editor"

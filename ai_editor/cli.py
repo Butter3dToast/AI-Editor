@@ -1493,7 +1493,7 @@ def rate_command(
                 continue
             table.add_row(clock(clip["start_sec"]), note.stars, note.summary,
                           "yes" if note.stands_alone else "-",
-                          {1: "👍", -1: "👎"}.get(clip["user_rating"], ""))
+                          {1: "👍", 2: "🔖", -1: "👎"}.get(clip["user_rating"], ""))
         console.print(table)
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
@@ -1519,6 +1519,8 @@ def highlights_command(
     only_liked: bool = typer.Option(None, "--only-liked/--any-clips",
                                     help="Only your thumbs-up clips, or let AI-Editor fill to the "
                                     "length (default from Settings: only liked)"),
+    next_video: bool = typer.Option(False, "--next-video",
+                                    help="Only the clips you saved with 🔖 Next video"),
     teaser_at: str = typer.Option(None, "--teaser-at",
                                   help="Open with this moment of the last video you watched, by its "
                                   "time in that video: e.g. --teaser-at 6:36-6:42, or just where it "
@@ -1581,7 +1583,8 @@ def highlights_command(
             teaser_clip = last.segments[teaser_part - 1].clip_id
         result = build_highlights(conn, settings, game=wanted_game, recording_ids=ids,
                                   target_min=minutes, teaser_clip=teaser_clip,
-                                  teaser_moment=teaser_moment, only_liked=only_liked)
+                                  teaser_moment=teaser_moment, only_liked=only_liked,
+                                  saved=next_video)
         plan = result.plan
         titles = {r["id"]: r["title"] for r in conn.execute("SELECT id, title FROM recordings")}
 

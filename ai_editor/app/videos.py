@@ -17,7 +17,7 @@ from ..analysis.ai_rating import notes_for
 from ..analysis.captions import clock
 from ..cli import SIGNAL_LABELS
 from ..config import Settings
-from ..recipes.plan import APPROVED, EditPlan, load_plan, used_in
+from ..recipes.plan import APPROVED, DISLIKED, LIKED, SAVED, EditPlan, load_plan, used_in
 
 CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "AI says", "You said",
                 "Rated", "Used"]
@@ -28,7 +28,7 @@ ENDS_ON = {"loading": "loading screen", "menu": "menu or map", "silence": "a qui
            "stream_screen": "a starting/BRB screen", "pause": "a pause in talking",
            "forced": "⚠ no clean break: check it", "end": "the end of the recording"}
 SHOW = ["Not used yet", "All", "Rated"]
-RATINGS = {1: "👍", -1: "👎"}
+RATINGS = {1: "👍", 2: "🔖", -1: "👎"}
 
 
 def short_clock(seconds: float) -> str:
@@ -138,26 +138,34 @@ def video_lengths(conn, settings: Settings, recording_id: int) -> dict[str, floa
     every = {r[0] for r in conn.execute("SELECT clip_id FROM clips WHERE recording_id = ?",
                                         (recording_id,))}
     return {c.clip_id: c.length for c in gather(conn, settings, [row], refresh=False,
-                                                allow=every, quality_bar=False)}
+                                                allow=every, quality_bar=False, saved=True)}
 
 
 def clip_summary(conn, settings: Settings, recording_id: int,
                  lengths: dict[str, float] | None = None) -> str:
-    """'34 clips · 18 👍 · 21 👎 · your unused 👍 clips make about 14.2 min of video'."""
+    """'34 clips · 18 👍 · 6 🔖 · 21 👎 · your unused 👍 clips make about 14.2 min of
+    video · your 🔖 clips about 7.0 min'."""
     lengths = video_lengths(conn, settings, recording_id) if lengths is None else lengths
     rows = conn.execute("SELECT clip_id, user_rating, used_in_json FROM clips "
                         "WHERE recording_id = ?", (recording_id,)).fetchall()
-    up = [r for r in rows if (r["user_rating"] or 0) > 0]
+    up = [r for r in rows if r["user_rating"] == LIKED]
+    saved = [r for r in rows if r["user_rating"] == SAVED]
     down = sum((r["user_rating"] or 0) < 0 for r in rows)
-    fresh = sum(lengths.get(r["clip_id"], 0.0) for r in up
-                if not used_in(r["used_in_json"], shorts=False))
-    text = f"**{len(rows)} clips** · {len(up)} 👍 · {down} 👎"
-    if up:
+
+    def minutes(clips) -> float:
+        return sum(lengths.get(r["clip_id"], 0.0) for r in clips
+                   if not used_in(r["used_in_json"], shorts=False)) / 60
+
+    text = f"**{len(rows)} clips** · {len(up)} 👍 · " +         (f"{len(saved)} 🔖 · " if saved else "") + f"{down} 👎"
+    if up or saved:
         game = conn.execute("SELECT game FROM recordings WHERE id = ?",
                             (recording_id,)).fetchone()
         _, style = made_with(conn, settings, game[0] if game else None)
-        text += (f" · your unused 👍 clips make about **{fresh / 60:.1f} min** of video "
-                 "(each trimmed to its moment"
+        if up:
+            text += f" · your unused 👍 clips make about **{minutes(up):.1f} min** of video"
+        if saved:
+            text += f" · your 🔖 clips about **{minutes(saved):.1f} min**"
+        text += (" (each trimmed to its moment"
                  + (f", with your {style} style" if style else "") + ")")
     return text + " · " + marks_line(conn, recording_id)
 
@@ -243,7 +251,10 @@ def clip_details(conn, clip_id: str) -> str:
 
 
 def rate(conn, clip_id: str, rating: int | None) -> str:
-    """Thumbs up (1), down (-1) or cleared (None); kept for learning later (spec 7.10)."""
+    """Thumbs up (1), 🔖 next video (2), down (-1) or cleared (None); kept for
+    learning (spec 7.10), with where the clip sat in the list (learning.scoreboard)."""
+    from ..learning.scoreboard import place
+
     row = conn.execute("SELECT recording_id, signals_json FROM clips WHERE clip_id = ?",
                        (clip_id,)).fetchone()
     if row is None:
@@ -252,14 +263,17 @@ def rate(conn, clip_id: str, rating: int | None) -> str:
     game = (json.loads(row["signals_json"] or "{}").get("game")
             or (conn.execute("SELECT game FROM recordings WHERE id = ?",
                              (row["recording_id"],)).fetchone() or [None])[0])
-    action = {1: "thumbs_up", -1: "thumbs_down", None: "rating_cleared"}[rating]
-    conn.execute("INSERT INTO feedback (ts, action, clip_id, game, features_json) "
-                 "VALUES (?, ?, ?, ?, ?)",
+    action = {LIKED: "thumbs_up", SAVED: "next_video", DISLIKED: "thumbs_down",
+              None: "rating_cleared"}[rating]
+    conn.execute("INSERT INTO feedback (ts, action, clip_id, game, features_json, detail_json) "
+                 "VALUES (?, ?, ?, ?, ?, ?)",
                  (datetime.now(timezone.utc).isoformat(timespec="seconds"), action, clip_id, game,
-                  row["signals_json"]))
+                  row["signals_json"], json.dumps(place(conn, clip_id)) if rating else None))
     conn.commit()
-    return {1: "👍 Saved. Clips like this one are what AI-Editor learns to look for.",
-            -1: "👎 Saved. This moment won't go into a highlight video.",
+    return {LIKED: "👍 Saved. Clips like this one are what AI-Editor learns to look for.",
+            SAVED: "🔖 Saved for your next video: it stays out of the video you make now. "
+                   "AI-Editor learns from it like a 👍.",
+            DISLIKED: "👎 Saved. This moment won't go into a highlight video.",
             None: "Rating cleared."}[rating]
 
 

@@ -805,7 +805,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 | Why | What made it stand out: you marked it, laughter, shouting, gunfire, chat busy, loud... |
 | AI says | The local AI's rating out of 10 and what happens, e.g. "7/10 Teamfight engagement and multi-kill" (12.3) |
 | You said | Your words in it |
-| Rated | 👍 or 👎 if you've rated it |
+| Rated | 👍, 🔖 or 👎 if you've rated it |
 | Used | **yes** once a rendered video uses it |
 
 3. **Click a clip** to play it beside the list. It plays from the preview copy, so it starts straight away; the finished video is full quality. Underneath are what the AI says about it, all its words, its game, and the video it's used in.
@@ -817,10 +817,24 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 Click a clip, then:
 
 - 👍 **Good clip:** **it goes into your next highlight video**, whatever its score, so you see it in Review for the final check. Already made the video? Add it there with **Add a clip** (18.2). With **Only my 👍 clips** on (16.1), the video is just your 👍 clips: vote for the clips you want in this one and leave the rest for the next.
+- 🔖 **Next video:** a good clip you're **saving for a later video**. It never goes into the video you make now, not even when AI-Editor picks the clips itself. When you're ready, choose **Which clips → My 🔖 next-video clips** in Create video (16.1) for a video of exactly those. Once a rendered video uses a 🔖 clip, it turns into a 👍. Shorts may still use 🔖 clips: a Short doesn't use a clip up for a video. AI-Editor learns from 🔖 like a 👍.
 - 👎 **Not good:** that moment never goes into a highlight video, even a moment you marked, and even if the clip is cut slightly differently later.
-- **Clear rating:** undo either.
+- **Clear rating:** undo any of them.
 
-Every rating is kept, with what the clip sounded like, so AI-Editor can learn what you like (Phase 3). Rating even 10–20 clips a week helps.
+The line above the list counts them: *"34 clips · 18 👍 · 6 🔖 · 21 👎 · your unused 👍 clips make about 14.2 min of video · your 🔖 clips about 7.0 min"*.
+
+Every rating is kept, with what the clip sounded like and where it was in the list, so AI-Editor can learn what you like (Phase 3). Clips you leave unrated teach nothing. Rating even 10–20 clips a week helps.
+
+### 12.2a How well AI-Editor knows you
+
+The **How well AI-Editor knows you** box at the bottom of the Clips tab shows, for each game and each week you streamed, two numbers:
+
+- **Picked right:** of AI-Editor's **top 20 clips** in each stream (about a 10-minute video's worth), how many of the ones you rated you liked (👍 or 🔖). *76% (13 of 17)* means 13 liked, 4 👎.
+- **Found your favourites:** of all the clips you liked, how many were in its top 20. The rest were further down the list, where you had to look for them.
+
+Both should climb as AI-Editor learns your taste (Phase 3). Weeks go by **when you streamed**, not when you rated, so you see whether new streams get better. A clip's place in the list is written down the first time you rate it and never changes afterwards, so the numbers stay fair. Editing a clip in Review doesn't count against it. Ratings from before this box existed use the list as it was the first time the box was opened.
+
+Also kept for learning, from 0.30.0: each effect you tick or untick in Review, and every clip that ends up in a rendered video or Short.
 
 ### 12.3 What the AI says
 
@@ -1137,8 +1151,13 @@ Use Condense when you want a single video from a session.
 1. Go to **Create video**, and choose **Highlights**.
 2. **Game:** leave **All my streams** for stream highlights of every game you played (Let's Plays stay out), or pick one game.
 3. **Only these streams** (optional): leave it empty and AI-Editor uses the oldest streams' unused clips first, then the next stream's. Or pick the streams yourself.
-4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video. (Not with **Only my 👍 clips**, next.)
-4a. **Only my 👍 clips** (ticked by default): if you gave any clips a 👍, the video is **exactly those clips**. No marked clips, and nothing added to reach the length: it's as long as your 👍 clips are, and Review's summary says so (*Only your 👍 clips: 16 clips, 7.6 min. The target was 12...*). The clips you didn't vote on stay unused for your next video. With no 👍 clips at all, AI-Editor picks them itself, as above. Untick it to have AI-Editor fill up to the length around your 👍 clips.
+4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video. (Not with **My 👍 clips**, next.)
+4a. **Which clips:** one of three, for this video:
+   - **My 👍 clips** (the default): if you gave any clips a 👍, the video is **exactly those clips**. No marked clips, and nothing added to reach the length: it's as long as your 👍 clips are, and Review's summary says so (*Only your 👍 clips: 16 clips, 7.6 min. The target was 12...*). The clips you didn't vote on stay unused for your next video. With no 👍 clips at all, AI-Editor picks them itself.
+   - **My 🔖 next-video clips:** the video is exactly the clips you saved with 🔖 (12.2), the same way. With none, AI-Editor picks them itself and says so.
+   - **AI-Editor picks:** it fills up to the length around your 👍 clips, as above.
+
+   Whichever you choose, a 🔖 clip only ever goes into a video of 🔖 clips.
 
 When the Stream Companion was running, no clip runs into your "BRB", "Starting" or "Ending Screen" scenes: each one stops half a second before you switched, and a moment during "BRB" isn't used.
 5. Check the **Style profile** box: a profile made for this game and highlights is picked by itself (chapter 13.0). Or choose **No profile (my Settings)**.
@@ -1156,6 +1175,12 @@ For **one game only**, add `--game`:
 
 ```powershell
 ai-editor highlights --game Wardogs --open
+```
+
+For a video of the clips you saved with 🔖 **Next video**, add `--next-video`:
+
+```powershell
+ai-editor highlights --next-video --open
 ```
 
 That takes clips of that game only, including the Wardogs part of a stream where you also played something else (the Stream Companion knows which part was which: 8.1b).
@@ -1299,7 +1324,7 @@ Or click a row first, then:
 
 - **Use as teaser:** the video opens with a few seconds of this clip's best moment, and ends on the clip in full, paying the teaser off.
 - **Or the teaser from an exact moment:** type the time in the quick preview or render, e.g. `6:36-6:42`, or just where it starts, `6:36`, and click **Use this moment**. AI-Editor adds a second either side and never starts or stops mid-word.
-- **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). Not in a video of **Only my 👍 clips**: nothing goes in by itself; use **Add a clip** if you want one. If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
+- **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). Not in a video of **My 👍 clips** or **My 🔖 clips**: nothing goes in by itself; use **Add a clip** if you want one. If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
 - **Move up / Move down:** changes the order one place, if you'd rather not drag. The teaser always stays first.
 - **Move the clicked clip to #:** type a number from the list's **#** column and click **Move**: the clip jumps straight there.
 - **Sort by time:** puts everything back in the order it happened: the teaser first, the clips as they happened, the teaser's own clip saved for the end.

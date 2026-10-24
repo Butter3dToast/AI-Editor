@@ -45,7 +45,8 @@ from ..analysis.moments import load_signal
 from ..analysis.game_events import for_recording
 from ..analysis.pipeline import load_scene_cuts
 from ..config import Settings
-from .plan import EditPlan, Segment, discard_drafts, new_plan_id, save_plan, used_in
+from .plan import (LIKED, SAVED, EditPlan, Segment, discard_drafts, new_plan_id, save_plan,
+                   used_in)
 
 # A video counts as on target within this share of the target (spec section 7.6).
 TOLERANCE = 0.15
@@ -76,6 +77,7 @@ class Candidate:
     reaction: float = 0.0  # how strongly the creator reacts (see reaction_strength)
     marked: bool = False  # marked with the Stream Companion's hotkey
     liked: bool = False  # thumbs up in the Clips tab
+    saved: bool = False  # 🔖 "Next video" in the Clips tab (3A-1)
     ruled_in: str = ""   # an "always" moment rule put it in: "r004: Penta kill" (2H-3a)
     kept_out: str = ""   # a "never" moment rule keeps it out: "r003: you die"
 
@@ -152,7 +154,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
            recordings: list[sqlite3.Row], *, game: str | None = None, refresh: bool = True,
            allow: set[str] | frozenset[str] = frozenset(),
            quality_bar: bool = True, reuse: bool = False,
-           ruled_out: bool = False) -> list[Candidate]:
+           ruled_out: bool = False, saved: bool = False) -> list[Candidate]:
     """Every clip that may go into the video, trimmed to its moment.
 
     With ``game``, only clips from that game: each clip knows its own game
@@ -171,6 +173,10 @@ def gather(conn: sqlite3.Connection, settings: Settings,
     Your moment rules (2H-3a, rules/moments.py) work the same way: an "always"
     moment puts a clip in, a "never" moment keeps it out. ``ruled_out`` also
     returns the clips a rule keeps out, marked (kept_out), for Review to offer.
+
+    A 🔖 "Next video" clip is saved for a later video: "any clip that has the
+    next video icon is to not go into the current video" (the creator,
+    2026-10-24). Only ``saved`` (a video of those clips, or a Short) brings them.
     """
     from ..companion.link import game_spans, game_timeline, league_events, scene_span
     from ..analysis.game_events import within
@@ -218,8 +224,11 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                 continue
             summary = json.loads(clip["signals_json"] or "{}")
             marked = "marker" in summary or "marker_short" in summary
-            liked = (clip["user_rating"] or 0) > 0
-            must = liked or (h.always_include_pinned and bool(clip["pinned"])) or \
+            liked = clip["user_rating"] == LIKED
+            bookmarked = clip["user_rating"] == SAVED
+            if bookmarked and not saved:
+                continue   # saved for the next video
+            must = liked or bookmarked or (h.always_include_pinned and bool(clip["pinned"])) or \
                 (h.always_include_markers and marked)
             below = quality_bar and scores[clip["clip_id"]] < h.min_clip_score and not must
             if below and not always:
@@ -235,7 +244,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
             candidate = Candidate(
                 clip["clip_id"], row["id"], clip["start_sec"], clip["end_sec"],
                 scores[clip["clip_id"]], peak, (int(core[0]), int(core[1])), summary.get("reasons", []), when, must,
-                game=clip_game, marked=marked, liked=liked,
+                game=clip_game, marked=marked, liked=liked, saved=bookmarked,
             )
             adjusted = bool(summary.get("adjusted"))
             if adjusted:
@@ -275,7 +284,7 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                     rules, clip_game,
                     moments.found(within(events, candidate.src_in, candidate.src_out),
                                   summary.get("reasons", []), tags.get(clip["clip_id"]), marked),
-                    liked=liked, marked=marked)
+                    liked=liked or bookmarked, marked=marked)
                 if said and said[0] == "in":
                     candidate.must_include, candidate.ruled_in = True, said[1]
                     candidate.reasons = ["📌 " + said[1], *candidate.reasons]
@@ -557,13 +566,13 @@ def kept_out_notes(kept: list[Candidate]) -> list[str]:
             for rule, whats in by_rule.items()]
 
 
-def liked_note(clips: int, clips_sec: float, target_sec: float) -> str:
-    """Said when a video is only the creator's thumbs-up clips."""
-    note = (f"Only your 👍 clips: {clips} clip{'s' if clips != 1 else ''}, "
+def liked_note(clips: int, clips_sec: float, target_sec: float, mark: str = "👍") -> str:
+    """Said when a video is only the creator's thumbs-up (or 🔖) clips."""
+    note = (f"Only your {mark} clips: {clips} clip{'s' if clips != 1 else ''}, "
             f"{clips_sec / 60:.1f} min.")
     if clips_sec < target_sec:
-        note += (f" The target was {target_sec / 60:.0f}: give more clips a 👍 and make it "
-                 "again, or add some in Review.")
+        note += (f" The target was {target_sec / 60:.0f}: give more clips a {mark} and make "
+                 "it again, or add some in Review.")
     return note
 
 
@@ -600,17 +609,20 @@ def build_highlights(
     teaser_moment: tuple[float, float] | None = None,
     reuse: bool = False,
     only_liked: bool | None = None,
+    saved: bool = False,
 ) -> HighlightResult:
     """``teaser_clip``: a clip id to open with (and end on), instead of the automatic pick.
     ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one.
-    ``only_liked``: just the thumbs-up clips, if there are any (default: Settings)."""
+    ``only_liked``: just the thumbs-up clips, if there are any (default: Settings).
+    ``saved``: just the 🔖 "Next video" clips instead, if there are any (3A-1)."""
     h = settings.highlights
     target = (target_min or h.target_length_min) * 60
     everything = recordings_for(conn, settings, game=game, recording_ids=recording_ids,
                                 need_video=False)
     recordings = [r for r in everything if has_video(r)]
     deleted = [r for r in everything if not has_video(r)]
-    every = gather(conn, settings, recordings, game=game, reuse=reuse, ruled_out=True)
+    every = gather(conn, settings, recordings, game=game, reuse=reuse, ruled_out=True,
+                   saved=saved)
     candidates = [c for c in every if not c.kept_out]
     for c in candidates:
         if c.clip_id == teaser_clip:
@@ -618,9 +630,15 @@ def build_highlights(
     available = sum(c.length for c in candidates)
     if only_liked is None:
         only_liked = h.only_liked
-    liked = [c for c in candidates if c.liked or c.clip_id == teaser_clip]
-    only_liked = only_liked and bool(liked)
-    selected = liked if only_liked else select(candidates, target, h.fill_order)
+    if saved:
+        liked = [c for c in candidates if c.saved or c.clip_id == teaser_clip]
+        only_liked = bool(liked)
+    else:
+        liked = [c for c in candidates if c.liked or c.clip_id == teaser_clip]
+        only_liked = only_liked and bool(liked)
+    # With no 🔖 clips, AI-Editor picks; the 🔖 stays out of that like any other video.
+    pool = candidates if only_liked or not saved else [c for c in candidates if not c.saved]
+    selected = liked if only_liked else select(pool, target, h.fill_order)
     # Chosen once, so the teaser and the ending are always the same moment
     # (two marked League moments tied, and each broke the tie differently).
     best = best_of(selected, teaser_clip) if selected else None
@@ -641,7 +659,7 @@ def build_highlights(
         if "youtube_1080p60" in settings.render.presets else {},
     )
     plan.source = {"game": game, "recording_ids": recording_ids, "removed": [], "reuse": reuse,
-                   "only_liked": only_liked}
+                   "only_liked": only_liked, "saved": saved and only_liked}
     if best is not None and h.hook:
         plan.segments.append(teaser_segment(
             conn, settings, best,
@@ -659,7 +677,11 @@ def build_highlights(
     if not chosen:
         plan.notes.append(nothing_left_note(conn, settings, recordings, game, reuse))
     elif only_liked:
-        plan.notes.append(liked_note(len(chosen), sum(c.length for c in chosen), target))
+        plan.notes.append(liked_note(len(chosen), sum(c.length for c in chosen), target,
+                                     "🔖" if saved else "👍"))
+    elif saved:
+        plan.notes.append("No 🔖 Next video clips in these streams, so AI-Editor picked the "
+                          "clips itself.")
     if not only_liked:
         plan.notes += kept_out_notes([c for c in every if c.kept_out])
     elif sum(c.length for c in chosen) < target:

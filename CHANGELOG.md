@@ -3,6 +3,40 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.30.0 — Phase 3A-1: How well AI-Editor knows you — 24 October 2026
+
+Phase 3 begins: AI-Editor learning your taste. This first step measures where
+it stands and collects what it will learn from. Nothing about how clips are
+picked has changed yet.
+
+**New**
+
+- **🔖 Next video** in the Clips tab, next to 👍 and 👎: a good clip you're
+  saving for a later video. It never goes into the video you make now, not
+  even when AI-Editor picks the clips itself. Shorts may still use it.
+  AI-Editor learns from it like a 👍.
+- **Create video → Which clips**: **My 👍 clips** (as before), **My 🔖
+  next-video clips** (a video of exactly the clips you saved), or
+  **AI-Editor picks**. One or the other, never both in one video. Once a
+  rendered video uses a 🔖 clip, it turns into a 👍.
+- **How well AI-Editor knows you**, at the bottom of the Clips tab: per game
+  and per week you streamed, **Picked right** (of its top 20 clips in a
+  stream, how many of the ones you rated you liked) and **Found your
+  favourites** (of the clips you liked, how many were in its top 20). Your
+  League starting point: 66 to 85% picked right, 45 to 73% found. Both
+  should climb as it learns.
+- **Kept for learning from now on**: where each clip sat in the list when
+  you rated it, each effect you tick or untick in Review, and every clip that
+  ends up in a rendered video or Short.
+- From the command line: `ai-editor highlights --next-video`.
+
+**Good to know**
+
+- A clip's place in the list is written down when you first rate it and
+  never changes, so the numbers stay fair when learning starts re-ranking
+  clips. Editing a clip doesn't count against it. Ratings from before this
+  version get their places the first time you open the box.
+
 ## 0.29.0 — Phase 2I-2: Who's who — 24 October 2026
 
 **New**

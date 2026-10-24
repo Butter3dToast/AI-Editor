@@ -437,3 +437,70 @@ def test_the_clips_tab_counts_clips_at_the_length_the_video_will_have(conn, sett
     assert name == "League of legends" and used.highlights.max_clip_sec == 27.5
     used, name = videos.made_with(conn, settings, "Wardogs")
     assert name is None and used.highlights.max_clip_sec == settings.highlights.max_clip_sec
+
+
+# --- 🔖 Next video (3A-1) --------------------------------------------------------------------
+
+
+def test_a_next_video_clip_stays_out_of_the_video_made_now(conn, settings, voted):
+    """24 Oct: "any clip that has the next video icon is to not go into the current video"."""
+    add_clip(conn, "saved", 4000, 4040, 0.95, rating=2)
+    conn.commit()
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1]).plan
+    assert clip_ids(plan) == ["liked_a", "liked_b"]
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1],
+                                  only_liked=False).plan
+    assert "saved" not in clip_ids(plan)   # AI-Editor's own picks never take one
+    assert "saved" not in {c for _, c, *_ in review.addable(conn, settings, plan)}
+
+
+def test_my_next_video_clips_make_a_video_of_exactly_those(conn, settings, voted):
+    add_clip(conn, "saved_a", 4000, 4040, 0.2, rating=2)
+    add_clip(conn, "saved_b", 5000, 5040, 0.1, rating=2)
+    conn.commit()
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1], saved=True).plan
+    assert clip_ids(plan) == ["saved_a", "saved_b"]
+    assert plan.source["saved"] is True and plan.source["only_liked"] is True
+    assert any(n.startswith("Only your 🔖 clips: 2 clips") for n in plan.notes)
+    # Review: nothing comes in by itself, and the 🔖 clips are offered first.
+    change = review.remove(conn, settings, plan, 0)
+    assert clip_ids(change.plan) == ["saved_b"] and not change.added
+    assert review.addable(conn, settings, plan)[0][1] == "saved_a"
+
+
+def test_with_no_next_video_clips_ai_editor_picks_and_says_so(conn, settings, voted):
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1], saved=True).plan
+    assert set(clip_ids(plan)) == {"liked_a", "liked_b", "marked", "good"}
+    assert plan.source["saved"] is False
+    assert any("No 🔖 Next video clips" in n for n in plan.notes)
+
+
+def test_a_used_next_video_clip_becomes_a_thumbs_up_and_is_logged(conn, settings, voted):
+    add_clip(conn, "saved", 4000, 4040, 0.2, rating=2)
+    conn.commit()
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1], saved=True).plan
+    approve_plan(conn, plan.plan_id)
+    add_clip(conn, "short", 6000, 6040, 0.2, rating=2)
+    short = EditPlan("shorts_test_1", "shorts", "A Short", None, 30,
+                     [Segment(1, 6000, 6030, clip_id="short")])
+    save_plan(conn, short)
+    approve_plan(conn, short.plan_id)
+    ratings = dict(conn.execute("SELECT clip_id, user_rating FROM clips"))
+    assert ratings["saved"] == 1      # used in a video: it's a 👍 now
+    assert ratings["short"] == 2      # a Short doesn't use it up for a video
+    logged = conn.execute("SELECT action, clip_id FROM feedback WHERE action LIKE 'in_%' "
+                          "ORDER BY id").fetchall()
+    assert [tuple(r) for r in logged] == [("in_video", "saved"), ("in_short", "short")]
+    approve_plan(conn, plan.plan_id)  # rendered again: not logged twice
+    assert conn.execute("SELECT COUNT(*) FROM feedback WHERE action = 'in_video'").fetchone()[0] == 1
+
+
+def test_the_next_video_button_is_saved_with_the_clips_place(conn, settings):
+    add_clip(conn, "a", 100, 140, 0.9)
+    add_clip(conn, "b", 200, 240, 0.5)
+    conn.commit()
+    assert "next video" in videos.rate(conn, "b", 2)
+    action, detail = conn.execute("SELECT action, detail_json FROM feedback").fetchone()
+    assert action == "next_video" and json.loads(detail) == {"rank": 2, "of": 2}
+    assert "1 🔖" in videos.clip_summary(conn, settings, 1, {"b": 40.0})
+    assert "your 🔖 clips about **0.7 min**" in videos.clip_summary(conn, settings, 1, {"b": 40.0})

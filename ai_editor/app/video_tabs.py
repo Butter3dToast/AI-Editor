@@ -28,6 +28,9 @@ from .worker import DONE, Worker, submitted
 
 ALL_STREAMS = "All my streams"
 NO_STYLE = -1   # the Style profile box: no profile, the Settings as they are
+# Create video's "Which clips" (3A-1): a video is one or the other, never both.
+CLIP_CHOICES = [("My 👍 clips", "liked"), ("My 🔖 next-video clips", "saved"),
+                ("AI-Editor picks", "any")]
 ALL_PARTS = "All parts"
 WHOLE_VIDEO = "Quick preview of the whole video"
 SHORT_PREVIEW = "Quick preview (vertical, the apps' button areas shaded)"
@@ -111,7 +114,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return gr.update(choices=style_choices(), value=found if found is not None else NO_STYLE)
 
     # --- Clips -------------------------------------------------------------------------
-    with gr.Tab("Clips", id="clips"):
+    with gr.Tab("Clips", id="clips") as clips_tab:
         with gr.Row():
             clip_rec = gr.Dropdown(choices=read(videos.analysed_choices, settings), value=None,
                                    label="Recording", scale=3)
@@ -136,9 +139,12 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 clip_info = gr.Markdown()
                 with gr.Row():
                     good_btn = gr.Button("👍 Good clip")
+                    later_btn = gr.Button("🔖 Next video")
                     bad_btn = gr.Button("👎 Not good")
                     unrate_btn = gr.Button("Clear rating")
                 clip_msg = gr.Markdown()
+        with gr.Accordion("How well AI-Editor knows you", open=False) as knows_box:
+            knows = gr.Markdown()
 
     # --- Create video --------------------------------------------------------------------
     with gr.Tab("Create video", id="create") as create_tab:
@@ -160,11 +166,13 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                    info="Rendering a video uses its clips up, so the next one has "
                                         "fresh clips. Tick this to make another video from the "
                                         "same streams anyway.")
-            hl_liked = gr.Checkbox(value=settings.highlights.only_liked,
-                                   label="Only my 👍 clips",
-                                   info="The video is exactly the clips you gave a 👍: no "
-                                        "marked clips, nothing added to reach the length. "
-                                        "With no 👍 clips, AI-Editor picks them itself.")
+            hl_liked = gr.Radio(CLIP_CHOICES,
+                                value="liked" if settings.highlights.only_liked else "any",
+                                label="Which clips",
+                                info="My 👍 clips: exactly the clips you gave a 👍, nothing "
+                                     "added to reach the length. My 🔖 clips: the ones you "
+                                     "saved for this next video. With none, AI-Editor picks. "
+                                     "AI-Editor's own picks never take a 🔖 clip.")
         with gr.Group(visible=False) as lp_group:
             lp_rec = gr.Dropdown(choices=episode_choices(), value=None, label="Episode recording",
                                  info="Trimmed (loading screens, silent menus, long pauses) and "
@@ -418,10 +426,13 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             if rating == 1:
                 message += (" It goes into your next highlight video. To put it in one you've "
                             "already made, use 'Add a clip' in Review.")
+            elif rating == 2:
+                message += (" To make that video: Create video → Which clips → "
+                            "My 🔖 next-video clips.")
             return table, ids, message, counts
         return apply
 
-    for button, rating in ((good_btn, 1), (bad_btn, -1), (unrate_btn, None)):
+    for button, rating in ((good_btn, 1), (later_btn, 2), (bad_btn, -1), (unrate_btn, None)):
         button.click(rater(rating), [clip_sel, clip_rec, clip_show],
                      [clip_tbl, clip_ids, clip_msg, clip_counts])
 
@@ -436,6 +447,14 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     ai_btn.click(rate_with_ai, clip_rec, clip_msg)
 
+    def scoreboard():
+        from ..learning.scoreboard import scoreboard_text
+
+        return read(scoreboard_text)
+
+    for event in (knows_box.expand, clips_tab.select):
+        event(scoreboard, None, knows)
+
     # --- Create video: handlers ---------------------------------------------------------
 
     kind.change(lambda k: (gr.update(visible=k == "Highlights"),
@@ -443,7 +462,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 kind, [hl_group, lp_group, sh_group])
 
     def make(what, game, chosen, minutes, episode_rec, reuse=False, short_rec=None,
-             style=NO_STYLE, liked=None):
+             style=NO_STYLE, which=None):
         profile = None if style in (None, NO_STYLE) else int(style)
         if what == "Shorts":
             if short_rec is None:
@@ -460,7 +479,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 tasks.make_highlights(settings, game=game, recording_ids=ids,
                                       minutes=float(minutes) if minutes else None,
                                       reuse=bool(reuse), profile=profile,
-                                      only_liked=None if liked is None else bool(liked))))
+                                      only_liked=None if which is None else which == "liked",
+                                      saved=which == "saved")))
         if episode_rec is None:
             return "Pick the episode's recording first."
         return submitted(worker, worker.submit(
@@ -595,8 +615,19 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
     for event in (plan_pick.change, review_tab.select, ui.load):
         event(show_effects, plan_pick, effects_box)
 
+    def log_ticks(conn, plan, before, after, where, labels=None):
+        """Each effect ticked or unticked, for learning (3A-1); undone with the change."""
+        from ..recipes.review import log_feedback
+
+        labels = labels or {}
+        for action, keys in (("effect_on", set(after) - set(before)),
+                             ("effect_off", set(before) - set(after))):
+            for key in sorted(keys):
+                log_feedback(conn, action, plan, None, effect=key, where=where,
+                             label=labels.get(key, key))
+
     def set_effects(plan_id, chosen):
-        from ..effects import LABELS, set_switches
+        from ..effects import LABELS, set_switches, switches
 
         conn = init_db(settings.db_path)
         try:
@@ -604,8 +635,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             if plan is None:
                 return "Pick a plan first."
             with history.step(conn, plan_id, "the effects"):
+                before = switches(settings, plan)
                 set_switches(plan, chosen or [])
                 save_plan(conn, plan, status)
+                log_ticks(conn, plan, before, chosen or [], "video", LABELS)
         finally:
             conn.close()
         if not chosen:
@@ -657,7 +690,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         list_view, [plan_pick, sel], list_outputs)
 
     def set_moments(plan_id, kept):
-        from ..effects import moments, set_moments_on, summary, for_plan, use_suggestions
+        from ..effects import (moments, set_moments_on, suggestions, summary, for_plan,
+                               use_suggestions)
 
         conn = init_db(settings.db_path)
         try:
@@ -666,17 +700,25 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 return "Pick a plan first."
             if suggesting(plan):
                 with history.step(conn, plan_id, "the suggested effects"):
+                    found = suggestions(conn, settings, plan)
                     use_suggestions(conn, settings, plan, kept or [])
                     save_plan(conn, plan, status)
+                    log_ticks(conn, plan, [s.key for s in found if s.on], kept or [], "moment",
+                              {s.key: s.label for s in found})
                 if not kept:
                     return "No effects in this video."
                 return (f"{len(kept)} moment{'s' if len(kept) != 1 else ''} with effects: "
                         f"{summary(for_plan(conn, settings, plan))}. Make a quick preview to "
                         "see and hear them.")
-            every = [k for _, k in moments(conn, settings, plan)]
+            listed = moments(conn, settings, plan)
+            every = [k for _, k in listed]
             with history.step(conn, plan_id, "each effect's ticks"):
+                off = set((plan.source or {}).get("effects_off", []))
                 set_moments_on(plan, every, kept or [])
                 save_plan(conn, plan, status)
+                log_ticks(conn, plan, [k for k in every if k not in off],
+                          [k for k in kept or [] if k in every], "moment",
+                          {k: label for label, k in listed})
         finally:
             conn.close()
         left_out = len(every) - len(set(kept or []) & set(every))

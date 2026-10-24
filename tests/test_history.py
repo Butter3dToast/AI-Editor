@@ -212,7 +212,10 @@ def test_deleting_a_plan_takes_only_the_plan_out_of_the_list(conn, settings, lib
     used = conn.execute("SELECT COUNT(*) FROM clips WHERE used_in_json IS NOT NULL").fetchone()[0]
     assert delete_plan(conn, plan.plan_id) and load_plan(conn, plan.plan_id) is None
     assert conn.execute("SELECT COUNT(*) FROM plan_history").fetchone()[0] == 0
-    assert conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0] == 1   # still learnt from
+    # Still learnt from: the removal, and each clip used when it was approved (3A-1).
+    assert conn.execute("SELECT COUNT(*) FROM feedback WHERE action = 'removed'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM feedback WHERE action = 'in_video'"
+                        ).fetchone()[0] == used
     assert conn.execute("SELECT COUNT(*) FROM clips WHERE used_in_json IS NOT NULL"
                         ).fetchone()[0] == used
     assert not delete_plan(conn, plan.plan_id)

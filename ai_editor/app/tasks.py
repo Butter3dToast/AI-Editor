@@ -374,7 +374,7 @@ def _stamp(conn, settings: Settings, plans, used, report: Reporter) -> None:
 
 def make_highlights(settings: Settings, *, game: str | None, recording_ids: list[int] | None,
                     minutes: float | None, reuse: bool = False, profile: int | None = None,
-                    only_liked: bool | None = None) -> Job:
+                    only_liked: bool | None = None, saved: bool = False) -> Job:
     """`ai-editor highlights`: a draft plan for Review. ``profile``: a style profile's id."""
 
     def run(report: Reporter) -> None:
@@ -385,7 +385,8 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
             report.progress("Choosing the best clips", 0.0)
             used, style = _with_style(conn, settings, profile, "highlights", game)
             result = build_highlights(conn, used, game=game, recording_ids=recording_ids,
-                                      target_min=minutes, reuse=reuse, only_liked=only_liked)
+                                      target_min=minutes, reuse=reuse, only_liked=only_liked,
+                                      saved=saved)
             report.progress("Choosing the best clips", 1.0)
             plan = result.plan
             _stamp(conn, settings, [plan], style, report)

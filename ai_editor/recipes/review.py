@@ -85,7 +85,7 @@ def _candidates(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
     in_plan = {s.clip_id for s in plan.segments if s.clip_id}
     return gather(conn, settings, recordings, game=source.get("game", plan.game), refresh=False,
                   allow=in_plan, quality_bar=quality_bar, reuse=bool(source.get("reuse")),
-                  ruled_out=ruled_out)
+                  ruled_out=ruled_out, saved=bool(source.get("saved")))
 
 
 def _as_candidate(segment: Segment, known: dict[str, Candidate]) -> Candidate:
@@ -233,8 +233,9 @@ def use_as_teaser(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, 
 def addable(conn: sqlite3.Connection, settings: Settings,
             plan: EditPlan) -> list[tuple[str, str, int, float, float]]:
     """(label, clip id, recording, in, out) for clips that could be added:
-    thumbs up first, then the ones your moment rules point at ("always" ones, then
-    those a "never" rule kept out: 2H-3a), then the best. ``in`` and ``out`` are
+    🔖 clips first (in a video of them), thumbs up next, then the ones your moment
+    rules point at ("always" ones, then those a "never" rule kept out: 2H-3a), then
+    the best. ``in`` and ``out`` are
     as they'd be in the video.
 
     From the same streams as the plan, not already in it and not rated down;
@@ -245,8 +246,8 @@ def addable(conn: sqlite3.Connection, settings: Settings,
     pool = [c for c in _candidates(conn, settings, plan, quality_bar=False, ruled_out=True)
             if c.clip_id not in in_plan and not any(
                 rid == c.recording_id and a < c.src_out and c.src_in < b for rid, a, b in covered)]
-    pool.sort(key=lambda c: (not c.liked, not c.ruled_in, not c.kept_out, -c.score,
-                             c.recording_id, c.src_in))
+    pool.sort(key=lambda c: (not c.saved, not c.liked, not c.ruled_in, not c.kept_out,
+                             -c.score, c.recording_id, c.src_in))
     said = {r["clip_id"]: (r["transcript"] or "").strip() for r in conn.execute(
         f"SELECT clip_id, transcript FROM clips WHERE clip_id IN ({','.join('?' * len(pool))})",
         [c.clip_id for c in pool])} if pool else {}
@@ -256,7 +257,8 @@ def addable(conn: sqlite3.Connection, settings: Settings,
         quote = f' "{words[:50]}{"..." if len(words) > 50 else ""}"' if words else ""
         rule = (f" · {c.ruled_in.split(':')[0]} says always" if c.ruled_in else
                 f" · kept out by {c.kept_out.split(':')[0]}" if c.kept_out else "")
-        labels.append((f"{'👍 ' if c.liked else ''}#{c.recording_id} at {clock(c.src_in)} · "
+        mark = "🔖 " if c.saved else "👍 " if c.liked else ""
+        labels.append((f"{mark}#{c.recording_id} at {clock(c.src_in)} · "
                        f"{c.length:.0f}s · score {c.score:.2f}{rule}{quote}", c.clip_id,
                        c.recording_id, c.src_in, c.src_out))
     return labels
