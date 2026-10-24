@@ -1,4 +1,5 @@
-"""Moment rules: which moments always go in, and which never do (Phase 2H-3a).
+"""Moment rules: which moments always go in, which never do (Phase 2H-3a), and
+which effects suit a moment (2H-3b).
 
 "Always include pentakills", "Never use clips where I die". A moment rule
 works like a thumbs up or down you only say once: a clip with an "always"
@@ -19,6 +20,13 @@ What the creator chose (2026-10-24):
   objective, stolen, not "Baron or any steal" (Gemma's form for it on 24 Oct).
 * **Clips are never cut**: a clip is in or out.
 * A newer rule wins over an older one, as for every rule.
+
+Effects on a moment (2H-3b): "Add a zoom on pentakills", "No effects when I
+die". They only change what Review suggests, and what a moment gets once its
+effects are switched on: never switching anything on (the creator's choice in
+2H-1: they tick). The effects named replace the usual ones for that moment, and
+a moment you tick keeps them whatever the limits a minute say (24 Oct). Only
+moments with an exact second can carry one: League's, and your marks.
 
 Each moment is looked for only where it can be seen. League's are exact, from
 League itself (game_events), in the stretch of the clip that's in the video.
@@ -100,12 +108,16 @@ class MomentRule:
     which: str                                      # "always" | "never"
     moments: list[str]
     games: list[str] = field(default_factory=list)  # empty: every game
+    effects: list[str] = field(default_factory=list)  # which == "effect": the effects; [] none
 
     def label(self, hit: list[str]) -> str:
         """'r004: Penta kill', 'r006: Baron steal', for Review."""
         return f"{self.id}: " + ", ".join(
             f"{MOMENTS[m.removeprefix('stolen_')].short} steal" if m.startswith("stolen_")
             else MOMENTS[m].short for m in hit)
+
+    def for_game(self, game: str | None) -> bool:
+        return not self.games or (game or "").casefold() in {g.casefold() for g in self.games}
 
     def hits(self, moments: set[str]) -> list[str]:
         """Which of its moments the clip has."""
@@ -151,7 +163,8 @@ def league_only(params: dict) -> bool:
 def rules_of(settings) -> list[MomentRule]:
     """The moment rules a plan is made with, oldest first (kinds.apply puts them in)."""
     return [MomentRule(r.get("id", ""), r.get("which", "always"), list(r.get("moments") or []),
-                       list(r.get("games") or []))
+                       list(r.get("games") or []),
+                       list(r.get("effects") or []))
             for r in getattr(settings, "moment_rules", None) or []]
 
 
@@ -204,7 +217,7 @@ def verdict(rules: list[MomentRule], game: str | None, moments: set[str], *, lik
             marked: bool) -> tuple[str, str] | None:
     """('in' or 'out', its label) from the newest rule that has a say, or None."""
     for rule in reversed(rules):
-        if rule.games and (game or "").casefold() not in {g.casefold() for g in rule.games}:
+        if rule.which == "effect" or not rule.for_game(game):
             continue
         hit = rule.hits(moments)
         if not hit:
@@ -216,4 +229,45 @@ def verdict(rules: list[MomentRule], game: str | None, moments: set[str], *, lik
                 continue          # bad luck in a good fight
             return "out", rule.label(hit)
         return "in", rule.label(hit)
+    return None
+
+
+# --- Effects on a moment (2H-3b) -------------------------------------------------------------
+
+EFFECT_NAMES = {"flash": "a flash", "shake": "a screen shake", "sfx": "a sound effect",
+                "zoom": "a punch-in zoom", "replay": "a slow-motion replay"}
+NO_EFFECTS = "none"
+
+
+def exact(name: str) -> bool:
+    """A moment with an exact second, so an effect lands on it: League's, and your marks."""
+    return name in MOMENTS and (MOMENTS[name].source == LEAGUE or name == "marked")
+
+
+def _where(names: list[str]) -> str:
+    stolen = _stolen(names)
+    parts = ([f"where your side steals {' or '.join(STOLEN[m] for m in stolen)}"] if stolen
+             else []) + [MOMENTS[m].clips for m in names if not (stolen and (m == "steal"
+                                                                             or m in stolen))]
+    return " or ".join(parts)
+
+
+def effect_said(params: dict) -> str:
+    """'Review suggests a punch-in zoom on moments with a penta kill, in place of...'"""
+    names = [m for m in params.get("moments") or [] if m in MOMENTS]
+    effects = [e for e in params.get("effects") or [] if e in EFFECT_NAMES]
+    where = "moments " + _where(names)
+    if not effects:
+        return f"no effects suggested on {where}"
+    listed = [EFFECT_NAMES[e] for e in effects]
+    what = listed[0] if len(listed) == 1 else ", ".join(listed[:-1]) + " and " + listed[-1]
+    return f"Review suggests {what} on {where} for you to tick, in place of the usual effects"
+
+
+def effect_for(rules: list[MomentRule], game: str | None,
+               moments: set[str]) -> MomentRule | None:
+    """The newest effect rule about one of these moments, for this game."""
+    for rule in reversed(rules):
+        if rule.which == "effect" and rule.for_game(game) and rule.hits(moments):
+            return rule
     return None

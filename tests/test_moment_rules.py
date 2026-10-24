@@ -125,8 +125,7 @@ def test_the_ais_form_becomes_a_moment_rule():
     note = to_rule({"kind": "moment", "games": [], "videos": [], "which": "always",
                     "moments": []}, GAMES)
     assert note.rule.is_note
-    effect = to_rule({"kind": "effect_on_moment", "games": [], "videos": []}, GAMES)
-    assert effect.rule.is_note and "2H-3b" in effect.message
+    assert "Try naming the moment" in note.message
 
 
 def test_two_rules_about_the_same_moment_clash():
@@ -245,3 +244,43 @@ def test_shorts_suggest_always_moments_right_after_your_marks(settings):
                       rows, {}, settings)
     assert [p.candidate.clip_id for p in picks] == ["marked", "ruled", "big"]
     assert picks[1].why == "rule"
+
+
+# --- Effects on a moment (2H-3b) --------------------------------------------------------------
+
+
+def test_effect_rules_say_what_review_will_suggest():
+    zoom = Rule("effect_on_moment", {"moments": ["penta_kill"], "effects": ["zoom", "replay"]},
+                [LOL])
+    assert zoom.said() == ("League of Legends highlights and Shorts: Review suggests a punch-in "
+                           "zoom and a slow-motion replay on moments with a penta kill for you "
+                           "to tick, in place of the usual effects.")
+    quiet = Rule("effect_on_moment", {"moments": ["death"], "effects": ["none"]})
+    assert quiet.said().startswith("Every game's highlights and Shorts: no effects suggested on "
+                                   "moments where you die")
+    steal = Rule("effect_on_moment", {"moments": ["baron", "steal"], "effects": ["replay"]})
+    assert "on moments where your side steals Baron" in steal.said()
+
+
+def test_the_ais_form_becomes_an_effect_rule():
+    made = to_rule({"kind": "effect_on_moment", "games": [], "videos": [],
+                    "moments": ["penta_kill"], "effects": ["zoom", "made_up"]}, GAMES)
+    assert made.rule.kind == "effect_on_moment"
+    assert made.rule.params == {"moments": ["penta_kill"], "effects": ["zoom"]}
+    none = to_rule({"kind": "effect_on_moment", "games": [], "videos": [],
+                    "moments": ["death"], "effects": ["none"]}, GAMES)
+    assert none.rule.params["effects"] == ["none"]
+    laughing = to_rule({"kind": "effect_on_moment", "games": [], "videos": [],
+                        "moments": ["laughter"], "effects": ["zoom"]}, GAMES)
+    assert laughing.rule.is_note and "exact second" in laughing.message
+
+
+def test_effect_rules_reach_the_plan_without_none(settings):
+    used = kinds.apply(settings, [Rule("effect_on_moment", {"moments": ["death"],
+                                                            "effects": ["none"]}, id="r009")],
+                       "highlights")
+    assert used.moment_rules == [{"id": "r009", "which": "effect", "moments": ["death"],
+                                  "games": [], "effects": []}]
+    assert kinds.apply(settings, [Rule("effect_on_moment", {"moments": ["death"],
+                                                            "effects": ["zoom"]})],
+                       "letsplay").moment_rules == []   # never Let's Plays

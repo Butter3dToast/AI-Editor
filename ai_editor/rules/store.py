@@ -97,7 +97,7 @@ def clashes(saved: list[Saved]) -> dict[str, str]:
                 continue
             if a.kind == "switch":
                 same = a.params.get("switch") == b.params.get("switch")
-            elif a.kind == "moment":   # about the same moment, always or never
+            elif a.kind in ("moment", "effect_on_moment"):   # about the same moment
                 same = bool(set(a.params.get("moments") or []) & set(b.params.get("moments") or []))
             else:
                 same = bool(set(a.params) & set(b.params))   # they set the same value

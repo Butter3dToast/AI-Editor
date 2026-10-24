@@ -3,6 +3,35 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.27.0 — Phase 2H-3b: Effects on a moment — 24 October 2026
+
+**New**
+
+- **Effect rules** in the Rules tab: "Add a zoom on pentakills", "A slow-mo
+  replay on Baron steals", "Shake and boom on every kill", "No effects when I
+  die". AI-Editor says back exactly what it will do before you save.
+- **They never switch an effect on.** They change what Review suggests under
+  **Suggested effects on the big moments**, marked with the rule: "Clip 4 at
+  1:52: Kill 📌 r007: zoom". Nothing is ticked for you; tick one and the
+  moment gets exactly those effects.
+- **Your choices (24 Oct):** the rule's effects replace the moment's usual
+  ones, and a moment you tick is never dropped by the effects-a-minute limits
+  (a style profile's included).
+- **New moments:** a rule reaches moments that get nothing today, like a
+  single kill or a Dragon. Two it names within 2 seconds in one clip (a kill
+  and the double kill straight after) get one effect, on the bigger.
+- **"No effects when I die"** leaves those moments without, and out of the
+  suggestions.
+- Only moments with an exact second can carry an effect: League's and your
+  marks. "A zoom when I laugh" is kept as a note, saying why.
+- Tested on 24 Oct: six effect tips, two tries each, all right; on your
+  19 Oct stream "A zoom on every kill" suggested 10 zooms, one per fight.
+
+**Changed**
+
+- A moment tip AI-Editor can't fully read now says to name the moment ("Always
+  include pentakills"), not to give a number.
+
 ## 0.26.1 — Fix: deleted streams leave the lists — 24 October 2026
 
 **Changed**

@@ -32,6 +32,12 @@ the rest of that stream, because every game and mic is a different
 loudness. (The sound recogniser's shout and explosion scores never passed
 0.3 on the creator's streams: it hears a mixed track.)
 
+**Your effect rules** (2H-3b): "a zoom on pentakills" gives every penta in
+the video a zoom and nothing else, a single kill or a Dragon included when a
+rule names them; "no effects when I die" leaves the moments where you die
+without. A ruled moment isn't held to the effects a minute: you tick it in
+Review, and your tick wins (24 Oct).
+
 The analysis is per second, so each effect is then lined up with the
 instant the sound starts, from the recording's own sound track: a flash
 half a second late looks like a mistake.
@@ -78,6 +84,9 @@ MIN_SPEECH = 0.3          # a reaction is said: share of the second with words i
 MARK_WINDOW_SEC = 20.0
 # A mark pressed a little after a clip ends is still about that clip.
 MARK_AFTER_SEC = 10.0
+# Two moments an effect rule names this close are one fight: the bigger keeps its
+# effects ("a zoom on every kill" put two zooms a second apart on a double kill, 24 Oct).
+RULE_GAP_SEC = 2.0
 
 
 def rise(db: np.ndarray, back: int = RISE_BACK_SEC) -> np.ndarray:
@@ -154,6 +163,7 @@ class Moment:
     at: float | None = None      # League's exact time, when it's on a League event
     label: str | None = None     # that event: "Triple kill"
     replay: bool = False         # big enough for a slow-motion replay (2C-2b)
+    kinds: list[str] | None = None   # an effect rule's own effects (2H-3b)
 
     @property
     def strength(self) -> float:
@@ -247,6 +257,48 @@ def marked_kill(events: list[tuple[float, dict]], seg_in: float, seg_out: float,
                                      k[1].get("kind") == "objective", k[0]))
 
 
+def ruled_events(events: list[tuple[float, dict]], seg_in: float, seg_out: float, rules,
+                 game: str | None) -> list[tuple[float, dict, object]]:
+    """(time, event, rule) for the League events inside the clip an effect rule names."""
+    from ..rules import moments as moment_rules
+
+    out = []
+    # A multikill comes at the same second as its kill: named by the bigger one.
+    for t, e in sorted(events, key=lambda te: (te[0], -int(te[1].get("streak") or 0))):
+        if not seg_in + EDGE_SEC <= t <= seg_out - EDGE_SEC - SHAKE_SEC:
+            continue
+        rule = moment_rules.effect_for(rules, game, moment_rules.found([(t, e)], [], None, False))
+        if rule is not None:
+            out.append((t, e, rule))
+    return out
+
+
+def weight(event: dict | None) -> int:
+    """Which of two moments in one fight is bigger: a longer streak, an ace, an objective."""
+    if not event:
+        return 0
+    return (10 * int(event.get("streak") or 0) + 5 * (event.get("kind") == "ace")
+            + 3 * (event.get("kind") == "objective") + 1)
+
+
+def apart(found: list[Moment], weights: dict[int, int]) -> list[Moment]:
+    """No two within RULE_GAP_SEC in a clip: the bigger stays."""
+    kept: list[Moment] = []
+    for m in sorted(found, key=lambda m: -weights.get(id(m), 0)):
+        if not any(k.segment == m.segment and abs((k.at or k.second) - (m.at or m.second))
+                   < RULE_GAP_SEC for k in kept):
+            kept.append(m)
+    return kept
+
+
+def ruled(m: Moment, rule) -> Moment:
+    """The moment with the rule's effects in place of its own."""
+    m.kinds = list(rule.effects)
+    m.replay = "replay" in rule.effects
+    m.label = f"{m.label or 'your mark'} 📌 {rule.id}"
+    return m
+
+
 def pick(found: list[Moment], count: int, gap_sec: float,
          per_segment: dict[int, int] | None = None) -> list[Moment]:
     """The strongest, kept apart within a clip, at most ``count`` in all and
@@ -338,8 +390,18 @@ def effects_at(moment: Moment, at: float, on: list[str]) -> list[Effect]:
         from ..render.replay import LENGTH_SEC
 
         out.append(Effect("replay", at, LENGTH_SEC, why))
-    if "sfx" in on:
-        out.append(Effect("sfx", at, SFX_SEC, why, SOUNDS[IMPACT if both else why]))
+    if moment.kinds is not None:   # an effect rule's: exactly those
+        out = [Effect(kind, at, length, why) for kind, length in
+               (("flash", FLASH_SEC), ("shake", SHAKE_SEC), ("zoom", ZOOM_SEC))
+               if kind in moment.kinds and kind in on]
+        if "replay" in moment.kinds and "replay" in on:
+            from ..render.replay import LENGTH_SEC
+
+            out.append(Effect("replay", at, LENGTH_SEC, why))
+    if "sfx" in on and (moment.kinds is None or "sfx" in moment.kinds):
+        sound = (IMPACT if "shake" in moment.kinds or not {"flash", "zoom"} & set(moment.kinds)
+                 else REACTION) if moment.kinds is not None else IMPACT if both else why
+        out.append(Effect("sfx", at, SFX_SEC, why, SOUNDS[sound]))
     if moment.label:
         out = [Effect(e.kind, e.at, e.length, e.why, e.sound, moment.label) for e in out]
     return out
@@ -347,7 +409,12 @@ def effects_at(moment: Moment, at: float, on: list[str]) -> list[Effect]:
 
 def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
           on: list[str]) -> list[list[Effect]]:
+    from ..rules import moments as moment_rules
+
     fx = settings.effects
+    rules = [r for r in moment_rules.rules_of(settings) if r.which == "effect"]
+    by_rule: list[Moment] = []   # held to no limits: your tick wins
+    weights: dict[int, int] = {}
     streams: dict[int, Stream] = {}
     marks: dict[int, list[float]] = {}
     league: dict[int, list[tuple[float, dict]]] = {}
@@ -360,7 +427,9 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
             league[rid] = league_of(conn, rid)
         pressed = marks_in(marks[rid], seg.src_in, seg.src_out)
         biggest = big_events(league[rid], seg.src_in, seg.src_out)
-        if not pressed and not biggest:
+        game = seg.game or plan.game
+        named = ruled_events(league[rid], seg.src_in, seg.src_out, rules, game) if rules else []
+        if not pressed and not biggest and not named:
             continue
         if rid not in streams:
             streams[rid] = stream_of(conn, rid)
@@ -371,11 +440,32 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
                  else marked_moment(streams[rid], index, seg.src_in, seg.src_out, p))
             if m is not None and not any(o.at is not None and m.at is not None
                                          and abs(o.at - m.at) < 0.5 for o in moments):
+                if rules:
+                    said = moment_rules.found([kill] if kill else [], [], None, True)
+                    rule = moment_rules.effect_for(rules, game, said)
+                    if rule is not None:
+                        by_rule.append(ruled(m, rule))
+                        weights[id(m)] = weight(kill[1] if kill else None)
+                        continue
                 moments.append(m)
+        for t, e, rule in named:
+            if any(o.at is not None and abs(o.at - t) < 0.5 for o in by_rule
+                   if o.segment == index):
+                continue   # a mark already on it
+            moments = [o for o in moments if o.at is None or abs(o.at - t) >= 0.5]
+            by_rule.append(ruled(event_moment(streams[rid], index, t, e), rule))
+            weights[id(by_rule[-1])] = weight(e)
         found += moments
         per_segment[index] = len(moments)
     chosen = pick(found, how_many(fx.per_min(plan.recipe), plan.total_sec, bool(found)),
                   fx.min_gap_sec, per_segment)
+    # "No effects when I die": those rules' moments go without, and nothing else
+    # lands on them.
+    quiet = [m for m in by_rule if not m.kinds]
+    chosen = [m for m in chosen if not any(
+        q.segment == m.segment and abs((m.at or m.second) - (q.at or q.second)) <= 1.0
+        for q in quiet)]
+    ruled_now = apart([m for m in by_rule if m.kinds], weights)
     # Slow-motion replays: the biggest moments only, one per clip, and no more
     # than one every REPLAY_EVERY_SEC of video (one in a Short).
     allowed = 1 if plan.recipe == "shorts" else max(1, int(plan.total_sec // REPLAY_EVERY_SEC))
@@ -391,9 +481,12 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
     allowed = {kind: {id(m) for m in sorted(chosen, key=lambda m: -m.strength)
                       [:how_many(rate, plan.total_sec, bool(chosen))]}
                for kind, rate in fx.kind_per_min.items()}
+    for m in ruled_now:
+        for kind in allowed:
+            allowed[kind].add(id(m))
     placed: list[list[Effect]] = [[] for _ in plan.segments]
     tracks: dict[tuple[int, str], Path | None] = {}
-    for m in chosen:
+    for m in sorted(chosen + ruled_now, key=lambda m: (m.segment, m.at or m.second)):
         seg = plan.segments[m.segment]
         if m.at is not None:
             at = m.at   # League's own time: already exact

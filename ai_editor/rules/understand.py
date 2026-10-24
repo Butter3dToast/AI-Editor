@@ -21,14 +21,14 @@ from dataclasses import dataclass
 from .. import llm
 from ..config import Settings
 from .kinds import EFFECTS, KINDS, ORDERS, REFUSED, SWITCHES, VIDEOS, Rule
-from .moments import MOMENTS, WHICH
+from .moments import EFFECT_NAMES, MOMENTS, NO_EFFECTS, WHICH, exact
 
 # The values each kind keeps: its own, plus the ones it may have.
 ACCEPTS = {"clip_length": ("min_seconds", "max_seconds"), "video_length": ("minutes",),
            "teaser": ("on", "seconds"), "clip_order": ("order",), "quality_bar": ("level",),
            "silence": ("seconds",), "caption_look": ("size_scale", "words", "height_percent"),
            "effect_amount": ("per_minute", "effect"), "switch": ("switch", "on"),
-           "moment": ("which", "moments")}
+           "moment": ("which", "moments"), "effect_on_moment": ("moments", "effects")}
 # The form's name for a value, where it differs: "switch" is also a kind's name, and with
 # both Gemma left the value out 2 times in 5.
 FORM_NAME = {"switch": "which_switch"}
@@ -45,13 +45,12 @@ Pick the ONE kind of rule it is:
 {kinds}
 - speed_up: speeding anything up (AI-Editor never does)
 - effects_on: switching effects or captions on or off for good
-- effect_on_moment: which effect goes on which moment (a zoom on kills, a replay on steals)
 - note: anything else, or more than one idea at once
 
 games: the games it names, from: {games}. Empty if it doesn't name one.
 videos: the kinds of video it names: highlights, shorts, letsplay. Empty if it doesn't say.
 Fill in only the values the tip gives, for the kind you picked; leave out the rest.
-why_note: for speed_up, effects_on, effect_on_moment or note, a few words on what the tip wants.
+why_note: for speed_up, effects_on or note, a few words on what the tip wants.
 
 Examples (not the streamer's own):
 "Wardogs clips should be at most 25 seconds" -> kind clip_length, games [Wardogs], max_seconds 25
@@ -60,7 +59,8 @@ Examples (not the streamer's own):
 "Bigger captions on Shorts" -> kind caption_look, videos [shorts], size_scale 1.3
 "Always use the clips where I get first blood" -> kind moment, which always, moments [first_blood]
 "Keep the clips where my team gets aced out of my highlights" -> kind moment, videos [highlights], which never, moments [aced]
-"Add a zoom whenever I get a triple kill" -> kind effect_on_moment
+"Add a zoom whenever I get a triple kill" -> kind effect_on_moment, moments [triple_kill], effects [zoom]
+"Turn my eliminations into slow motion with a boom" -> kind effect_on_moment, moments [kill], effects [replay, sfx]
 "Make it faster when I'm walking around" -> kind speed_up"""
 
 
@@ -78,6 +78,7 @@ def schema(games: list[str]) -> dict:
         FORM_NAME["switch"]: {"enum": list(SWITCHES)},
         "which": {"enum": list(WHICH)},
         "moments": {"type": "array", "items": {"enum": list(MOMENTS)}},
+        "effects": {"type": "array", "items": {"enum": [*EFFECT_NAMES, NO_EFFECTS]}},
         "why_note": {"type": "string", "maxLength": 120},
     }, "required": ["kind", "games", "videos"]}
 
@@ -123,6 +124,8 @@ def to_rule(answer: dict, games: list[str]) -> Understood:
             value = next((s for s in SWITCHES if s in why), None)
         if name == "moments":
             value = list(dict.fromkeys(m for m in value or [] if m in MOMENTS)) or None
+        elif name == "effects":
+            value = list(dict.fromkeys(e for e in value or [] if e in EFFECT_NAMES)) or                 ([NO_EFFECTS] if NO_EFFECTS in (value or []) else None)
         elif name == "which" and value not in WHICH:
             value = None
         if value is None:
@@ -142,11 +145,21 @@ def to_rule(answer: dict, games: list[str]) -> Understood:
     missing = ([f for f in spec.fields if f not in params] if spec.needs_all
                else [] if any(f in params for f in spec.fields) else list(spec.fields))
     if missing:
+        hint = {"moment": "naming the moment, like \"Always include pentakills\"",
+                "effect_on_moment": "naming the moment and the effect, like \"A zoom on "
+                                    "pentakills\""}.get(
+            kind, "saying it with a number, like \"at most 20 seconds\"")
         return Understood(Rule("note", {}, named, videos, why or "kept for later"),
                           "AI-Editor couldn't tell from it "
                           + ("the number" if any(f in NUMBERS for f in missing) else "what to set")
-                          + ", so it would be kept as a note. Try saying it with a number, like "
-                            "\"at most 20 seconds\".")
+                          + f", so it would be kept as a note. Try {hint}.")
+    if kind == "effect_on_moment" and not all(exact(m) for m in params["moments"]):
+        loose = [m for m in params["moments"] if not exact(m)]
+        return Understood(Rule("note", {}, named, videos, why or "an effect on a moment"),
+                          "An effect needs the exact second of its moment, and AI-Editor only "
+                          "knows that for League's moments and your marks, not "
+                          + ", ".join(m.replace("_", " ") for m in loose)
+                          + ". So it would be kept as a note.")
     if videos and not set(videos) & set(spec.videos):
         allowed = " and ".join(VIDEOS[v] for v in spec.videos)
         return Understood(Rule("note", {}, named, videos, why or "kept for later"),
@@ -176,7 +189,8 @@ def understand(settings: Settings, tip: str, games: list[str]) -> Understood:
 # and left which one out 5 times in 5. Never a length or a time: "short clips" stays a
 # note rather than the AI making up a number you didn't give.
 FOLLOW_UP = {"switch": ("switch",), "clip_order": ("order",), "teaser": ("on",),
-             "quality_bar": ("level",), "moment": ("which", "moments")}
+             "quality_bar": ("level",), "moment": ("which", "moments"),
+             "effect_on_moment": ("moments", "effects")}
 
 
 def follow_up(tip: str, kind: str, left_out: list[str], games: list[str]) -> str:

@@ -5,11 +5,11 @@ creator's own. Its read-back is written here from the rule itself, so what the
 Rules tab says is exactly what will happen, whatever the AI understood.
 
 Moment rules (2H-3a, rules/moments.py) say which moments always or never go
-in: they choose clips rather than change Settings, so apply() hands them on in
-settings.moment_rules for the recipes.
+in, and effect rules (2H-3b) which effects suit a moment: they choose clips and
+effects rather than change Settings, so apply() hands them on in
+settings.moment_rules for the recipes and effects/placement.py.
 
-Not rules, on purpose (2H-2): which effect goes on which moment (2H-3b);
-speeding anything up (the creator's choice in 2C: never); switching effects or
+Not rules, on purpose (2H-2): speeding anything up (the creator's choice in 2C: never); switching effects or
 captions on (ticked in Review).
 """
 
@@ -266,6 +266,11 @@ KINDS: dict[str, Kind] = {k.name: k for k in [
          "the game's sound under the streamer's voice), suggest_effects (suggest effects in "
          "Review); and on (true/false)", ("highlights", "shorts", "letsplay"),
          ("switch", "on"), _switch, _say_switch, needs_all=True),
+    Kind("effect_on_moment", "which effects go on a moment: moments (from the list under "
+         "moment; only League's and marked can carry an effect), and effects, one or more of "
+         "flash, shake, sfx (a sound effect), zoom, replay (slow motion), or none for no "
+         "effects there", ("highlights", "shorts"), ("moments", "effects"), _moment,
+         moment_rules.effect_said, needs_all=True),
     Kind("moment", "which moments always go into the videos, or never do: which is always "
          "or never, and moments, one or more of: "
          + "; ".join(f"{m.name}" + (f" ({m.about})" if m.about else "")
@@ -279,8 +284,6 @@ REFUSED = {
     "speed_up": "AI-Editor never speeds a video up: your choice (2C). Nothing to save.",
     "effects_on": "Rules don't switch effects or captions on: you tick them in Review, to be "
                   "sure they went in right. Kept as a note.",
-    "effect_on_moment": "Which effect goes on which moment comes with 2H-3b. Kept as a note until "
-               "then.",
 }
 
 
@@ -302,7 +305,7 @@ class Rule:
         """'League of Legends Shorts', 'Every video'."""
         kinds = KINDS.get(self.kind)
         videos = [v for v in self.videos if kinds is None or v in kinds.videos]
-        if not videos and self.kind == "moment":
+        if not videos and self.kind in ("moment", "effect_on_moment"):
             videos = list(kinds.videos)   # never Let's Plays: say so
         place = " and ".join(self.games)
         what = " and ".join(VIDEOS[v] for v in videos) if videos else ""
@@ -317,7 +320,8 @@ class Rule:
         if self.is_note:
             return f"📝 Note: {self.why_note or 'kept for later'}"
         text = f"{self.where()}: {KINDS[self.kind].say(self.params)}"
-        if self.kind == "moment" and moment_rules.league_only(self.params) and                 [g.casefold() for g in self.games] != ["league of legends"]:
+        if (self.kind in ("moment", "effect_on_moment") and moment_rules.league_only(self.params)
+                and [g.casefold() for g in self.games] != ["league of legends"]):
             text += " (League only: other games can't tell yet)"
         return text + "."
 
@@ -328,7 +332,7 @@ class Rule:
         if self.videos and video not in self.videos:
             return False
         if self.games:
-            if game is None and self.kind == "moment":
+            if game is None and self.kind in ("moment", "effect_on_moment"):
                 return True   # every game's highlights: each clip's own game decides
             return game is not None and game.casefold() in {g.casefold() for g in self.games}
         return True
@@ -340,9 +344,13 @@ def apply(settings: Settings, rules: list[Rule], video: str) -> Settings:
         kind = KINDS.get(rule.kind)
         if kind is None or video not in kind.videos:
             continue
-        if rule.kind == "moment":
-            found = {"id": rule.id, "which": rule.params.get("which", "always"),
-                     "moments": list(rule.params.get("moments") or []), "games": rule.games}
+        if rule.kind in ("moment", "effect_on_moment"):
+            effect = rule.kind == "effect_on_moment"
+            found = {"id": rule.id,
+                     "which": "effect" if effect else rule.params.get("which", "always"),
+                     "moments": list(rule.params.get("moments") or []), "games": rule.games,
+                     "effects": [e for e in rule.params.get("effects") or []
+                                 if e != moment_rules.NO_EFFECTS]}
             settings = settings.model_copy(update={
                 "moment_rules": [*settings.moment_rules, found]})
         else:

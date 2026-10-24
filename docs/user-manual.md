@@ -937,12 +937,12 @@ Rules are tips you write in normal English, like *"Keep League highlight clips u
 | Caption look | "Bigger captions on Shorts", "2 words at a time" | Size, height and words at a time. Only when captions are on |
 | Effect amounts | "At most 1 zoom a minute" | How many effects at most. Only when they're on |
 | Moments (14.7) | "Always include pentakills", "Never use clips where I die", "Never use rage clips in Wardogs" | Which moments always go into highlights and Shorts, and which never do |
+| Effects on a moment (14.8) | "Add a zoom on pentakills", "A slow-mo replay on Baron steals", "No effects when I die" | Which effects Review suggests for a moment. Never ticks them for you |
 | Your three tips (16.2, 19.2d, 19.2e) | "Ensure the action is always within the clip", "Make sure the video sound is never over my voice", "Suggest where an effect can work and which effect" | Their switches, so you can turn one off for one game: "Don't keep the game under my voice in League" |
 
 **What a rule can't do:**
 - **Speed anything up:** you chose never to (2C). AI-Editor says so and saves nothing.
 - **Switch effects or captions on:** you tick those in Review, to be sure they went in right. Kept as a 📝 note.
-- **Put an effect on a moment**, like "Add a zoom on pentakills": coming in 2H-3b. Kept as a 📝 note until then.
 - **Anything AI-Editor can't see yet**, like boss fights or horse riding. Kept as a 📝 note.
 
 ### 14.3 Writing good rules
@@ -1004,6 +1004,24 @@ A League moment only exists in League clips, so the read-back adds *"(League onl
 On 24 Oct these all came out right, three tries each: "Always include pentakills", "Never use clips where I die", "Always put Baron steals in my Shorts", "Always include dragon steals", "Never use rage clips in Wardogs", "Don't put clips in where my team gets aced" and "Always use the clips where I laugh". "Add a zoom on pentakills" was kept as a note for 2H-3b.
 
 On 24 Oct, on your League streams of 10-14 October: "Never use clips where I die" found 13 clips where you died. You'd given every one of them a 👍, so it left them all in. Without your 👍, it would have kept out 6: the ones where you died, nothing good happened, and you hadn't marked them.
+
+### 14.8 Effects on a moment
+
+An effect rule says which effects suit a moment: *"Add a zoom on pentakills"*, *"A slow-mo replay on Baron steals"*, *"Shake and boom on every kill"*, *"No effects when I die"*. For highlights and Shorts; Let's Plays have no effects.
+
+**It never switches an effect on.** It changes what Review suggests under **Suggested effects on the big moments** (19.2d), and nothing is ticked for you: *"Clip 3 at 1:42: Penta kill 📌 r007: zoom + replay"*. Tick it and the moment gets exactly those effects.
+
+- **The rule's effects replace the usual ones** for that moment. Want both? Say both: *"A zoom and a shake on pentakills"*.
+- **It reaches moments that get nothing today.** A single kill or a Dragon isn't normally an effect moment (so a one-sided game doesn't shake all the way through); "a zoom on every kill" suggests one on each.
+- **One per fight:** two moments a rule names within 2 seconds in one clip, like a kill and the double kill straight after, get one effect, on the bigger.
+- **Your tick wins over the limits.** A moment from a rule is never dropped by "effects a minute", a style profile's "at most 1 zoom a minute" or the one-replay-every-2-minutes rule.
+- **"No effects when I die":** moments where you die get none, and are left out of the suggestions.
+- **Only moments with an exact second**, because an effect half a second off looks like a mistake: League's own moments (14.7) and your marks. A tip about laughter, shouting or the AI's guesses ("a zoom when I laugh") is kept as a 📝 note, and AI-Editor says why.
+- If you switch an effect on for the whole video (19.2d, the tick boxes), moments a rule names get only the rule's effects there too.
+
+On 24 Oct these all came out right, two tries each: "Add a zoom on pentakills", "A slow-mo replay on Baron steals", "Shake and boom on every kill", "No effects when I die" and "Flash and a zoom on my aces". "A zoom when I laugh" was kept as a note, saying why.
+
+On 24 Oct, on your League stream of 19 October, "A zoom on every kill" suggested a zoom on 10 kills and double kills, one per fight: 7 of them got nothing before, and the other 3 had their shake and boom replaced by the zoom. The Dragon and the moments it doesn't name kept their usual shake and boom.
 
 ---
 

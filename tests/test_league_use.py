@@ -208,3 +208,72 @@ def test_a_style_profile_limits_one_kind_of_effect_to_the_biggest_moments(conn, 
     placed = placement.place(conn, settings, plan, ["shake", "sfx"])
     kinds = [[e.kind for e in effects] for effects in placed]
     assert kinds == [[], ["shake", "sfx"], ["shake"]]     # the Double kill beats a single kill
+
+
+# --- Your effect rules (2H-3b) ----------------------------------------------------------------
+
+
+def effect_rule(settings, moments, effects, rule_id="r007"):
+    from ai_editor.rules import kinds
+    from ai_editor.rules.kinds import Rule
+
+    return kinds.apply(settings, [Rule("effect_on_moment", {"moments": moments,
+                                                            "effects": effects}, id=rule_id)],
+                       "highlights")
+
+
+def test_an_effect_rule_replaces_a_moments_effects_and_reaches_new_moments(conn, settings):
+    """'A zoom on every kill': the lone kill gets one too, and the double kill a zoom
+    in place of its shake and boom."""
+    settings.effects.highlights_per_min = 6.0
+    used = effect_rule(settings, ["kill"], ["zoom"])
+    plan = EditPlan("hl", "highlights", "t", None, 600,
+                    [Segment(1, 20, 40), Segment(1, 60, 90), Segment(1, 140, 165)])
+    placed = placement.place(conn, used, plan, ["shake", "sfx", "zoom"])
+    assert [(e.kind, e.at) for e in placed[0]] == [("zoom", 30.25)]
+    # The kill 1.2 s before the double kill is the same fight: one zoom, on the bigger.
+    assert [(e.kind, e.at, e.label) for e in placed[1]] == [("zoom", 71.6, "Double kill 📌 r007")]
+    assert [e.kind for e in placed[2]] == ["zoom"]   # your mark snapped to a kill
+
+
+def test_effect_rules_need_the_effect_switched_on(conn, settings):
+    used = effect_rule(settings, ["kill"], ["zoom"])
+    plan = EditPlan("hl", "highlights", "t", None, 600, [Segment(1, 20, 40)])
+    assert placement.place(conn, used, plan, ["shake", "sfx"]) == [[]]
+
+
+def test_your_ruled_moments_are_not_held_to_the_effects_a_minute(conn, settings):
+    settings.effects.highlights_per_min = 0.1      # one in the whole video
+    plan = EditPlan("hl", "highlights", "t", None, 600,
+                    [Segment(1, 20, 40), Segment(1, 60, 90), Segment(1, 140, 165)])
+    plain = placement.place(conn, settings, plan, ["shake", "sfx"])
+    assert sum(bool(p) for p in plain) == 1
+    used = effect_rule(settings, ["kill"], ["shake", "sfx"])
+    ruled = placement.place(conn, used, plan, ["shake", "sfx"])
+    assert all(ruled) and [e.kind for e in ruled[0]] == ["shake", "sfx"]
+    assert ruled[0][1].sound == "boom"
+
+
+def test_no_effects_where_you_die(conn, settings):
+    conn.execute("INSERT INTO companion_events (session_id, event_type, wall_clock, "
+                 "recording_time_sec, recording_id, payload_json) VALUES "
+                 "('s', 'league', 'now', 151.0, 1, ?)", (json.dumps(DEATH),))
+    conn.commit()
+    settings.effects.highlights_per_min = 6.0
+    plan = EditPlan("hl", "highlights", "t", None, 600,
+                    [Segment(1, 60, 90), Segment(1, 140, 165)])
+    assert placement.place(conn, settings, plan, ["shake", "sfx"])[1]   # your marked kill
+    used = effect_rule(settings, ["death"], ["none"])
+    placed = placement.place(conn, used, plan, ["shake", "sfx"])
+    assert placed[1] == [] and placed[0]           # the double kill keeps its own
+
+
+def test_review_suggests_the_rules_effects(conn, settings):
+    from ai_editor import effects
+
+    settings.effects.suggest = True
+    used = effect_rule(settings, ["double_kill"], ["zoom", "replay"])
+    plan = EditPlan("hl", "highlights", "t", None, 600, [Segment(1, 60, 90)])
+    found = effects.suggestions(conn, used, plan)
+    assert [s.kinds for s in found] == [["zoom", "replay"]]
+    assert "Double kill 📌 r007" in found[0].text and not found[0].on   # nothing ticked
