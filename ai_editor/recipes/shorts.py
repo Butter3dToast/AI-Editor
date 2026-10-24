@@ -87,14 +87,18 @@ def choose(candidates: list[Candidate], clips: dict[str, sqlite3.Row], notes: di
         text = note.summary if note else ""
         if "marker_short" in summary:
             tiers.append((0, -(rating or 0), -c.score, Pick(c, "marked", text, rating)))
+        elif c.ruled_in:
+            # Your "always" moment rule (2H-3a): right after your own Numpad - marks.
+            tiers.append((1, -(rating or 0), -c.score,
+                          Pick(c, "rule", text or c.ruled_in.split(": ", 1)[-1], rating)))
         elif summary.get("league_big"):
             # A penta speaks for itself: no need for the AI to say it stands alone.
-            tiers.append((1, -(rating or 0), -c.score,
+            tiers.append((2, -(rating or 0), -c.score,
                           Pick(c, "league", text or (summary.get("reasons") or [""])[0], rating)))
         elif c.liked and (alone or not rated):
-            tiers.append((2, -(rating or 0), -c.score, Pick(c, "liked", text, rating)))
+            tiers.append((3, -(rating or 0), -c.score, Pick(c, "liked", text, rating)))
         elif alone or not (s.must_make_sense_alone and rated):
-            tiers.append((3, -(rating or 0), -c.score,
+            tiers.append((4, -(rating or 0), -c.score,
                           Pick(c, "ai" if rated else "score", text, rating)))
     chosen: list[Pick] = []
     for *_, pick in sorted(tiers, key=lambda t: t[:3]):
@@ -157,7 +161,8 @@ def within_limit(c: Candidate, longest: float, words: list, bounds: list[float],
                                      bounds, words, starts)
 
 
-WHY = {"marked": "you marked it as a Short", "league": "it's a big League moment",
+WHY = {"marked": "you marked it as a Short", "rule": "your rule says always",
+       "league": "it's a big League moment",
        "liked": "you gave it a 👍",
        "ai": "the AI says it works on its own", "score": "it scored well"}
 
@@ -207,7 +212,8 @@ def build_shorts(conn: sqlite3.Connection, settings: Settings, recording_id: int
         )
         plan.source = {"recording_ids": [recording_id], "game": game, "why": pick.why,
                        "layout": settings.shorts.layout_for(game), "rating": pick.rating}
-        plan.notes.append(f"Suggested because {WHY[pick.why]}.")
+        plan.notes.append(f"Suggested because {WHY[pick.why]}"
+                          + (f" ({c.ruled_in})" if pick.why == "rule" else "") + ".")
         if game in settings.shorts.spoiler_check_games:
             # Spec 7.6: story Shorts are flagged for review before they go out.
             plan.notes.append("Story game: check it doesn't give away the plot before you "

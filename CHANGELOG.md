@@ -3,6 +3,42 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.26.0 — Phase 2H-3a: Moment rules, always in or never in — 24 October 2026
+
+**New**
+
+- **Moment rules** in the Rules tab: "Always include pentakills", "Never use
+  clips where I die", "Always put Baron steals in my Shorts", "Never use rage
+  clips in Wardogs". AI-Editor says back exactly what it will do before you
+  save, as for every rule.
+- **The moments it knows.** League, exactly, from League itself: your kills,
+  double to penta kills, your deaths, aces either way, first blood, every
+  objective, steals, Victory and Defeat. Heard in any game: your marks,
+  laughter, a loud reaction, gunfire. The AI's guesses in any game (funny,
+  fail, rage, clutch, scary, teamwork, banter), and the rule says they're a
+  guess.
+- **Always:** the clip goes in like a 👍, whatever its score, and Review's
+  **Why** says which rule: "📌 r004: Penta kill". **Never:** it stays out like
+  a 👎; Review's summary says how many each rule kept out, and **Add a clip**
+  lists them near the top, marked "kept out by r003".
+- **Your choices (24 Oct):** your own 👍 or mark always beats a "never" rule.
+  Dying in a good fight is still a good clip: a "never" rule about your death,
+  your team getting aced or a defeat leaves a clip in when something good
+  happens too (a kill, ace or objective). "Triple kills" means a triple or
+  bigger. "Baron steals" means a stolen Baron. No clip is ever cut.
+- **With Only my 👍 clips**, the video is still exactly your 👍 clips: "always"
+  rules add nothing, and their clips come right after your 👍 ones in **Add a
+  clip**.
+- **Shorts:** "always" moments are suggested right after your Numpad −
+  moments; "never" moments aren't suggested unless you marked them or gave
+  them a 👍.
+- Tested on 24 Oct: nine tips, three tries each, all right.
+
+**Changed**
+
+- "Add a zoom on pentakills" (an effect on a moment) is still kept as a note:
+  that's 2H-3b.
+
 ## 0.25.1 — Fix: only your 👍 clips, videos named by their title — 24 October 2026
 
 **Changed**

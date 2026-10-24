@@ -283,7 +283,7 @@ def test_review_can_add_a_clip_before_the_finale(conn, settings, library, monkey
     extra = cand("extra", 0.3, 5000.0)
     extra.liked = True
     pool = [*library, extra]
-    monkeypatch.setattr(r, "_candidates", lambda conn, settings, plan, quality_bar=True: list(pool))
+    monkeypatch.setattr(r, "_candidates", lambda conn, settings, plan, **_: list(pool))
     options = r.addable(conn, settings, plan)
     assert options[0][1] == "extra" and options[0][0].startswith("👍 #1 at 1:23:20 · 60s")
     assert "c0" not in [o[1] for o in options]  # already in the video
@@ -303,7 +303,7 @@ def test_with_balanced_order_an_added_clip_goes_just_before_the_finale(conn, set
         update={"ordering": "balanced"})})
     plan = plan_of(library)
     pool = [*library, cand("early", 0.3, 150.0)]
-    monkeypatch.setattr(r, "_candidates", lambda conn, settings, plan, quality_bar=True: list(pool))
+    monkeypatch.setattr(r, "_candidates", lambda conn, settings, plan, **_: list(pool))
     change = r.add(conn, balanced, plan, "early")
     assert ids(change.plan)[-2:] == ["early", "c0"] and "just before the finale" in change.message
     change = r.remove(conn, balanced, plan_of(library), 2)  # c2: the refill takes its place

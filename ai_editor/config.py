@@ -688,6 +688,9 @@ class Settings(BaseModel):
 
     # Where this instance was loaded from; not part of the YAML.
     source_path: Path | None = Field(default=None, exclude=True)
+    # Your moment rules for the plan being made (2H-3a), put in by rules.kinds.apply
+    # like every other rule; never in the YAML.
+    moment_rules: list[dict] = Field(default_factory=list, exclude=True)
 
     @property
     def db_path(self) -> Path:

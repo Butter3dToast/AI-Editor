@@ -936,12 +936,13 @@ Rules are tips you write in normal English, like *"Keep League highlight clips u
 | Let's Play silences | "Cut silences longer than 10 seconds in Dawnwalker" | How long a silence may run before it's cut down |
 | Caption look | "Bigger captions on Shorts", "2 words at a time" | Size, height and words at a time. Only when captions are on |
 | Effect amounts | "At most 1 zoom a minute" | How many effects at most. Only when they're on |
+| Moments (14.7) | "Always include pentakills", "Never use clips where I die", "Never use rage clips in Wardogs" | Which moments always go into highlights and Shorts, and which never do |
 | Your three tips (16.2, 19.2d, 19.2e) | "Ensure the action is always within the clip", "Make sure the video sound is never over my voice", "Suggest where an effect can work and which effect" | Their switches, so you can turn one off for one game: "Don't keep the game under my voice in League" |
 
 **What a rule can't do:**
 - **Speed anything up:** you chose never to (2C). AI-Editor says so and saves nothing.
 - **Switch effects or captions on:** you tick those in Review, to be sure they went in right. Kept as a 📝 note.
-- **Choose moments**, like "Always include pentakills", "Never use clips where I die" or "Add a zoom on pentakills": those are moment rules, coming in 2H-3. Kept as a 📝 note until then.
+- **Put an effect on a moment**, like "Add a zoom on pentakills": coming in 2H-3b. Kept as a 📝 note until then.
 - **Anything AI-Editor can't see yet**, like boss fights or horse riding. Kept as a 📝 note.
 
 ### 14.3 Writing good rules
@@ -972,6 +973,37 @@ When instructions disagree, AI-Editor follows this order (top wins):
 - **On and off:** pick a rule under **Rule**; the **On** tick box shows whether it's on. Untick it to make new videos without the rule (it stays in the list), tick it to use it again.
 - **Delete:** pick it, click **Delete**, then **Yes, delete it**. Only you can delete a rule; AI-Editor never removes one by itself.
 - **Notes** (📝) don't change the edit. They're kept so nothing you wrote is lost, ready for when AI-Editor can act on them.
+
+### 14.7 Moment rules: always in, never in
+
+A moment rule says which moments **always** go into your highlights and Shorts, or **never** do: *"Always include pentakills"*, *"Never use clips where I die"*, *"Always put Baron steals in my Shorts"*. Let's Plays aren't affected.
+
+**The moments AI-Editor knows:**
+
+| Kind | Moments | How sure |
+|---|---|---|
+| **League** (needs the Stream Companion running) | your kills; double, triple, quadra and penta kills; your deaths; your team's ace, or your team aced; first blood; Dragon, Elder Dragon, Baron, Rift Herald, Voidgrubs, Atakhan; turrets and inhibitors you take; steals; Victory and Defeat | Exact, from League itself, in the part of the clip that's in the video |
+| **Heard** (any game) | your marks, laughter, shouting or a loud reaction, gunfire or explosions | Good: what made it a clip |
+| **The AI's guess** (any game) | funny, fail, rage, clutch, scary, teamwork, banter | A guess, and the rule says so: *"clips the AI thinks are rage (its guess)"*. Only clips the AI has rated (Rate with AI, 12.3) |
+
+A League moment only exists in League clips, so the read-back adds *"(League only: other games can't tell yet)"* when the rule is for every game.
+
+**How they work:**
+- **Always:** a clip with the moment goes in like a 👍, whatever its score, and the video may run over its length. *"Triple kills"* means a triple or bigger: quadras and pentas count too. In Review its **Why** starts with 📌 and the rule: *"📌 r004: Penta kill"*.
+- **Never:** a clip with the moment stays out, like a 👎.
+- **Your own pick always wins:** a clip you gave a 👍 or marked is never kept out by a rule.
+- **Bad luck in a good fight is still a good clip:** a "never" rule about your death, your team getting aced, or a defeat leaves a clip in when something good happens in it too (a kill, an ace or an objective). Other "never" rules ("never use rage clips") don't have this exception.
+- **No clip is ever cut:** it's in or out.
+- **Only my 👍 clips** (16.1): with 👍 clips, the video is exactly those, so "always" rules add nothing. **Add a clip** in Review lists the clips an "always" rule points at first (*"r004 says always"*), after your 👍 ones.
+- **Kept out:** Review's summary says so (*"r003 kept out 4 clips (you die). Add any of them back with Add a clip."*), and **Add a clip** lists them near the top, marked *"kept out by r003"*.
+- **Shorts:** clips with an "always" moment are suggested right after your Numpad − moments. A clip with a "never" moment isn't suggested, unless you marked it or gave it a 👍.
+- Two rules about the same moment that disagree: the newer wins (14.4).
+
+"Baron steals" means a **stolen Baron**: a steal together with an objective is that objective, stolen, and the read-back says *"where your side steals Baron"*.
+
+On 24 Oct these all came out right, three tries each: "Always include pentakills", "Never use clips where I die", "Always put Baron steals in my Shorts", "Always include dragon steals", "Never use rage clips in Wardogs", "Don't put clips in where my team gets aced" and "Always use the clips where I laugh". "Add a zoom on pentakills" was kept as a note for 2H-3b.
+
+On 24 Oct, on your League streams of 10-14 October: "Never use clips where I die" found 13 clips where you died. You'd given every one of them a 👍, so it left them all in. Without your 👍, it would have kept out 6: the ones where you died, nothing good happened, and you hadn't marked them.
 
 ---
 

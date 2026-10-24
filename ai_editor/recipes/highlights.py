@@ -76,6 +76,8 @@ class Candidate:
     reaction: float = 0.0  # how strongly the creator reacts (see reaction_strength)
     marked: bool = False  # marked with the Stream Companion's hotkey
     liked: bool = False  # thumbs up in the Clips tab
+    ruled_in: str = ""   # an "always" moment rule put it in: "r004: Penta kill" (2H-3a)
+    kept_out: str = ""   # a "never" moment rule keeps it out: "r003: you die"
 
     @property
     def length(self) -> float:
@@ -149,7 +151,8 @@ def _recordings_for(conn: sqlite3.Connection, settings: Settings, *, game: str |
 def gather(conn: sqlite3.Connection, settings: Settings,
            recordings: list[sqlite3.Row], *, game: str | None = None, refresh: bool = True,
            allow: set[str] | frozenset[str] = frozenset(),
-           quality_bar: bool = True, reuse: bool = False) -> list[Candidate]:
+           quality_bar: bool = True, reuse: bool = False,
+           ruled_out: bool = False) -> list[Candidate]:
     """Every clip that may go into the video, trimmed to its moment.
 
     With ``game``, only clips from that game: each clip knows its own game
@@ -164,10 +167,18 @@ def gather(conn: sqlite3.Connection, settings: Settings,
     A clip you gave a thumbs up always goes in, like one you marked: "the
     thumbs up should mean that it should be in the video for review" (the
     creator, 2026-10-03). A thumbs down always keeps it out.
+
+    Your moment rules (2H-3a, rules/moments.py) work the same way: an "always"
+    moment puts a clip in, a "never" moment keeps it out. ``ruled_out`` also
+    returns the clips a rule keeps out, marked (kept_out), for Review to offer.
     """
-    from ..companion.link import game_spans, game_timeline, scene_span
+    from ..companion.link import game_spans, game_timeline, league_events, scene_span
+    from ..analysis.game_events import within
+    from ..rules import moments
 
     h = settings.highlights
+    rules = moments.rules_of(settings)
+    always = any(r.which == "always" for r in rules)
     found: list[Candidate] = []
     for row in recordings:
         if refresh:
@@ -199,6 +210,8 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                     if c["user_rating"] is not None and c["user_rating"] < 0]
         # The local AI's rating counts for llm.rating_weight of the score (0 by default).
         scores = scores_for(conn, settings, row["id"], clips)
+        events = league_events(conn, row["id"]) if rules else []
+        tags = moments.guesses(conn, row["id"], clips) if moments.guesses_needed(rules) else {}
         for clip in clips:
             if used_in(clip["used_in_json"], shorts=False) and not (h.allow_reused_clips or reuse) \
                     and clip["clip_id"] not in allow:
@@ -208,8 +221,9 @@ def gather(conn: sqlite3.Connection, settings: Settings,
             liked = (clip["user_rating"] or 0) > 0
             must = liked or (h.always_include_pinned and bool(clip["pinned"])) or \
                 (h.always_include_markers and marked)
-            if quality_bar and scores[clip["clip_id"]] < h.min_clip_score and not must:
-                continue
+            below = quality_bar and scores[clip["clip_id"]] < h.min_clip_score and not must
+            if below and not always:
+                continue   # an "always" moment rule may still put it in, once trimmed
             if any(a < clip["end_sec"] and clip["start_sec"] < b and (had_mark or not marked)
                    for a, b, had_mark in rejected):
                 continue  # thumbs down
@@ -256,6 +270,21 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                     candidate.src_in, candidate.src_out, start, end, bounds, words, starts)
                 if candidate.length < 3:
                     continue
+            if rules:
+                said = moments.verdict(
+                    rules, clip_game,
+                    moments.found(within(events, candidate.src_in, candidate.src_out),
+                                  summary.get("reasons", []), tags.get(clip["clip_id"]), marked),
+                    liked=liked, marked=marked)
+                if said and said[0] == "in":
+                    candidate.must_include, candidate.ruled_in = True, said[1]
+                    candidate.reasons = ["📌 " + said[1], *candidate.reasons]
+                elif said:
+                    if not ruled_out or below:
+                        continue
+                    candidate.kept_out = said[1]
+            if below and not candidate.must_include:
+                continue
             candidate.reaction = reaction_strength(signals, candidate.src_in, candidate.src_out,
                                                    settings.scoring.zscore_full_scale)
             found.append(candidate)
@@ -517,6 +546,17 @@ def nothing_left_note(conn: sqlite3.Connection, settings: Settings,
             "more recordings of this game.")
 
 
+def kept_out_notes(kept: list[Candidate]) -> list[str]:
+    """'r003 kept out 4 clips (you die).', one per rule: Review lists them first in Add a clip."""
+    by_rule: dict[str, list[str]] = {}
+    for c in kept:
+        rule, _, what = c.kept_out.partition(": ")
+        by_rule.setdefault(rule, []).append(what)
+    return [f"{rule} kept out {len(whats)} clip{'s' if len(whats) != 1 else ''} "
+            f"({', '.join(dict.fromkeys(whats))}). Add any of them back with Add a clip."
+            for rule, whats in by_rule.items()]
+
+
 def liked_note(clips: int, clips_sec: float, target_sec: float) -> str:
     """Said when a video is only the creator's thumbs-up clips."""
     note = (f"Only your 👍 clips: {clips} clip{'s' if clips != 1 else ''}, "
@@ -570,7 +610,8 @@ def build_highlights(
                                 need_video=False)
     recordings = [r for r in everything if has_video(r)]
     deleted = [r for r in everything if not has_video(r)]
-    candidates = gather(conn, settings, recordings, game=game, reuse=reuse)
+    every = gather(conn, settings, recordings, game=game, reuse=reuse, ruled_out=True)
+    candidates = [c for c in every if not c.kept_out]
     for c in candidates:
         if c.clip_id == teaser_clip:
             c.must_include = True  # the clip you picked is in the video, whatever else is
@@ -619,6 +660,8 @@ def build_highlights(
         plan.notes.append(nothing_left_note(conn, settings, recordings, game, reuse))
     elif only_liked:
         plan.notes.append(liked_note(len(chosen), sum(c.length for c in chosen), target))
+    if not only_liked:
+        plan.notes += kept_out_notes([c for c in every if c.kept_out])
     elif sum(c.length for c in chosen) < target:
         plan.notes.append(short_note(sum(c.length for c in chosen), target, len(recordings)))
     save_plan(conn, plan)

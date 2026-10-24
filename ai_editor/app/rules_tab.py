@@ -22,7 +22,8 @@ from . import library
 RULE_COLUMNS = ["Rule", "On", "What it does", "Your words"]
 VIDEO_CHOICES = [(label[0].upper() + label[1:], key) for key, label in VIDEOS.items()]
 INTRO = ("Write an editing tip the way you'd say it, like *\"Keep League highlight clips under "
-         "20 seconds\"* or *\"Dawnwalker parts about 40 minutes\"*. The local AI turns it into "
+         "20 seconds\"*, *\"Dawnwalker parts about 40 minutes\"* or *\"Never use clips where I "
+         "die\"*. The local AI turns it into "
          "a rule and AI-Editor tells you exactly what it will do; nothing is saved until you "
          "press Save. Rules apply by themselves to every new video they match, and win over "
          "the style profile. They never switch effects or captions on: you tick those in "

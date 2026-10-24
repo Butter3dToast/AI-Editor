@@ -4,7 +4,11 @@ Each kind changes Settings for one kind of video, on a copy: never the
 creator's own. Its read-back is written here from the rule itself, so what the
 Rules tab says is exactly what will happen, whatever the AI understood.
 
-Not rules, on purpose (2H-2): which moments go in or get which effect (2H-3);
+Moment rules (2H-3a, rules/moments.py) say which moments always or never go
+in: they choose clips rather than change Settings, so apply() hands them on in
+settings.moment_rules for the recipes.
+
+Not rules, on purpose (2H-2): which effect goes on which moment (2H-3b);
 speeding anything up (the creator's choice in 2C: never); switching effects or
 captions on (ticked in Review).
 """
@@ -15,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ..config import Settings
+from . import moments as moment_rules
 
 VIDEOS = {"highlights": "highlights", "shorts": "Shorts", "letsplay": "Let's Plays"}
 ORDERS = {"timeline": "as it happened, the teaser's moment saved for last",
@@ -225,6 +230,13 @@ def _say_switch(p: dict) -> str:
     return said if p["on"] else f"not: {said}"
 
 
+# --- Moment rules (2H-3a): which moments always or never go in ----------------------------------
+
+
+def _moment(s: Settings, p: dict, video: str) -> Settings:
+    return s   # chooses clips, not settings: see apply()
+
+
 KINDS: dict[str, Kind] = {k.name: k for k in [
     Kind("clip_length", "how long each clip may be, in seconds: min_seconds and/or max_seconds",
          ("highlights", "shorts"), ("min_seconds", "max_seconds"), _clip_length,
@@ -254,6 +266,12 @@ KINDS: dict[str, Kind] = {k.name: k for k in [
          "the game's sound under the streamer's voice), suggest_effects (suggest effects in "
          "Review); and on (true/false)", ("highlights", "shorts", "letsplay"),
          ("switch", "on"), _switch, _say_switch, needs_all=True),
+    Kind("moment", "which moments always go into the videos, or never do: which is always "
+         "or never, and moments, one or more of: "
+         + "; ".join(f"{m.name}" + (f" ({m.about})" if m.about else "")
+                     for m in moment_rules.MOMENTS.values()),
+         ("highlights", "shorts"), ("which", "moments"), _moment, moment_rules.said,
+         needs_all=True),
 ]}
 
 # Not rules: what the AI should answer for them, and what AI-Editor then says.
@@ -261,8 +279,8 @@ REFUSED = {
     "speed_up": "AI-Editor never speeds a video up: your choice (2C). Nothing to save.",
     "effects_on": "Rules don't switch effects or captions on: you tick them in Review, to be "
                   "sure they went in right. Kept as a note.",
-    "moments": "Which moments go in, and which effect suits which moment, come with moment "
-               "rules (2H-3). Kept as a note until then.",
+    "effect_on_moment": "Which effect goes on which moment comes with 2H-3b. Kept as a note until "
+               "then.",
 }
 
 
@@ -274,6 +292,7 @@ class Rule:
     games: list[str] = field(default_factory=list)
     videos: list[str] = field(default_factory=list)
     why_note: str = ""                          # for a note: why it isn't a rule
+    id: str = ""                                # "r004", once saved
 
     @property
     def is_note(self) -> bool:
@@ -283,6 +302,8 @@ class Rule:
         """'League of Legends Shorts', 'Every video'."""
         kinds = KINDS.get(self.kind)
         videos = [v for v in self.videos if kinds is None or v in kinds.videos]
+        if not videos and self.kind == "moment":
+            videos = list(kinds.videos)   # never Let's Plays: say so
         place = " and ".join(self.games)
         what = " and ".join(VIDEOS[v] for v in videos) if videos else ""
         if place and what:
@@ -295,7 +316,10 @@ class Rule:
         """What it does, in AI-Editor's words: 'League of Legends Shorts: clips 20–40 seconds long.'"""
         if self.is_note:
             return f"📝 Note: {self.why_note or 'kept for later'}"
-        return f"{self.where()}: {KINDS[self.kind].say(self.params)}."
+        text = f"{self.where()}: {KINDS[self.kind].say(self.params)}"
+        if self.kind == "moment" and moment_rules.league_only(self.params) and                 [g.casefold() for g in self.games] != ["league of legends"]:
+            text += " (League only: other games can't tell yet)"
+        return text + "."
 
     def applies_to(self, game: str | None, video: str) -> bool:
         kind = KINDS.get(self.kind)
@@ -304,6 +328,8 @@ class Rule:
         if self.videos and video not in self.videos:
             return False
         if self.games:
+            if game is None and self.kind == "moment":
+                return True   # every game's highlights: each clip's own game decides
             return game is not None and game.casefold() in {g.casefold() for g in self.games}
         return True
 
@@ -312,6 +338,13 @@ def apply(settings: Settings, rules: list[Rule], video: str) -> Settings:
     """``settings`` with ``rules`` in, oldest first, so a newer rule wins. A copy."""
     for rule in rules:
         kind = KINDS.get(rule.kind)
-        if kind is not None and video in kind.videos:
+        if kind is None or video not in kind.videos:
+            continue
+        if rule.kind == "moment":
+            found = {"id": rule.id, "which": rule.params.get("which", "always"),
+                     "moments": list(rule.params.get("moments") or []), "games": rule.games}
+            settings = settings.model_copy(update={
+                "moment_rules": [*settings.moment_rules, found]})
+        else:
             settings = kind.apply(settings, rule.params, video)
     return settings

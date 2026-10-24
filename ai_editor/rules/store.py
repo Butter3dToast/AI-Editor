@@ -36,7 +36,7 @@ def _row(r: sqlite3.Row) -> Saved:
     scope = json.loads(r["scope_json"] or "{}")
     data = json.loads(r["rule_json"] or "{}")
     rule = Rule(data.get("kind", "note"), data.get("params") or {}, scope.get("games") or [],
-                scope.get("videos") or [], data.get("why_note", ""))
+                scope.get("videos") or [], data.get("why_note", ""), r["rule_id"])
     return Saved(r["id"], r["rule_id"], r["source_text"], rule, bool(r["enabled"]),
                  r["created_at"])
 
@@ -97,6 +97,8 @@ def clashes(saved: list[Saved]) -> dict[str, str]:
                 continue
             if a.kind == "switch":
                 same = a.params.get("switch") == b.params.get("switch")
+            elif a.kind == "moment":   # about the same moment, always or never
+                same = bool(set(a.params.get("moments") or []) & set(b.params.get("moments") or []))
             else:
                 same = bool(set(a.params) & set(b.params))   # they set the same value
             if not same:
@@ -123,11 +125,11 @@ def stamp(plan: "EditPlan", found: list[Saved]) -> None:
     """Keep a copy of the rules a plan was made with."""
     plan.source = dict(plan.source or {})
     plan.source["rules"] = [{"id": s.rule_id, "kind": s.rule.kind, "params": s.rule.params,
-                             "said": s.rule.said()} for s in found]
+                             "games": s.rule.games, "said": s.rule.said()} for s in found]
 
 
 def stamped(plan: "EditPlan") -> list[Rule]:
-    return [Rule(r["kind"], r.get("params") or {})
+    return [Rule(r["kind"], r.get("params") or {}, list(r.get("games") or []), id=r.get("id", ""))
             for r in (plan.source or {}).get("rules") or [] if r.get("kind") in KINDS]
 
 

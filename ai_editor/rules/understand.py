@@ -21,12 +21,14 @@ from dataclasses import dataclass
 from .. import llm
 from ..config import Settings
 from .kinds import EFFECTS, KINDS, ORDERS, REFUSED, SWITCHES, VIDEOS, Rule
+from .moments import MOMENTS, WHICH
 
 # The values each kind keeps: its own, plus the ones it may have.
 ACCEPTS = {"clip_length": ("min_seconds", "max_seconds"), "video_length": ("minutes",),
            "teaser": ("on", "seconds"), "clip_order": ("order",), "quality_bar": ("level",),
            "silence": ("seconds",), "caption_look": ("size_scale", "words", "height_percent"),
-           "effect_amount": ("per_minute", "effect"), "switch": ("switch", "on")}
+           "effect_amount": ("per_minute", "effect"), "switch": ("switch", "on"),
+           "moment": ("which", "moments")}
 # The form's name for a value, where it differs: "switch" is also a kind's name, and with
 # both Gemma left the value out 2 times in 5.
 FORM_NAME = {"switch": "which_switch"}
@@ -43,20 +45,22 @@ Pick the ONE kind of rule it is:
 {kinds}
 - speed_up: speeding anything up (AI-Editor never does)
 - effects_on: switching effects or captions on or off for good
-- moments: which moments go in or stay out, or which effect goes on which moment
+- effect_on_moment: which effect goes on which moment (a zoom on kills, a replay on steals)
 - note: anything else, or more than one idea at once
 
 games: the games it names, from: {games}. Empty if it doesn't name one.
 videos: the kinds of video it names: highlights, shorts, letsplay. Empty if it doesn't say.
 Fill in only the values the tip gives, for the kind you picked; leave out the rest.
-why_note: for speed_up, effects_on, moments or note, a few words on what the tip wants.
+why_note: for speed_up, effects_on, effect_on_moment or note, a few words on what the tip wants.
 
 Examples (not the streamer's own):
 "Wardogs clips should be at most 25 seconds" -> kind clip_length, games [Wardogs], max_seconds 25
 "I want my Dawnwalker parts to be around 40 minutes" -> kind video_length, games [The Blood of Dawnwalker], videos [letsplay], minutes 40
 "Don't open highlights with a teaser" -> kind teaser, videos [highlights], on false
 "Bigger captions on Shorts" -> kind caption_look, videos [shorts], size_scale 1.3
-"Add a zoom whenever I get a triple kill" -> kind moments
+"Always use the clips where I get first blood" -> kind moment, which always, moments [first_blood]
+"Keep the clips where my team gets aced out of my highlights" -> kind moment, videos [highlights], which never, moments [aced]
+"Add a zoom whenever I get a triple kill" -> kind effect_on_moment
 "Make it faster when I'm walking around" -> kind speed_up"""
 
 
@@ -72,6 +76,8 @@ def schema(games: list[str]) -> dict:
         "order": {"enum": list(ORDERS)},
         "effect": {"enum": list(EFFECTS)},
         FORM_NAME["switch"]: {"enum": list(SWITCHES)},
+        "which": {"enum": list(WHICH)},
+        "moments": {"type": "array", "items": {"enum": list(MOMENTS)}},
         "why_note": {"type": "string", "maxLength": 120},
     }, "required": ["kind", "games", "videos"]}
 
@@ -115,6 +121,10 @@ def to_rule(answer: dict, games: list[str]) -> Understood:
             # 2 times in 5 Gemma left out which one, naming it in why_note instead:
             # "...which corresponds to the whole_fights switch".
             value = next((s for s in SWITCHES if s in why), None)
+        if name == "moments":
+            value = list(dict.fromkeys(m for m in value or [] if m in MOMENTS)) or None
+        elif name == "which" and value not in WHICH:
+            value = None
         if value is None:
             continue
         if name in NUMBERS or name == "words":
@@ -151,7 +161,8 @@ def understand(settings: Settings, tip: str, games: list[str]) -> Understood:
     answer = llm.ask(settings, SYSTEM, question(tip, games), schema=schema(games),
                      keep_alive="2m")
     kind = answer.get("kind")
-    left_out = [n for n in FOLLOW_UP.get(kind, ()) if answer.get(FORM_NAME.get(n, n)) is None]
+    left_out = [n for n in FOLLOW_UP.get(kind, ())
+                if answer.get(FORM_NAME.get(n, n)) in (None, [])]
     if left_out and not (kind == "switch" and any(s in str(answer.get("why_note")) for s in
                                                    SWITCHES)):
         answer = {**answer, **llm.ask(settings, SYSTEM, follow_up(tip, kind, left_out, games),
@@ -165,7 +176,7 @@ def understand(settings: Settings, tip: str, games: list[str]) -> Understood:
 # and left which one out 5 times in 5. Never a length or a time: "short clips" stays a
 # note rather than the AI making up a number you didn't give.
 FOLLOW_UP = {"switch": ("switch",), "clip_order": ("order",), "teaser": ("on",),
-             "quality_bar": ("level",)}
+             "quality_bar": ("level",), "moment": ("which", "moments")}
 
 
 def follow_up(tip: str, kind: str, left_out: list[str], games: list[str]) -> str:
