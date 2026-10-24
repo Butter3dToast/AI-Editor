@@ -3,6 +3,39 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.31.0 — Phase 3A-2: Your taste — 24 October 2026
+
+**New**
+
+- **AI-Editor learns your taste**, per game, from your 👍, 🔖 and 👎, and uses
+  it to order your clips and pick them. It looks at the usual score, kills
+  and multikills, your Shorts marks, how long the moment is, and how much
+  talking there is. From your League ratings it learned that talking without
+  action counts against a clip, and kills, your Shorts marks and longer
+  fights count for it.
+- **Only where it helps**: each time it learns, it tests itself on each
+  stream using only your other streams, as a new stream would be. It's only
+  used in a game where it beats the usual score. League today: **74%**
+  against the usual score's 70% at putting a clip you liked above one you
+  didn't, so it's in use. Wardogs starts learning at 30 ratings.
+- It learns again after every 20 new ratings, in a fraction of a second, on
+  this PC. Nothing new to install.
+- **Clips tab**: a new **Your taste** column (how likely you are to like the
+  clip), and the list in that order where it's in use.
+- **Settings → Learning your taste**: the **Learn my taste** switch, and a
+  line per game saying how it did and whether it's in use.
+- **A copy of your library before every upgrade**: when a new version changes
+  how the library is laid out, AI-Editor first saves a whole copy beside it
+  (`ai-editor.before-v9.db`). It never deletes it.
+
+**Good to know**
+
+- It changes the order, never the bar: as many clips pass the quality bar
+  as before. "My 👍 clips" and "My 🔖 clips" videos, your marks, 👎 and
+  your rules work exactly as before.
+- The manual described a Settings → Backup button that was never built. It
+  now says how to back up by hand.
+
 ## 0.30.0 — Phase 3A-1: How well AI-Editor knows you — 24 October 2026
 
 Phase 3 begins: AI-Editor learning your taste. This first step measures where

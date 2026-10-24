@@ -25,27 +25,31 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from ..config import Settings
+from .taste import ranked
+
 TOP = 20
 RATED = ("thumbs_up", "thumbs_down", "next_video")
 
 
-def ranking(conn: sqlite3.Connection, recording_id: int) -> dict[str, tuple[int, int]]:
+def ranking(conn: sqlite3.Connection, recording_id: int,
+            settings: Settings | None = None) -> dict[str, tuple[int, int]]:
     """Each clip's place in the recording's list, best first: {clip id: (place, of)}.
-    The order of the Clips tab."""
-    ids = [r[0] for r in conn.execute("SELECT clip_id FROM clips WHERE recording_id = ? "
-                                      "ORDER BY score DESC", (recording_id,))]
-    return {clip_id: (n + 1, len(ids)) for n, clip_id in enumerate(ids)}
+    The order of the Clips tab: with ``settings``, your taste's where it's in use."""
+    rows, _ = ranked(conn, settings, recording_id)
+    return {r["clip_id"]: (n + 1, len(rows)) for n, r in enumerate(rows)}
 
 
-def place(conn: sqlite3.Connection, clip_id: str) -> dict:
+def place(conn: sqlite3.Connection, clip_id: str, settings: Settings | None = None) -> dict:
     """{"rank": 4, "of": 40} for the clip as the list stands now, for its feedback row."""
     row = conn.execute("SELECT recording_id FROM clips WHERE clip_id = ?", (clip_id,)).fetchone()
-    found = ranking(conn, row[0]).get(clip_id) if row else None
+    found = ranking(conn, row[0], settings).get(clip_id) if row else None
     return {"rank": found[0], "of": found[1]} if found else {}
 
 
 def _write_down_missing(conn: sqlite3.Connection) -> None:
-    """Ratings from before 3A-1 have no place written down: give them today's, once."""
+    """Ratings from before 3A-1 have no place written down: give them the usual
+    score's (all there was then), once."""
     rows = conn.execute(
         "SELECT feedback.id, feedback.clip_id, clips.recording_id FROM feedback "
         "JOIN clips ON clips.clip_id = feedback.clip_id "

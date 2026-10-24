@@ -185,13 +185,13 @@ Everything else in AI-Editor works without it. Untick **Use the local AI** in Se
 
 ### Backing up your settings
 
-Your Style Profiles, Rules, learned preferences, and Clip Library live in AI-Editor's database. Back them up regularly:
+Your Style Profiles, Rules, ratings, learned taste and Clip Library live in one file, the library: `ai-editor.db` in your cache folder (for you, `F:\AI-Editor\cache\ai-editor.db`). Your private settings are `config\settings.local.yaml`.
 
-1. Go to **Settings → Backup**.
-2. Click **Create backup** and choose a location (for example a USB drive or cloud folder).
-3. To restore, click **Restore backup** and pick the backup file.
+**Before an update changes how the library is laid out**, AI-Editor keeps a whole copy of it as it was, beside it, for example `ai-editor.before-v9.db`. AI-Editor never deletes it. Once the new version has been working for a while, you can delete it yourself.
 
-Backups do **not** include your video files.
+**To back up yourself:** close AI-Editor, then copy `ai-editor.db` somewhere else (a USB drive or a cloud folder). To restore, close AI-Editor and copy it back. Backups do **not** include your video files.
+
+**Not built yet:** a Backup button in Settings.
 
 ---
 
@@ -802,6 +802,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 | Length | How long the clip is in the library. Generous on purpose, so nothing good is lost |
 | In a video | How long it is once a highlight video trims it to its moment: about 15 s of lead-up, never more than 50 s, never cut mid-word. "-" means it can't go in (rated down, or during "BRB") |
 | Score | 0 to 1. Higher is better. A moment you marked scores 1.00 |
+| Your taste | How likely you are to like it, learned from your ratings (12.2b). Only in games where your taste is in use; otherwise "-". The list is in this order there |
 | Why | What made it stand out: you marked it, laughter, shouting, gunfire, chat busy, loud... |
 | AI says | The local AI's rating out of 10 and what happens, e.g. "7/10 Teamfight engagement and multi-kill" (12.3) |
 | You said | Your words in it |
@@ -835,6 +836,20 @@ The **How well AI-Editor knows you** box at the bottom of the Clips tab shows, f
 Both should climb as AI-Editor learns your taste (Phase 3). Weeks go by **when you streamed**, not when you rated, so you see whether new streams get better. A clip's place in the list is written down the first time you rate it and never changes afterwards, so the numbers stay fair. Editing a clip in Review doesn't count against it. Ratings from before this box existed use the list as it was the first time the box was opened.
 
 Also kept for learning, from 0.30.0: each effect you tick or untick in Review, and every clip that ends up in a rendered video or Short.
+
+### 12.2b Your taste
+
+From your 👍, 🔖 and 👎, AI-Editor learns **your taste**, separately for each game, and uses it to **order the clips and pick them** for videos. No AI model, nothing sent anywhere: a small sum worked out on this PC in a fraction of a second.
+
+What it looks at: the usual score, a kill or multikill (League game info), your Shorts marks, how long the moment is, and **how much talking there is**. On your League ratings it learned that **talking without action counts against a clip** (clips the local AI called *chill* were liked 12% of the time, *banter* 26%, a multikill 96%), and kills, multikills, your Shorts marks and longer fights count for it.
+
+- **It starts at 30 ratings in a game** (some 👍 and some 👎), from at least 3 streams.
+- **The safety net:** each time it learns, it tests itself the fair way: each stream ranked by what it learned from your *other* streams, as a new stream would be. **It's only used in a game where it beats the usual score**, and Settings → **Learning your taste** says how it did: *"League of Legends: your taste puts a clip you liked above one you didn't 74% of the time, the usual score 70% (from 424 ratings), in use."*
+- **It learns again after every 20 new ratings**, so it can switch itself off again (and back on).
+- **It changes the order, never the bar:** in a stream, the clip it thinks you'd like most gets the best score there, and so on. As many clips pass the quality bar as before. Your 👍, 🔖 and 👎, your marks and your rules work exactly as before.
+- **Untick Learn my taste** in Settings to go back to the usual score everywhere.
+
+The **How well AI-Editor knows you** box (12.2a) shows whether it helps on your new streams.
 
 ### 12.3 What the AI says
 
@@ -1862,6 +1877,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Publish | Description footer (`publish.description_footer`) | (empty) | Lines added under every description, e.g. your Twitch link. |
 | Publish | Thumbnails (`publish.thumbnails`) | 6 (1–12) | Frames kept, best first (20.4). |
 | Publish | Let's Play chapters every (`publish.chapter_every_min`) | 5 minutes (1–30) | How often a Let's Play part gets a chapter (20.3). |
+| Learning | Learn my taste (`learning.taste`) | On | Your taste orders and picks the clips in each game where it beats the usual score (12.2b). Off: the usual score everywhere. |
 | AI | Use the local AI (`llm.enabled`) | On | Rate and describe each clip with the local AI (5.2, 12.3). Off: everything else works as before. |
 | AI | Model (`llm.model`) | `gemma4:12b` | The Ollama model. It must be able to look at pictures. About 8 GB. |
 | AI | Address (`llm.host`) | `http://127.0.0.1:11434` | Where Ollama answers. Only this PC is allowed. |

@@ -131,8 +131,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             with gr.Column(scale=3):
                 clip_tbl = gr.Dataframe(headers=videos.CLIP_COLUMNS, interactive=False, wrap=True,
                                         max_height=560,
-                                        column_widths=["4%", "10%", "7%", "7%", "6%", "13%",
-                                                       "22%", "19%", "6%", "6%"])
+                                        column_widths=["4%", "9%", "6%", "6%", "6%", "6%",
+                                                       "12%", "21%", "18%", "6%", "6%"])
             with gr.Column(scale=2):
                 clip_player = gr.HTML(videos.player(None, note="Pick a recording, then click a "
                                                                "clip to watch it here."))
@@ -375,7 +375,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         conn = init_db(settings.db_path)
         try:
             lengths = videos.video_lengths(conn, settings, int(recording_id))
-            rows, ids = videos.clip_table(conn, int(recording_id), show, lengths)
+            rows, ids = videos.clip_table(conn, int(recording_id), show, lengths, settings)
             counts = videos.clip_summary(conn, settings, int(recording_id), lengths)
         finally:
             conn.close()
@@ -421,7 +421,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         def apply(clip_id, recording_id, show):
             if clip_id is None:
                 return gr.skip(), gr.skip(), "Click a clip first.", gr.skip()
-            message = read(videos.rate, clip_id, rating)
+            message = read(videos.rate, clip_id, rating, settings)
             table, ids, counts = clips_view(recording_id, show)
             if rating == 1:
                 message += (" It goes into your next highlight video. To put it in one you've "

@@ -19,8 +19,8 @@ from ..cli import SIGNAL_LABELS
 from ..config import Settings
 from ..recipes.plan import APPROVED, DISLIKED, LIKED, SAVED, EditPlan, load_plan, used_in
 
-CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Why", "AI says", "You said",
-                "Rated", "Used"]
+CLIP_COLUMNS = ["#", "Time", "Length", "In a video", "Score", "Your taste", "Why", "AI says",
+                "You said", "Rated", "Used"]
 PLAN_COLUMNS = ["#", "In the video", "From", "Starts at", "Length", "Score", "Why"]
 PART_COLUMNS = ["Part", "Length", "In the recording", "Ends on"]
 # What a part can end on, in plain words.
@@ -188,13 +188,17 @@ def marks_line(conn, recording_id: int) -> str:
 
 
 def clip_table(conn, recording_id: int, show: str = "Not used yet",
-               lengths: dict[str, float] | None = None) -> tuple[list[list], list[str]]:
+               lengths: dict[str, float] | None = None,
+               settings: Settings | None = None) -> tuple[list[list], list[str]]:
     """The recording's clips, best first: the table's rows, and each row's clip id.
 
     ``lengths``: each clip's length in a video (video_lengths), for that column.
+    With ``settings``, in your taste's order where it's in use (3A-2), with how
+    likely you are to like each one.
     """
-    rows = conn.execute("SELECT * FROM clips WHERE recording_id = ? ORDER BY score DESC",
-                        (recording_id,)).fetchall()
+    from ..learning.taste import ranked
+
+    rows, liking = ranked(conn, settings, recording_id)
     lengths = lengths or {}
     notes = notes_for(conn, recording_id, rows)
     table, ids = [], []
@@ -214,6 +218,7 @@ def clip_table(conn, recording_id: int, show: str = "Not used yet",
             f"{row['end_sec'] - row['start_sec']:.0f}s",
             f"{lengths[row['clip_id']]:.0f}s" if row["clip_id"] in lengths else "-",
             f"{row['score']:.2f}",
+            f"{liking[row['clip_id']]:.0%}" if row["clip_id"] in liking else "-",
             why(summary.get("reasons", [])),
             f"{note.stars} {note.summary}" if note else "-",
             said[:70] + ("..." if len(said) > 70 else "") or "-",
@@ -250,7 +255,7 @@ def clip_details(conn, clip_id: str) -> str:
     return "\n\n".join(lines)
 
 
-def rate(conn, clip_id: str, rating: int | None) -> str:
+def rate(conn, clip_id: str, rating: int | None, settings: Settings | None = None) -> str:
     """Thumbs up (1), 🔖 next video (2), down (-1) or cleared (None); kept for
     learning (spec 7.10), with where the clip sat in the list (learning.scoreboard)."""
     from ..learning.scoreboard import place
@@ -268,7 +273,8 @@ def rate(conn, clip_id: str, rating: int | None) -> str:
     conn.execute("INSERT INTO feedback (ts, action, clip_id, game, features_json, detail_json) "
                  "VALUES (?, ?, ?, ?, ?, ?)",
                  (datetime.now(timezone.utc).isoformat(timespec="seconds"), action, clip_id, game,
-                  row["signals_json"], json.dumps(place(conn, clip_id)) if rating else None))
+                  row["signals_json"], json.dumps(place(conn, clip_id, settings)) if rating
+                  else None))
     conn.commit()
     return {LIKED: "👍 Saved. Clips like this one are what AI-Editor learns to look for.",
             SAVED: "🔖 Saved for your next video: it stays out of the video you make now. "

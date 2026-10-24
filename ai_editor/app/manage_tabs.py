@@ -209,6 +209,12 @@ def build(settings: Settings, worker: Worker) -> None:
                                     info="{subtitle} is the AI's idea; {game}, {episode} and "
                                          "{part} are filled in.")
         friends_panel.build_settings(settings)   # Phase 2I-2
+        with gr.Accordion("Learning your taste", open=True):
+            learn_on = gr.Checkbox(value=settings.learning.taste, label="Learn my taste",
+                                   info="From your 👍, 🔖 and 👎: it orders your clips and picks "
+                                        "them, in each game where it beats the usual score. "
+                                        "Untick to go back to the usual score everywhere.")
+            learn_status = gr.Markdown()
         with gr.Accordion("AI (on this PC)", open=True):
             ai_status = gr.Markdown(llm.status(settings))
             with gr.Row():
@@ -312,6 +318,17 @@ def build(settings: Settings, worker: Worker) -> None:
         return llm.status(settings), agree
 
     settings_tab.select(ai_look, None, [ai_status, ai_agree])
+
+    def taste_look():
+        from ..learning.taste import status_text
+
+        conn = init_db(settings.db_path)
+        try:
+            return status_text(conn, settings)
+        finally:
+            conn.close()
+
+    settings_tab.select(taste_look, None, learn_status)
     ai_check.click(ai_look, None, [ai_status, ai_agree])
 
     def pull():
@@ -339,7 +356,7 @@ def build(settings: Settings, worker: Worker) -> None:
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
              effects_lp, rate_hl, rate_sh, sfx_db, between, fights_whole, game_voice,
-             suggest):
+             suggest, learn):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -374,6 +391,7 @@ def build(settings: Settings, worker: Worker) -> None:
             ("effects", "suggest"): bool(suggest),
             ("clips", "keep_fights_whole"): bool(fights_whole),
             ("render", "game_under_voice"): bool(game_voice),
+            ("learning", "taste"): bool(learn),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -395,8 +413,8 @@ def build(settings: Settings, worker: Worker) -> None:
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
                           pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume,
-                          fx_between, whole_fights, game_under, fx_suggest],
-                 settings_msg)
+                          fx_between, whole_fights, game_under, fx_suggest, learn_on],
+                 settings_msg).then(taste_look, None, learn_status)
 
 
 def current(settings: Settings, key: tuple[str, str]):

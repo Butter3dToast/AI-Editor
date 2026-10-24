@@ -199,3 +199,32 @@ def test_session_rolls_back_on_error(tmp_path):
 
     with session(db_path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM layouts").fetchone()[0] == 0
+
+
+def test_a_copy_is_kept_before_the_library_is_upgraded(tmp_path):
+    """The library as it was, beside it, untouched: in case an upgrade goes wrong."""
+    from ai_editor.db import MIGRATIONS, connect
+
+    path = tmp_path / "library.db"
+    old = connect(path)
+    for target in sorted(MIGRATIONS):
+        if target < SCHEMA_VERSION:
+            old.executescript(MIGRATIONS[target])
+            old.execute(f"PRAGMA user_version = {target}")
+    old.execute("INSERT INTO recordings (content_hash, source_type, source_file, imported_at) "
+                "VALUES ('h', 'local_obs', 'x.mkv', 'now')")
+    old.commit()
+    old.close()
+    init_db(path).close()
+    kept = sqlite3.connect(tmp_path / f"library.before-v{SCHEMA_VERSION}.db")
+    assert kept.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION - 1
+    assert kept.execute("SELECT COUNT(*) FROM recordings").fetchone()[0] == 1
+    kept.close()
+    assert len(list(tmp_path.glob("*.before-*"))) == 1
+    init_db(path).close()                                   # up to date: no new copy
+    assert len(list(tmp_path.glob("*.before-*"))) == 1
+
+
+def test_a_new_library_needs_no_copy(tmp_path):
+    init_db(tmp_path / "library.db").close()
+    assert not list(tmp_path.glob("*.before-*"))

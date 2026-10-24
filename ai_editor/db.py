@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 _V1 = """
@@ -403,7 +403,21 @@ CREATE TABLE voices (
 """
 
 
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8}
+# Your taste per game (Phase 3A-2, learning/taste.py): the learned model, and how
+# it did against the usual score when tested, which decides whether it's used.
+_V9 = """
+CREATE TABLE taste_models (
+    game            TEXT    PRIMARY KEY,
+    model_json      TEXT,                      -- NULL: too few ratings yet
+    ratings         INTEGER NOT NULL,
+    taste_check     REAL,                      -- liked above disliked, this model
+    usual_check     REAL,                      -- the same, the usual score
+    learned_at      TEXT    NOT NULL
+);
+"""
+
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8,
+                              9: _V9}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:
@@ -439,10 +453,27 @@ def migrate(conn: sqlite3.Connection) -> int:
 
 
 def init_db(db_path: str | Path) -> sqlite3.Connection:
-    """Open the library and bring its schema up to date."""
+    """Open the library and bring its schema up to date, keeping a copy first."""
     conn = connect(db_path)
+    version = current_version(conn)
+    if 0 < version < SCHEMA_VERSION:
+        keep_copy(conn, Path(db_path), version)
     migrate(conn)
     return conn
+
+
+def keep_copy(conn: sqlite3.Connection, db_path: Path, version: int) -> Path:
+    """A whole copy of the library as it was, beside it, before it's upgraded:
+    "library.before-v9.db". Never deleted by AI-Editor; delete it yourself once
+    the new version has been working for a while."""
+    target = db_path.with_name(f"{db_path.stem}.before-v{SCHEMA_VERSION}{db_path.suffix}")
+    if not target.exists():
+        copy = sqlite3.connect(target)
+        try:
+            conn.backup(copy)
+        finally:
+            copy.close()
+    return target
 
 
 @contextmanager

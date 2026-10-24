@@ -182,9 +182,12 @@ def gather(conn: sqlite3.Connection, settings: Settings,
     from ..analysis.game_events import within
     from ..rules import moments
 
+    from ..learning import taste
+
     h = settings.highlights
     rules = moments.rules_of(settings)
     always = any(r.which == "always" for r in rules)
+    models = taste.in_use(conn, settings)
     found: list[Candidate] = []
     for row in recordings:
         if refresh:
@@ -216,6 +219,8 @@ def gather(conn: sqlite3.Connection, settings: Settings,
                     if c["user_rating"] is not None and c["user_rating"] < 0]
         # The local AI's rating counts for llm.rating_weight of the score (0 by default).
         scores = scores_for(conn, settings, row["id"], clips)
+        # Your taste (3A-2), where it beats the usual score: the same scores, in its order.
+        scores = taste.reordered(scores, taste.likes(conn, settings, clips, row["game"], models))
         events = league_events(conn, row["id"]) if rules else []
         tags = moments.guesses(conn, row["id"], clips) if moments.guesses_needed(rules) else {}
         for clip in clips:

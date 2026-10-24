@@ -350,6 +350,9 @@ publish: # Titles, description, chapters and thumbnails for each video (manual 2
   thumbnails: 6 # Frames kept, best first (output/thumbnails)
   chapter_every_min: 5 # A Let's Play part gets a chapter about this often
 
+learning: # AI-Editor learning your taste from your ratings (manual 12.2b)
+  taste: true # Your taste picks clips in a game once it beats the usual score there
+
 logging:
   # What appears on screen. The log file always records everything.
   level: WARNING # DEBUG | INFO | WARNING | ERROR

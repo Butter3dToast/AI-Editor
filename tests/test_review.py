@@ -190,11 +190,12 @@ def test_the_clip_list_is_best_first_and_ratings_are_kept_for_learning(conn):
                      "(?, 1, 60, 90, ?, ?, 'oh no', ?, 'now')",
                      (clip_id, score, json.dumps({"reasons": ["laughter"]}), used))
     rows, clip_ids = videos.clip_table(conn, 1)
-    assert clip_ids == ["b", "a"] and rows[0][5] == "laughter" and rows[0][4] == "0.90"
+    assert clip_ids == ["b", "a"] and rows[0][4] == "0.90"
+    assert rows[0][5] == "-" and rows[0][6] == "laughter"   # no taste learned yet
     assert videos.clip_table(conn, 1, "All")[1] == ["b", "c", "a"]
     assert "👎" in videos.rate(conn, "a", -1)
     assert videos.clip_table(conn, 1, "Rated")[1] == ["a"]
-    assert videos.clip_table(conn, 1, "Rated")[0][0][8] == "👎"
+    assert videos.clip_table(conn, 1, "Rated")[0][0][9] == "👎"
     assert videos.clip_table(conn, 1, lengths={"b": 48.4})[0][0][3] == "48s"
     action, features = conn.execute("SELECT action, features_json FROM feedback").fetchone()
     assert action == "thumbs_down" and "laughter" in features

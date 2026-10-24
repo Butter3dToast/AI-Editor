@@ -663,6 +663,13 @@ class Publish(BaseModel):
         return v
 
 
+class Learning(BaseModel):
+    """Phase 3: learning your taste from what you rate (learning/taste.py)."""
+
+    # Your taste picks the clips in a game once it beats the usual score there.
+    taste: bool = True
+
+
 class Logging(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
 
@@ -687,6 +694,7 @@ class Settings(BaseModel):
     twitch: Twitch = Twitch()
     llm: Llm = Llm()
     publish: Publish = Publish()
+    learning: Learning = Learning()
     logging: Logging = Logging()
 
     # Where this instance was loaded from; not part of the YAML.
