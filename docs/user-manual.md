@@ -793,7 +793,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 ### 12.1 What you see for each clip
 
-1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, how many minutes of video your unused 👍 clips make (each clip at the length it will have in the video, with the game's style profile and your rules, so it matches what **Make the plan** gives), and your marks from the Stream Companion (8.4). A clip with your mark in it has a ⭐ in front of its **Why** ("⭐ you marked it (Short)"), here and in Review.
+1. Pick a **Recording**. Streams whose video you've deleted aren't listed: tick **Show streams whose video is deleted** to rate their clips anyway (it still teaches AI-Editor; no video can be made from them). Create video never lists them, and the Library always does. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, how many minutes of video your unused 👍 clips make (each clip at the length it will have in the video, with the game's style profile and your rules, so it matches what **Make the plan** gives), and your marks from the Stream Companion (8.4). A clip with your mark in it has a ⭐ in front of its **Why** ("⭐ you marked it (Short)"), here and in Review.
 2. Each row is one clip:
 
 | Column | Shows |

@@ -137,3 +137,23 @@ def test_new_highlights_leave_out_recordings_whose_video_was_deleted(settings, t
     shorts = build_shorts(conn, settings, 2)
     assert not shorts.plans and "video was deleted" in shorts.notes[0]
     conn.close()
+
+
+def test_recordings_whose_video_was_deleted_leave_the_lists(settings, tmp_path):
+    """24 Oct: the lists were mostly "(video deleted)". They're only shown when asked
+    (Clips: to rate old clips), and kept in the library for learning."""
+    from ai_editor.app.videos import analysed_choices
+
+    conn = init_db(settings.db_path)
+    kept = tmp_path / "kept.mkv"
+    kept.write_bytes(b"x")
+    for rid, path in ((1, kept), (2, tmp_path / "deleted.mkv")):
+        conn.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                     "duration_sec, imported_at, analysis_status, game) VALUES "
+                     "(?, ?, 'local_obs', ?, 600, ?, 'complete', 'Wardogs')",
+                     (rid, f"h{rid}", str(path), f"2026-10-0{rid}"))
+    conn.commit()
+    assert [i for _, i in analysed_choices(conn, settings)] == [1]
+    shown = analysed_choices(conn, settings, deleted=True)
+    assert [i for _, i in shown] == [2, 1] and shown[0][0].endswith("(video deleted)")
+    conn.close()

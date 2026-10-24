@@ -117,6 +117,10 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                    label="Recording", scale=3)
             clip_show = gr.Radio(videos.SHOW, value=videos.SHOW[0], label="Show", scale=2)
             ai_btn = gr.Button("Rate with AI", scale=1)
+        clip_deleted = gr.Checkbox(False, label="Show streams whose video is deleted",
+                                   info="Their clips and ratings are kept for learning: rate "
+                                        "them here to teach AI-Editor. No video can be made "
+                                        "from them.")
         clip_ids = gr.State([])
         clip_sel = gr.State(None)
         clip_counts = gr.Markdown()
@@ -379,6 +383,13 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     clip_outputs = [clip_tbl, clip_ids, clip_player, clip_info, clip_sel, clip_counts]
     clip_rec.change(load_clips, [clip_rec, clip_show], clip_outputs)
+
+    def clip_recordings(deleted, recording):
+        found = read(videos.analysed_choices, settings, deleted=bool(deleted))
+        return gr.update(choices=found,
+                         value=recording if recording in [r[1] for r in found] else None)
+
+    clip_deleted.change(clip_recordings, [clip_deleted, clip_rec], clip_rec)
     clip_show.change(load_clips, [clip_rec, clip_show], clip_outputs)
 
     def pick_clip(ids, recording_id, evt: gr.SelectData):
@@ -1504,7 +1515,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     # --- keeping up with finished jobs ---------------------------------------------------
 
-    def tick(seen_version, done, recording, plan_id, show, part):
+    def tick(seen_version, done, recording, plan_id, show, part, deleted=False):
         version = worker.version
         if version == seen_version:
             return (gr.skip(),) * 19 + (done, seen_version)
@@ -1525,6 +1536,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             if "preview" in task.result and task.id > done["preview"]:
                 preview_file, done["preview"] = task.result["preview"], task.id
         recordings = read(videos.analysed_choices, settings)
+        clip_recs = read(videos.analysed_choices, settings, deleted=bool(deleted))
         plans = read(videos.plan_choices)
         ids = [p[1] for p in plans]
         chosen = new_plan if new_plan in ids else plan_id if plan_id in ids else \
@@ -1536,8 +1548,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         return (
             *clip_view,
             *publish_view,
-            gr.update(choices=recordings,
-                      value=recording if recording in [r[1] for r in recordings] else None),
+            gr.update(choices=clip_recs,
+                      value=recording if recording in [r[1] for r in clip_recs] else None),
             gr.update(choices=plans, value=chosen),
             gr.update(choices=read(videos.analysed_choices, settings, lets_play=False)),
             gr.update(choices=episode_choices()),
@@ -1548,7 +1560,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             done, version,
         )
 
-    timer.tick(tick, [seen, handled, clip_rec, plan_pick, clip_show, part_pick],
+    timer.tick(tick, [seen, handled, clip_rec, plan_pick, clip_show, part_pick, clip_deleted],
                [clip_tbl, clip_ids, clip_counts, *publish_outputs, clip_rec, plan_pick, hl_from,
                 lp_rec, sh_rec,
                 review_player, review_msg, summary, handled, seen],

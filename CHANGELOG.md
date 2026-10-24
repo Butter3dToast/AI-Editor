@@ -3,6 +3,17 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.26.1 — Fix: deleted streams leave the lists — 24 October 2026
+
+**Changed**
+
+- **Streams whose video you deleted aren't listed any more** in Clips or
+  Create video: the lists were mostly "(video deleted)". No video can be made
+  from them, so Create video never shows them. In Clips, tick **Show streams
+  whose video is deleted** to rate their clips anyway, which still teaches
+  AI-Editor. The Library still lists everything, and nothing is removed from
+  it: their analysis, ratings and League events all stay.
+
 ## 0.26.0 — Phase 2H-3a: Moment rules, always in or never in — 24 October 2026
 
 **New**

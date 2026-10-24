@@ -76,10 +76,14 @@ def proxy_of(conn, recording_id: int) -> Path | None:
     return Path(row["proxy_path"]) if row and row["proxy_path"] else None
 
 
-def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None) -> list[tuple[str, int]]:
+def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None,
+                     deleted: bool = False) -> list[tuple[str, int]]:
     """(label, id) for analysed recordings, newest first.
 
     ``lets_play``: True for Let's Play games only, False for streams only.
+    ``deleted``: also those whose video you deleted (kept for learning). Left out
+    otherwise: no video can be made from them, and the lists filled up with them
+    (24 Oct).
     """
     episodes = {g.lower() for g in settings.lets_play.games}
     from ..recipes.highlights import has_video
@@ -91,6 +95,8 @@ def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None)
     for r in rows:
         is_episode = (r["game"] or "").lower() in episodes
         if lets_play is not None and is_episode != lets_play:
+            continue
+        if not deleted and not has_video(r):
             continue
         out.append((f"#{r['id']}  {r['title'] or Path(r['source_file']).stem}"
                     + (f"  ({r['game']})" if r["game"] else "")
