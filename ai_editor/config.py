@@ -358,6 +358,11 @@ class Highlights(BaseModel):
     allow_reused_clips: bool = False
     always_include_pinned: bool = True
     always_include_markers: bool = True
+    # Only my thumbs-up clips (0.25.1): with any clip given a thumbs up, the video
+    # is made of exactly those, no marked clips and no topping up. The creator
+    # votes for one video and leaves the rest for the next; marks only capture a
+    # moment (2026-10-24). No thumbs up at all: picked the usual way.
+    only_liked: bool = True
 
 
 class SafeZone(BaseModel):

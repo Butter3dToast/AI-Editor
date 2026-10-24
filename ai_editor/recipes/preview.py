@@ -21,7 +21,7 @@ from ..analysis.captions import Cue, Word, segment_cues, write_srt
 from ..analysis.clips import load_words
 from ..config import Settings
 from ..errors import MediaProcessingFailed, NotImported
-from ..ffmpeg import nvenc_encoders, run_ffmpeg
+from ..ffmpeg import concat_list, nvenc_encoders, run_ffmpeg
 from ..logging_setup import get_logger
 from .plan import EditPlan
 
@@ -226,8 +226,7 @@ def render_short_preview(conn: sqlite3.Connection, settings: Settings, plan: Edi
                         "making a Short's preview", item.length)
                 parts.append(part)
             listing = work / "parts.txt"
-            listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts),
-                               encoding="utf-8")
+            listing.write_text(concat_list(parts), encoding="utf-8")
             run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
                         "-movflags", "+faststart", str(target)], cwd=work,
                        what="joining a Short's preview")
@@ -357,7 +356,7 @@ def render_preview(
                     cues.append(Cue(c.start + offset + later, c.end + offset + later, c.text))
 
         listing = parts_dir / "parts.txt"
-        listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
+        listing.write_text(concat_list(parts), encoding="utf-8")
         run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
                     "-movflags", "+faststart", str(target)], what="joining a video preview")
         write_srt(cues, target.with_suffix(".srt"))

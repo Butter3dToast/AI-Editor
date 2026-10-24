@@ -3,6 +3,38 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.25.1 — Fix: only your 👍 clips, videos named by their title — 24 October 2026
+
+**Changed**
+
+- **Only my 👍 clips** (Create video, Highlights, ticked by default). If you gave
+  any clips a 👍, the highlight video is exactly those clips: no marked clips,
+  and nothing added to reach the length. Vote for the clips you want in this
+  video and leave the rest for the next one. Review's summary says how long they
+  came to against the target, and **Remove** adds nothing in a clip's place
+  (**Add a clip** still lists every clip). With no 👍 clips at all, AI-Editor
+  picks them itself as before. Your marks still capture clips as before. Shorts
+  are unchanged.
+- **The Clips tab's minutes are what the video will be.** Each clip is counted
+  at the length the game's style profile and your rules give it. On 24 Oct it
+  said 12.2 min while the video, with the League profile's 25 s clips, came
+  to 7.6.
+- **Finished videos are named with your title.** Keep a title in Review's
+  Publish section before rendering and the video (and its text file) is saved
+  under it: "We Hit Those.mp4". Never over another video's file: a second one
+  with the same title gets "(2)".
+
+**New**
+
+- **Delete several plans** in Review: tick them (or **Tick every draft**),
+  then delete them all at once, asked once more. Only the plans leave the list.
+- Switching tabs pauses a playing video.
+
+**Fixed**
+
+- A title with an apostrophe ("Well Don't Mind If I Do") stopped its render at
+  85%.
+
 ## 0.25.0 — Phase 2H-2: Rules from your tips — 19 October 2026
 
 **New**

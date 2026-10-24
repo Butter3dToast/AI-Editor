@@ -228,6 +228,13 @@ def run_ffmpeg(
         on_progress(1.0)
 
 
+def concat_list(paths: list[Path]) -> str:
+    """The list FFmpeg's concat reads, one file a line. An apostrophe in a path ends
+    the quotes, so it's written as '\\'' (out of the quotes, the apostrophe, back
+    in): a Short titled "Well Don't Mind If I Do" stopped at 85% (24 Oct)."""
+    return "".join("file '" + Path(p).as_posix().replace("'", "'\\''") + "'\n" for p in paths)
+
+
 def stream_lengths(path: str | Path) -> dict[str, float]:
     """How long a file's picture and sound run, in seconds: {"video": ..., "audio": ...},
     the longest stream of each kind. Matroska keeps them as DURATION tags."""

@@ -793,7 +793,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 ### 12.1 What you see for each clip
 
-1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, how many minutes of video your unused 👍 clips make, and your marks from the Stream Companion (8.4). A clip with your mark in it has a ⭐ in front of its **Why** ("⭐ you marked it (Short)"), here and in Review.
+1. Pick a **Recording**. Under **Show**, choose **Not used yet** (the default), **All**, or **Rated**. A line above the list counts its clips and your ratings, how many minutes of video your unused 👍 clips make (each clip at the length it will have in the video, with the game's style profile and your rules, so it matches what **Make the plan** gives), and your marks from the Stream Companion (8.4). A clip with your mark in it has a ⭐ in front of its **Why** ("⭐ you marked it (Short)"), here and in Review.
 2. Each row is one clip:
 
 | Column | Shows |
@@ -816,7 +816,7 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 Click a clip, then:
 
-- 👍 **Good clip:** **it goes into your next highlight video**, whatever its score, so you see it in Review for the final check. Already made the video? Add it there with **Add a clip** (18.2).
+- 👍 **Good clip:** **it goes into your next highlight video**, whatever its score, so you see it in Review for the final check. Already made the video? Add it there with **Add a clip** (18.2). With **Only my 👍 clips** on (16.1), the video is just your 👍 clips: vote for the clips you want in this one and leave the rest for the next.
 - 👎 **Not good:** that moment never goes into a highlight video, even a moment you marked, and even if the clip is cut slightly differently later.
 - **Clear rating:** undo either.
 
@@ -1087,7 +1087,8 @@ Use Condense when you want a single video from a session.
 1. Go to **Create video**, and choose **Highlights**.
 2. **Game:** leave **All my streams** for stream highlights of every game you played (Let's Plays stay out), or pick one game.
 3. **Only these streams** (optional): leave it empty and AI-Editor uses the oldest streams' unused clips first, then the next stream's. Or pick the streams yourself.
-4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video.
+4. **Length in minutes:** 10 by default. That's the **least** it will be: it never comes out shorter while there are good clips left, and it may run a little over. Every moment you marked with the Stream Companion and every clip you gave a 👍 always goes in, so lots of them make a longer video. (Not with **Only my 👍 clips**, next.)
+4a. **Only my 👍 clips** (ticked by default): if you gave any clips a 👍, the video is **exactly those clips**. No marked clips, and nothing added to reach the length: it's as long as your 👍 clips are, and Review's summary says so (*Only your 👍 clips: 16 clips, 7.6 min. The target was 12...*). The clips you didn't vote on stay unused for your next video. With no 👍 clips at all, AI-Editor picks them itself, as above. Untick it to have AI-Editor fill up to the length around your 👍 clips.
 
 When the Stream Companion was running, no clip runs into your "BRB", "Starting" or "Ending Screen" scenes: each one stops half a second before you switched, and a moment during "BRB" isn't used.
 5. Check the **Style profile** box: a profile made for this game and highlights is picked by itself (chapter 13.0). Or choose **No profile (my Settings)**.
@@ -1146,7 +1147,8 @@ The preview is only for judging the choices. The finished video, in full quality
 | **Ordering** | Timeline | *Timeline* (as it happened, the teaser's clip saved for the end; with no teaser, simply as it happened), *Chronological* (strictly as it happened), *Balanced* (mixes intense and calmer clips), or *Best last* (builds to the strongest). |
 | **Allow reused clips** | Off | Whether clips already used in other highlight videos can appear. |
 | **Always include pinned clips** | On | Your pinned clips are always used. |
-| **Always include markers** | On | Moments you marked with the hotkey always go in. |
+| **Always include markers** | On | Moments you marked with the hotkey always go in. Not when **Only my 👍 clips** is on and you've given clips a 👍: then a mark only captures the moment, for you to 👍 or not. |
+| **Only my 👍 clips** | On | With any 👍 clips, the video is exactly those: no marked clips, no topping up to the length, and **Remove** in Review adds nothing in its place. No 👍 clips: picked the usual way. Also a tick box in Create video, for one video. |
 
 ### 16.3 Tips
 
@@ -1231,6 +1233,7 @@ Every video goes through Review before rendering. Nothing is final until you ren
 
 - **Video plan:** every plan you've made, newest first, with the stream it's from ("League of Legends highlights · 8 Oct stream · Highlights, 15.8 min, draft"). It opens on the newest one. Making a plan again from the **same** stream(s) replaces its old draft (never a rendered one); a plan from another stream is kept.
 - **Delete this plan** (beside Video plan): takes the plan on show out of the list, after you confirm. Only the plan goes (and its Undo history): a finished video stays in your output folder, its clips stay marked as used, and your clips, ratings and what AI-Editor learns from them all stay. AI-Editor never deletes a plan by itself, and deleting quick previews from the folder doesn't remove plans: use this.
+- **Delete several plans** (open it under Video plan): tick the plans to go, or **Tick every draft** (rendered plans stay unticked), then **Delete the ticked plans** and **Yes, delete them**. The same as Delete this plan for each one: only the plans leave the list.
 - **↶ Undo / ↷ Redo:** see 18.4.
 - **The length bar:** how long the video is against its target, one block per clip, as wide as the clip is long. The teaser is amber, a clip with a slow-motion replay is purple (and marked ⟲), the dashed line is your target. Highlights: about 10 minutes, never below; the note turns amber when the video is under it. A Short: 60 seconds at most. A Let's Play: one block per part, aiming for 25-35 minutes each. Hover a block to see what it is; click it to pick that clip (or part), the same as clicking its row.
 - **The list** (highlights and Shorts): every piece in order. The teaser first, then each clip, with where it lands in the video, which stream it's from, where it starts in that stream, its length, score, and why it's in.
@@ -1246,7 +1249,7 @@ Or click a row first, then:
 
 - **Use as teaser:** the video opens with a few seconds of this clip's best moment, and ends on the clip in full, paying the teaser off.
 - **Or the teaser from an exact moment:** type the time in the quick preview or render, e.g. `6:36-6:42`, or just where it starts, `6:36`, and click **Use this moment**. AI-Editor adds a second either side and never starts or stops mid-word.
-- **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
+- **Remove:** takes the clip out. **The next best clip fills the gap**, in the same place, so the video stays at least its target length (16.1). Not in a video of **Only my 👍 clips**: nothing goes in by itself; use **Add a clip** if you want one. If the clip was the teaser's moment, the teaser and the ending move to your next best. Removed clips never come back into this video.
 - **Move up / Move down:** changes the order one place, if you'd rather not drag. The teaser always stays first.
 - **Move the clicked clip to #:** type a number from the list's **#** column and click **Move**: the clip jumps straight there.
 - **Sort by time:** puts everything back in the order it happened: the teaser first, the clips as they happened, the teaser's own clip saved for the end.
@@ -1313,7 +1316,7 @@ Quick previews are kept. Opening a plan in Review shows its last one, ready to p
 1. In Review, tick **Burn in captions** if you want your words on screen (chapter 19.2c). It's off by default.
 2. For a Let's Play, check the **Episode number**, and choose **All parts** or one.
 3. Click **Render the finished video**. Progress shows under **Jobs**.
-4. When it's finished, click **Open the finished video**. Finished files are in your output folder, under `videos`: a highlight video by its plan's name, a Let's Play part as "Game - EP 1 - Part 2".
+4. When it's finished, click **Open the finished video**. Finished files are in your output folder, under `videos` (Shorts under `shorts`), **named with the title you kept** in Publish (20): write the text, pick or type the **Title**, click **Keep my changes**, then render. Without a kept title: a highlight video by its plan's name, a Let's Play part as "Game - EP 1 - Part 2".
 
 Rendering marks the plan's clips as **used**, so the next highlight video carries on with fresh ones. Remove a clip and render again, and that clip is free again.
 
@@ -1498,6 +1501,8 @@ Everything to paste into YouTube when you upload: title ideas, a description wit
 4. Change anything you like, then click **Keep my changes**.
 
 It's also saved as a text file beside the finished video, with the same name (`... .txt`), whenever you write it, keep changes, or render. You can do it before or after rendering.
+
+**The video's file is named with your title.** Keep a title **before** you render and the finished video is saved under it, e.g. `PENTA KILL in ranked.mp4` (`... captions.mp4` for the captioned one). Characters Windows doesn't allow in file names (`? | : " < > * / \`) are left out. It never saves over another video: a second video with the same title becomes `... (2).mp4`. Change the title after rendering and the file keeps its name; it gets the new one the next time you render it, and the old file stays (AI-Editor never deletes a video: delete it yourself if you don't want it).
 
 **Changed the video since?** If you remove, add or move clips after writing the text, Publish says **the chapter times may be off: write it again.**
 

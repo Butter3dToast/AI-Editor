@@ -146,7 +146,10 @@ def remove(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, index: 
     pool = [c for c in candidates if c.clip_id not in taken and not any(
         rid == c.recording_id and a < c.src_out and c.src_in < b for rid, a, b in covered)]
     fill_order = settings.highlights.fill_order
-    added = [_segment(c) for c in top_up(pool, clips_sec(plan), plan.target_sec, fill_order)]
+    # Only your thumbs-up clips: nothing comes in by itself to take its place.
+    liked_only = bool(plan.source.get("only_liked"))
+    added = [] if liked_only else [
+        _segment(c) for c in top_up(pool, clips_sec(plan), plan.target_sec, fill_order)]
     if settings.highlights.ordering == "timeline":
         for new in added:
             insert_by_time(conn, plan, new)
@@ -161,10 +164,13 @@ def remove(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, index: 
     if added:
         message += (f" Replaced with {len(added)} clip(s) ({sum(s.length for s in added):.0f}s), "
                     f"so the video is {plan.total_sec / 60:.1f} min.")
+    elif liked_only:
+        message += (f" Only your 👍 clips, so nothing was added in its place: the video is "
+                    f"{plan.total_sec / 60:.1f} min. Add one yourself if you want.")
     elif clips_sec(plan) >= plan.target_sec:
         message += (f" Still {plan.total_sec / 60:.1f} min, over the {plan.target_sec / 60:.0f} "
                     "minute target, so nothing else was needed.")
-    if clips_sec(plan) < plan.target_sec:
+    if clips_sec(plan) < plan.target_sec and not liked_only:
         recordings = len({c.recording_id for c in candidates}) or len(plan.recording_ids)
         message += " " + short_note(clips_sec(plan), plan.target_sec, recordings)
     return Change(plan, message, added)

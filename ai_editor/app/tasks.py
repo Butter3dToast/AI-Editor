@@ -373,7 +373,8 @@ def _stamp(conn, settings: Settings, plans, used, report: Reporter) -> None:
 
 
 def make_highlights(settings: Settings, *, game: str | None, recording_ids: list[int] | None,
-                    minutes: float | None, reuse: bool = False, profile: int | None = None) -> Job:
+                    minutes: float | None, reuse: bool = False, profile: int | None = None,
+                    only_liked: bool | None = None) -> Job:
     """`ai-editor highlights`: a draft plan for Review. ``profile``: a style profile's id."""
 
     def run(report: Reporter) -> None:
@@ -384,7 +385,7 @@ def make_highlights(settings: Settings, *, game: str | None, recording_ids: list
             report.progress("Choosing the best clips", 0.0)
             used, style = _with_style(conn, settings, profile, "highlights", game)
             result = build_highlights(conn, used, game=game, recording_ids=recording_ids,
-                                      target_min=minutes, reuse=reuse)
+                                      target_min=minutes, reuse=reuse, only_liked=only_liked)
             report.progress("Choosing the best clips", 1.0)
             plan = result.plan
             _stamp(conn, settings, [plan], style, report)
@@ -528,29 +529,35 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
     def run(report: Reporter) -> None:
         from ..analysis.captions import clock
         from ..recipes.plan import approve_plan, load_plan
-        from ..render import parts as lp
-        from ..render.final import render_plan
+        from ..recipes.plan import save_plan
+        from ..render import names, parts as lp
+        from ..render.final import render_plan, video_path
 
         conn = init_db(settings.db_path)
         try:
             found = load_plan(conn, plan_id)
             if found is None:
                 raise TaskFailed("That plan isn't there any more.")
-            plan = found[0]
-            jobs = [(plan, "Rendering", {})]
+            plan, status = found
+            jobs = [(plan, None, "Rendering",
+                     dict(target=video_path(settings, plan, captions=captions)))]
             if plan.recipe == "letsplay":
                 if episode is None:
                     raise TaskFailed("Which episode is this? Fill in the episode number in "
                                      "Review and render again.")
                 numbers = lp.part_numbers(plan)
-                jobs = [(lp.part_plan(plan, n), f"Part {n} of {len(numbers)}",
+                jobs = [(lp.part_plan(plan, n), n, f"Part {n} of {len(numbers)}",
                          dict(target=lp.part_path(settings, plan, episode, n, captions=captions),
                               title=lp.title_card(settings, episode, n)))
                         for n in numbers if not parts or n in parts]
             videos = []
-            for job, label, extra in jobs:
+            for job, part, label, extra in jobs:
+                # Saved under the title you kept in Review, if there is one.
+                extra["target"] = names.target(extra["target"], plan, part, captions)
                 result = render_plan(conn, settings, job, lambda f, label=label:
                                      report.progress(label, f), captions=captions, **extra)
+                names.remember(plan, part, captions, result.path)
+                save_plan(conn, plan, status)
                 videos.append(str(result.path))
                 report.say(f"Saved {result.path.name} ({clock(result.length_sec)}).")
                 for note in result.notes:

@@ -218,6 +218,9 @@ highlights: # Spec section 7.6 Recipe B
   allow_reused_clips: false
   always_include_pinned: true
   always_include_markers: true
+  # With any clip given a thumbs up, a video is made of exactly those: no marked
+  # clips and no topping up to the length. No thumbs up: picked the usual way.
+  only_liked: true
 
 shorts: # Spec section 7.6 Recipe C
   min_length_sec: 15

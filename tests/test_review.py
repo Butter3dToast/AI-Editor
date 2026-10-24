@@ -370,3 +370,70 @@ def test_each_plan_says_which_stream_it_is_from(conn):
     days = [datetime(2026, 10, d, 18).astimezone() for d in (7, 6, 7)]
     assert streams_of(days) == "6 + 7 Oct streams"
     assert streams_of([datetime(2026, 9, 30, 18).astimezone(), days[0]]) == "30 Sep + 7 Oct streams"
+
+
+# --- Only my thumbs-up clips (0.25.1) --------------------------------------------------------
+
+
+@pytest.fixture
+def voted(conn, settings, monkeypatch):
+    """Two 👍 clips, a marked clip and a good clip nobody voted on (24 Oct: the marked
+    and the good ones went into a video made from 16 👍 clips)."""
+    from ai_editor.recipes import highlights
+
+    monkeypatch.setattr(highlights, "refresh_clips", lambda *a: None)
+    settings.highlights.hook = False
+    add_clip(conn, "liked_a", 100, 140, 0.4, rating=1)
+    add_clip(conn, "liked_b", 1000, 1040, 0.3, rating=1)
+    add_clip(conn, "marked", 2000, 2040, 1.0, marker=True)
+    add_clip(conn, "good", 3000, 3040, 0.9)
+    conn.commit()
+    return highlights
+
+
+def clip_ids(plan):
+    return [s.clip_id for s in plan.segments]
+
+
+def test_only_my_thumbs_up_clips_go_in(conn, settings, voted):
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1]).plan
+    assert clip_ids(plan) == ["liked_a", "liked_b"]
+    assert plan.source["only_liked"] is True
+    assert any(n.startswith("Only your 👍 clips: 2 clips") and "The target was 10" in n
+               for n in plan.notes)
+
+
+def test_with_no_thumbs_up_ai_editor_picks_them_itself(conn, settings, voted):
+    conn.execute("UPDATE clips SET user_rating = NULL")
+    conn.commit()
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1]).plan
+    assert set(clip_ids(plan)) == {"marked", "good"} and plan.source["only_liked"] is False
+
+
+def test_unticked_it_fills_to_the_length_as_before(conn, settings, voted):
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1],
+                                  only_liked=False).plan
+    assert set(clip_ids(plan)) == {"liked_a", "liked_b", "marked", "good"}
+
+
+def test_removing_a_clip_from_a_thumbs_up_video_adds_nothing_by_itself(conn, settings, voted):
+    plan = voted.build_highlights(conn, settings, game=None, recording_ids=[1]).plan
+    change = review.remove(conn, settings, plan, 0)
+    assert clip_ids(change.plan) == ["liked_b"] and not change.added
+    assert "nothing was added in its place" in change.message
+    # The unvoted clips can still be added by hand.
+    assert {c for _, c, *_ in review.addable(conn, settings, plan)} >= {"marked", "good"}
+
+
+def test_the_clips_tab_counts_clips_at_the_length_the_video_will_have(conn, settings):
+    """24 Oct: the Clips tab said 12.2 min of 👍 clips; with the League profile's
+    25 s clips the video came to 7.6."""
+    from ai_editor.style import profiles
+
+    pid = profiles.create(conn, "League of legends")
+    profiles.save(conn, pid, games=["League of Legends"], recipes=["highlights"],
+                  values={"cuts_per_min": 2.4})
+    used, name = videos.made_with(conn, settings, "League of Legends")
+    assert name == "League of legends" and used.highlights.max_clip_sec == 27.5
+    used, name = videos.made_with(conn, settings, "Wardogs")
+    assert name is None and used.highlights.max_clip_sec == settings.highlights.max_clip_sec

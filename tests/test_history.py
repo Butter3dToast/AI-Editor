@@ -216,3 +216,20 @@ def test_deleting_a_plan_takes_only_the_plan_out_of_the_list(conn, settings, lib
     assert conn.execute("SELECT COUNT(*) FROM clips WHERE used_in_json IS NOT NULL"
                         ).fetchone()[0] == used
     assert not delete_plan(conn, plan.plan_id)
+
+
+def test_several_ticked_plans_are_deleted_at_once_and_nothing_else(conn, settings, library):
+    from ai_editor.app import videos
+    from ai_editor.recipes.plan import approve_plan, delete_plans
+
+    plans = []
+    for n in range(3):
+        plan = plan_of(library)
+        plan.plan_id = f"highlights_streams_test_{n}"
+        save_plan(conn, plan)
+        plans.append(plan.plan_id)
+    approve_plan(conn, plans[0])
+    assert videos.plan_statuses(conn) == {plans[0]: "rendered", plans[1]: "draft",
+                                          plans[2]: "draft"}
+    assert delete_plans(conn, [plans[0], plans[2], "not_a_plan"]) == 2
+    assert [p for _, p in videos.plan_choices(conn)] == [plans[1]]

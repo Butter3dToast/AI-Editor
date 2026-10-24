@@ -50,8 +50,11 @@ def part_plan(plan: EditPlan, part: int) -> EditPlan:
 
 def part_path(settings: Settings, plan: EditPlan, episode: int, part: int, *,
               captions: bool = False) -> Path:
+    from . import names
+
     name = f"{plan.game or 'Lets Play'} - EP {episode} - Part {part}{' captions' if captions else ''}"
-    return settings.folders.output / FOLDER / f"{NOT_IN_FILENAMES.sub('', name).strip()}.mp4"
+    usual = settings.folders.output / FOLDER / f"{NOT_IN_FILENAMES.sub('', name).strip()}.mp4"
+    return names.found(usual, plan, part, captions)   # saved under its title, if it had one
 
 
 def title_card(settings: Settings, episode: int, part: int) -> str | None:

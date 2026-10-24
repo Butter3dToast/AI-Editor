@@ -33,7 +33,7 @@ from ..config import Effects, RenderPreset, Settings
 from ..effects import Effect, for_plan as effects_for_plan, summary as effects_summary
 from ..effects import picture as picture_fx, sfx
 from ..errors import LowDiskSpace, MediaFileNotFound, MediaProcessingFailed
-from ..ffmpeg import measure_loudness, nvenc_encoders, run_ffmpeg, stream_lengths
+from ..ffmpeg import concat_list, measure_loudness, nvenc_encoders, run_ffmpeg, stream_lengths
 from ..logging_setup import get_logger
 from ..recipes.plan import EditPlan
 from ..analysis.captions import Cue, realistic_timing, segment_cues
@@ -88,10 +88,15 @@ class RenderResult:
 
 
 def video_path(settings: Settings, plan: EditPlan, *, captions: bool = False) -> Path:
-    """Captioned and plain versions are named apart, so one never replaces the other."""
+    """Captioned and plain versions are named apart, so one never replaces the other.
+    Saved under its title, if it had one (names.py)."""
+    from . import names
+
     if plan.recipe == "shorts":  # always captioned: one file, its own folder
-        return settings.folders.output / SHORTS_FOLDER / f"{plan.plan_id}.mp4"
-    return settings.folders.output / FOLDER / f"{plan.plan_id}{' captions' if captions else ''}.mp4"
+        usual = settings.folders.output / SHORTS_FOLDER / f"{plan.plan_id}.mp4"
+    else:
+        usual = settings.folders.output / FOLDER / f"{plan.plan_id}{' captions' if captions else ''}.mp4"
+    return names.found(usual, plan, None, captions)
 
 
 def vertical_of(settings: Settings, plan: EditPlan) -> Vertical:
@@ -590,7 +595,7 @@ def render_plan(
             pieces.append(path)
 
         listing = work / "pieces.txt"
-        listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in pieces), encoding="utf-8")
+        listing.write_text(concat_list(pieces), encoding="utf-8")
         joined = ["-f", "concat", "-safe", "0", "-i", str(listing)]
         target_lufs = settings.render.loudness_target_lufs
         stats = measure_loudness(joined, target_lufs=target_lufs, true_peak=TRUE_PEAK_DB)

@@ -1514,6 +1514,9 @@ def highlights_command(
     teaser_part: int = typer.Option(None, "--teaser",
                                     help="Open with this clip instead: its # in the last list shown, "
                                     "e.g. --teaser 5"),
+    only_liked: bool = typer.Option(None, "--only-liked/--any-clips",
+                                    help="Only your thumbs-up clips, or let AI-Editor fill to the "
+                                    "length (default from Settings: only liked)"),
     teaser_at: str = typer.Option(None, "--teaser-at",
                                   help="Open with this moment of the last video you watched, by its "
                                   "time in that video: e.g. --teaser-at 6:36-6:42, or just where it "
@@ -1576,7 +1579,7 @@ def highlights_command(
             teaser_clip = last.segments[teaser_part - 1].clip_id
         result = build_highlights(conn, settings, game=wanted_game, recording_ids=ids,
                                   target_min=minutes, teaser_clip=teaser_clip,
-                                  teaser_moment=teaser_moment)
+                                  teaser_moment=teaser_moment, only_liked=only_liked)
         plan = result.plan
         titles = {r["id"]: r["title"] for r in conn.execute("SELECT id, title FROM recordings")}
 
@@ -2048,8 +2051,9 @@ def render_command(
     part as its own video, each opening with a title card ("Ep 1 – Part 2").
     """
     from .analysis.captions import clock
-    from .render import parts as lp
-    from .render.final import render_plan
+    from .recipes.plan import load_plan, save_plan
+    from .render import names, parts as lp
+    from .render.final import render_plan, video_path
 
     settings = _load(settings_path)
     setup_logging(settings.log_dir, settings.logging.level)
@@ -2062,11 +2066,15 @@ def render_command(
                           "See them, numbered, with: ai-editor plans")
             raise typer.Exit(code=1)
 
-        jobs = [(plan, "Rendering", {})]
+        short = plan.recipe == "shorts"
+        captioned = (captions if captions is not None else settings.shorts.captions if short
+                     else settings.captions.highlights)
+        jobs = [(plan, None, "Rendering",
+                 dict(target=video_path(settings, plan, captions=captioned)))]
         if plan.recipe == "letsplay":
             episode, numbers, chosen = _episode_parts(conn, plan, part, episode)
             captioned = settings.captions.lets_play if captions is None else captions
-            jobs = [(lp.part_plan(plan, n), f"Part {n} of {len(numbers)}",
+            jobs = [(lp.part_plan(plan, n), n, f"Part {n} of {len(numbers)}",
                      dict(target=lp.part_path(settings, plan, episode, n, captions=captioned),
                           title=lp.title_card(settings, episode, n)))
                     for n in chosen]
@@ -2076,7 +2084,10 @@ def render_command(
             console.print(f"Rendering [bold]{plan.title}[/bold] ({plan.plan_id}): "
                           f"{clock(plan.total_sec)} from {len(plan.segments)} piece(s).")
 
-        for job, what, extra in jobs:
+        status = load_plan(conn, plan.plan_id)[1]
+        for job, number, what, extra in jobs:
+            # Saved under the title you kept in Review, if there is one.
+            extra["target"] = names.target(extra["target"], plan, number, captioned)
             progress = _progress_bar()
             task = progress.add_task(what, total=1.0)
             progress.start()
@@ -2086,6 +2097,8 @@ def render_command(
                                            captions=captions, **extra))
             finally:
                 progress.stop()
+            names.remember(plan, number, captioned, results[-1].path)
+            save_plan(conn, plan, status)
     except AIEditorError as exc:
         console.print(f"[red]{exc.user_message()}[/red]")
         raise typer.Exit(code=1) from exc

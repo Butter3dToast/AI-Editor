@@ -101,8 +101,25 @@ def analysed_choices(conn, settings: Settings, *, lets_play: bool | None = None)
 # --- Clips ------------------------------------------------------------------------
 
 
+def made_with(conn, settings: Settings, game: str | None) -> tuple[Settings, str | None]:
+    """(settings, style profile's name or None) a highlight video of ``game`` is made
+    with unless you change it: the profile Create video picks by itself, then your
+    rules. The Clips tab's lengths come from these (24 Oct: the Clips tab said 12.2
+    min, and the video, with the League profile's 25 s clips, came to 7.6)."""
+    from ..rules import store
+    from ..style import profiles
+    from ..style.apply import apply, matching
+
+    found = profiles.load(conn, matching(conn, settings, game, "highlights"))
+    if found is not None:
+        settings = apply(settings, found.current(settings), "highlights")
+    settings, _ = store.with_rules(conn, settings, game, "highlights")
+    return settings, found.name if found is not None else None
+
+
 def video_lengths(conn, settings: Settings, recording_id: int) -> dict[str, float]:
-    """How long each clip is once a highlight video trims it to its moment.
+    """How long each clip is once a highlight video trims it to its moment, with
+    the style profile and rules it would be made with (made_with).
 
     Clips that can't go in (rated down, or during "BRB") aren't listed.
     """
@@ -111,6 +128,7 @@ def video_lengths(conn, settings: Settings, recording_id: int) -> dict[str, floa
     row = conn.execute("SELECT * FROM recordings WHERE id = ?", (recording_id,)).fetchone()
     if row is None or row["analysis_status"] != "complete":
         return {}
+    settings, _ = made_with(conn, settings, row["game"])
     every = {r[0] for r in conn.execute("SELECT clip_id FROM clips WHERE recording_id = ?",
                                         (recording_id,))}
     return {c.clip_id: c.length for c in gather(conn, settings, [row], refresh=False,
@@ -129,8 +147,12 @@ def clip_summary(conn, settings: Settings, recording_id: int,
                 if not used_in(r["used_in_json"], shorts=False))
     text = f"**{len(rows)} clips** · {len(up)} 👍 · {down} 👎"
     if up:
+        game = conn.execute("SELECT game FROM recordings WHERE id = ?",
+                            (recording_id,)).fetchone()
+        _, style = made_with(conn, settings, game[0] if game else None)
         text += (f" · your unused 👍 clips make about **{fresh / 60:.1f} min** of video "
-                 "(each trimmed to its moment)")
+                 "(each trimmed to its moment"
+                 + (f", with your {style} style" if style else "") + ")")
     return text + " · " + marks_line(conn, recording_id)
 
 
@@ -358,6 +380,12 @@ def plan_choices(conn) -> list[tuple[str, str]]:
         out.append((f"{plan.title}  ·  {when + '  ·  ' if when else ''}{kind}, {length}, "
                     f"{state}  ({plan.plan_id})", plan.plan_id))
     return out
+
+
+def plan_statuses(conn) -> dict[str, str]:
+    """{plan id: 'draft' or 'rendered'}."""
+    return {r["plan_id"]: "rendered" if r["status"] == APPROVED else "draft"
+            for r in conn.execute("SELECT plan_id, status FROM edit_plans")}
 
 
 @dataclass

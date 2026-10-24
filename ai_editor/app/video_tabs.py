@@ -156,6 +156,11 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                    info="Rendering a video uses its clips up, so the next one has "
                                         "fresh clips. Tick this to make another video from the "
                                         "same streams anyway.")
+            hl_liked = gr.Checkbox(value=settings.highlights.only_liked,
+                                   label="Only my 👍 clips",
+                                   info="The video is exactly the clips you gave a 👍: no "
+                                        "marked clips, nothing added to reach the length. "
+                                        "With no 👍 clips, AI-Editor picks them itself.")
         with gr.Group(visible=False) as lp_group:
             lp_rec = gr.Dropdown(choices=episode_choices(), value=None, label="Episode recording",
                                  info="Trimmed (loading screens, silent menus, long pauses) and "
@@ -188,6 +193,21 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             confirm_note = gr.Markdown()
             yes_btn = gr.Button("Yes, delete it", variant="stop", scale=0, min_width=140)
             no_btn = gr.Button("Keep it", scale=0, min_width=110)
+        # Several at once (24 Oct: one by one was "very painful"), asked once more too.
+        with gr.Accordion("Delete several plans", open=False) as bulk_box:
+            bulk_pick = gr.CheckboxGroup(choices=[], label="Tick the plans to delete",
+                                         info="Newest first. Only the plans leave the list: "
+                                              "finished videos stay in your output folder, and "
+                                              "clips and ratings stay.")
+            with gr.Row():
+                bulk_drafts = gr.Button("Tick every draft", size="sm", scale=0, min_width=150)
+                bulk_none = gr.Button("Untick all", size="sm", scale=0, min_width=110)
+                bulk_btn = gr.Button("Delete the ticked plans", size="sm", variant="stop",
+                                     scale=0, min_width=190)
+            with gr.Row(visible=False) as bulk_confirm:
+                bulk_note = gr.Markdown()
+                bulk_yes = gr.Button("Yes, delete them", variant="stop", scale=0, min_width=150)
+                bulk_no = gr.Button("Keep them", scale=0, min_width=110)
         summary = gr.Markdown()
         sel = gr.State(None)
         # Kept inside a tab: anything placed straight in the tab bar shifts the
@@ -412,7 +432,7 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 kind, [hl_group, lp_group, sh_group])
 
     def make(what, game, chosen, minutes, episode_rec, reuse=False, short_rec=None,
-             style=NO_STYLE):
+             style=NO_STYLE, liked=None):
         profile = None if style in (None, NO_STYLE) else int(style)
         if what == "Shorts":
             if short_rec is None:
@@ -428,7 +448,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                 f"Making a {label} highlights plan", f"make:highlights:{game}",
                 tasks.make_highlights(settings, game=game, recording_ids=ids,
                                       minutes=float(minutes) if minutes else None,
-                                      reuse=bool(reuse), profile=profile)))
+                                      reuse=bool(reuse), profile=profile,
+                                      only_liked=None if liked is None else bool(liked))))
         if episode_rec is None:
             return "Pick the episode's recording first."
         return submitted(worker, worker.submit(
@@ -436,7 +457,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
             tasks.make_letsplay(settings, int(episode_rec), profile)))
 
     make_btn.click(lambda *a: make(*a) + " When it's finished, it opens in Review.",
-                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse, sh_rec, style_pick],
+                   [kind, hl_game, hl_from, hl_minutes, lp_rec, hl_reuse, sh_rec, style_pick,
+                    hl_liked],
                    make_msg)
     for picker in (kind, hl_game, lp_rec, sh_rec):
         picker.change(auto_style, [kind, hl_game, lp_rec, sh_rec], style_pick)
@@ -1069,7 +1091,52 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     # First on to the newest plan, then the deleted one off the list: both at
     # once, Gradio 6 kept showing the deleted plan's name in the box.
+    def bulk_list(ticked=None):
+        plans = read(videos.plan_choices)
+        still = {p for _, p in plans}
+        return gr.update(choices=plans, value=[p for p in ticked or [] if p in still])
+
     yes_btn.click(delete, plan_pick, [confirm_row, plan_pick]).then(
+        lambda: gr.update(choices=read(videos.plan_choices)), None, plan_pick).then(
+        bulk_list, bulk_pick, bulk_pick)
+    bulk_box.expand(bulk_list, bulk_pick, bulk_pick)
+    bulk_drafts.click(lambda: [p for p, s in read(videos.plan_statuses).items() if s == "draft"],
+                      None, bulk_pick)
+    bulk_none.click(lambda: [], None, bulk_pick)
+
+    def ask_bulk(ticked):
+        if not ticked:
+            gr.Info("Tick the plans to delete first.")
+            return gr.Row(visible=False), ""
+        statuses = read(videos.plan_statuses)
+        rendered = sum(statuses.get(p) == "rendered" for p in ticked)
+        made = (f"{rendered} of them {'is' if rendered == 1 else 'are'} rendered: the finished "
+                "videos stay in your output folder, and their clips stay marked as used. "
+                if rendered else "")
+        return gr.Row(visible=True), (
+            f"**Delete {len(ticked)} plan{'s' if len(ticked) != 1 else ''} from the list?** "
+            f"{made}Their clips, your ratings and what AI-Editor learns from them all stay. "
+            "This can't be undone.")
+
+    bulk_btn.click(ask_bulk, bulk_pick, [bulk_confirm, bulk_note])
+    bulk_no.click(lambda: gr.Row(visible=False), None, bulk_confirm)
+    bulk_pick.input(lambda: gr.Row(visible=False), None, bulk_confirm)
+
+    def delete_ticked(ticked, current):
+        from ..recipes.plan import delete_plans
+
+        gone = read(delete_plans, list(ticked or []))
+        if gone:
+            gr.Info(f"Deleted {gone} plan{'s' if gone != 1 else ''} from the list.")
+        plans = read(videos.plan_choices)
+        still = {p for _, p in plans}
+        keep = current if current in still else (plans[0][1] if plans else None)
+        return (gr.Row(visible=False), gr.update(choices=plans, value=[]),
+                gr.update(value=keep))
+
+    # As with one plan: first on to a plan that's still there, then the list.
+    bulk_yes.click(delete_ticked, [bulk_pick, plan_pick],
+                   [bulk_confirm, bulk_pick, plan_pick]).then(
         lambda: gr.update(choices=read(videos.plan_choices)), None, plan_pick)
 
     # --- Fixing captions, line by line (Phase 2D-2) ------------------------------------------

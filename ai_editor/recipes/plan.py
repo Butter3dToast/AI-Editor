@@ -154,6 +154,12 @@ def delete_plan(conn: sqlite3.Connection, plan_id: str) -> bool:
     return gone > 0
 
 
+def delete_plans(conn: sqlite3.Connection, plan_ids: list[str]) -> int:
+    """Several plans ticked in Review, all at once (24 Oct: one by one was "very
+    painful"). The same as delete_plan for each. How many went."""
+    return sum(delete_plan(conn, plan_id) for plan_id in plan_ids)
+
+
 def latest_draft(conn: sqlite3.Connection, recipe: str, game: str | None = None) -> EditPlan | None:
     """The newest draft of this recipe: for one game, or any game when ``game`` is None."""
     rows = conn.execute(

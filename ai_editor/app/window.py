@@ -81,6 +81,15 @@ CSS = """
 @media (max-width: 640px) { .aie-step { grid-template-columns: 1fr 1fr 40px; } }
 """
 
+# Switching tabs pauses whatever is playing: a video on a tab you left kept going (24 Oct).
+HEAD = """<script>
+document.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest("button[role=tab]")) {
+    document.querySelectorAll("video, audio").forEach((m) => { if (!m.paused) m.pause(); });
+  }
+}, true);
+</script>"""
+
 
 def _clock(seconds: float) -> str:
     s = int(seconds)
@@ -515,7 +524,7 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
         show_error=True, quiet=True, ssr_mode=False, favicon_path=str(ICON),
         footer_links=[], allowed_paths=[str(settings.folders.cache / "recordings"),
                                        str(settings.folders.output)],
-        theme=gr.themes.Soft(primary_hue="violet"), css=CSS)
+        theme=gr.themes.Soft(primary_hue="violet"), css=CSS, head=HEAD)
 
 
 # --- the desktop shortcut -------------------------------------------------------

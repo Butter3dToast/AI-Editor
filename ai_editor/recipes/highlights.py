@@ -517,6 +517,16 @@ def nothing_left_note(conn: sqlite3.Connection, settings: Settings,
             "more recordings of this game.")
 
 
+def liked_note(clips: int, clips_sec: float, target_sec: float) -> str:
+    """Said when a video is only the creator's thumbs-up clips."""
+    note = (f"Only your 👍 clips: {clips} clip{'s' if clips != 1 else ''}, "
+            f"{clips_sec / 60:.1f} min.")
+    if clips_sec < target_sec:
+        note += (f" The target was {target_sec / 60:.0f}: give more clips a 👍 and make it "
+                 "again, or add some in Review.")
+    return note
+
+
 def short_note(clips_sec: float, target_sec: float, recordings: int) -> str:
     """Said whenever the clips come in under the target, which is a floor."""
     return (f"Only {clips_sec / 60:.1f} of {target_sec / 60:.0f} minutes: that's all the good, "
@@ -549,9 +559,11 @@ def build_highlights(
     teaser_clip: str | None = None,
     teaser_moment: tuple[float, float] | None = None,
     reuse: bool = False,
+    only_liked: bool | None = None,
 ) -> HighlightResult:
     """``teaser_clip``: a clip id to open with (and end on), instead of the automatic pick.
-    ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one."""
+    ``teaser_moment``: the stretch of it to open with (recording time), if the creator named one.
+    ``only_liked``: just the thumbs-up clips, if there are any (default: Settings)."""
     h = settings.highlights
     target = (target_min or h.target_length_min) * 60
     everything = recordings_for(conn, settings, game=game, recording_ids=recording_ids,
@@ -563,7 +575,11 @@ def build_highlights(
         if c.clip_id == teaser_clip:
             c.must_include = True  # the clip you picked is in the video, whatever else is
     available = sum(c.length for c in candidates)
-    selected = select(candidates, target, h.fill_order)
+    if only_liked is None:
+        only_liked = h.only_liked
+    liked = [c for c in candidates if c.liked or c.clip_id == teaser_clip]
+    only_liked = only_liked and bool(liked)
+    selected = liked if only_liked else select(candidates, target, h.fill_order)
     # Chosen once, so the teaser and the ending are always the same moment
     # (two marked League moments tied, and each broke the tie differently).
     best = best_of(selected, teaser_clip) if selected else None
@@ -583,7 +599,8 @@ def build_highlights(
         output=settings.render.presets.get("youtube_1080p60").model_dump()
         if "youtube_1080p60" in settings.render.presets else {},
     )
-    plan.source = {"game": game, "recording_ids": recording_ids, "removed": [], "reuse": reuse}
+    plan.source = {"game": game, "recording_ids": recording_ids, "removed": [], "reuse": reuse,
+                   "only_liked": only_liked}
     if best is not None and h.hook:
         plan.segments.append(teaser_segment(
             conn, settings, best,
@@ -600,6 +617,8 @@ def build_highlights(
                           "them. What you taught AI-Editor with them is kept.")
     if not chosen:
         plan.notes.append(nothing_left_note(conn, settings, recordings, game, reuse))
+    elif only_liked:
+        plan.notes.append(liked_note(len(chosen), sum(c.length for c in chosen), target))
     elif sum(c.length for c in chosen) < target:
         plan.notes.append(short_note(sum(c.length for c in chosen), target, len(recordings)))
     save_plan(conn, plan)
