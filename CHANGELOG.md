@@ -3,6 +3,39 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.31.1 — Fix: the game's sound no longer drops out of long Let's Play pieces — 25 October 2026
+
+**Fixed**
+
+- **EP 5 Part 1 lost the game's sound from 16:39 to the end**, with only your
+  voice left. Your recording was fine, and so was the sound mix made on its
+  own. The tool that renders (FFmpeg 9.0.1) lost the game track when it made
+  the picture and four sound tracks of a 28-minute piece in one go, 12½
+  minutes in. Part 2 was fine.
+- **Each piece's picture and sound are now made separately**, then joined
+  (copied, nothing lost). Both are simple jobs FFmpeg does reliably. A 30-minute
+  part takes well under a minute longer.
+
+**New**
+
+- **Every render checks its own sound.** After each piece, AI-Editor compares
+  the sound it made with your recording's tracks, second by second. Where the
+  recording has sound and the render doesn't, it makes the sound again. If it's
+  missing twice, the render stops and says where in the recording, rather than
+  giving you a video with a hole in it. Tried on the broken Part 1: it found the
+  hole at 16:38.
+- **The sound and picture must both run to the end**, in each piece and in the
+  finished video, or it isn't finished. Part 1 rendered again on 25 Oct, before
+  AI-Editor was restarted with this fix, came out a second, different way
+  wrong: its sound stopped altogether at 16:46 of 32:36. This check refuses
+  that file.
+
+**Done**
+
+- EP 5 Part 1 rendered again with this fix on 25 Oct: the game's sound all
+  the way through, picture and sound both 32:36, every piece's check passed,
+  in the same 10 minutes as before. Part 2 didn't need it.
+
 ## 0.31.0 — Phase 3A-2: Your taste — 24 October 2026
 
 **New**

@@ -299,3 +299,85 @@ def test_a_video_open_in_a_player_is_kept_and_the_new_one_saved_beside_it(tmp_pa
         assert target.read_bytes() == b"old" and "open in a video player" in notes[0]
     new.write_bytes(b"newer")
     assert move_into_place(new, target, notes) == target and target.read_bytes() == b"newer"
+
+
+# --- Picture and sound apart, the sound checked (0.31.1) -------------------------------------
+
+
+def test_the_picture_and_the_sound_are_made_in_runs_of_their_own(settings, tmp_path):
+    """EP 5 Part 1 (25 Oct): one run with the picture and four tracks lost the game
+    track 12.5 minutes into a 28-minute piece; the sound alone was whole."""
+    from ai_editor.render.audio import AudioChoice
+
+    preset = settings.render.presets["youtube_1080p60"]
+    choice = AudioChoice([2, 3, 4], 2, True)
+    common = dict(gpu_decode=True)
+    picture = segment_args(tmp_path / "r.mkv", 10.0, 5.0, choice, preset, (1920, 1080), ["-c:v", "x"],
+                           tmp_path / "p.mkv", part="picture", **common)
+    assert picture.count("-i") == 1 and "-an" in picture and "-hwaccel" in picture
+    assert "amix" not in " ".join(picture) and "[0:v:0]" in " ".join(picture)
+    sound = segment_args(tmp_path / "r.mkv", 10.0, 5.0, choice, preset, (1920, 1080), [],
+                         tmp_path / "s.wav", part="sound", **common)
+    graph = sound[sound.index("-filter_complex") + 1]
+    assert sound.count("-i") == 1 and "-vn" in sound and "-hwaccel" not in sound
+    assert graph.startswith("[0:2]") and "[0:3]" in graph and "[0:v" not in graph
+    assert "amix=inputs=3:normalize=0" in graph and sound[-1].endswith("s.wav")
+
+
+def test_a_track_missing_from_the_sound_is_found(tmp_path):
+    from ai_editor.render.final import missing_sound
+
+    game = noise(30, 0.02, seed=1)          # about -34 dB, like Dawnwalker's game
+    mic = np.zeros_like(game)
+    mic[int(5 * RATE):int(7 * RATE)] = noise(2, 0.1, seed=2)   # you say something
+    tracks = [write(tmp_path / "game.wav", np.concatenate([np.zeros(RATE * 10, np.float32), game])),
+              write(tmp_path / "mic.wav", np.concatenate([np.zeros(RATE * 10, np.float32), mic]))]
+    whole = write(tmp_path / "whole.wav", game + mic)
+    assert missing_sound(whole, tracks, 10.0, 30.0) is None
+    ducked = write(tmp_path / "ducked.wav", game * 10 ** (-12 / 20) + mic)  # under your voice
+    assert missing_sound(ducked, tracks, 10.0, 30.0) is None
+    broken = (game + mic).copy()
+    broken[int(12 * RATE):] = mic[int(12 * RATE):]    # the game gone 12 s in
+    assert missing_sound(write(tmp_path / "broken.wav", broken), tracks, 10.0, 30.0) == 12.0
+    # The recording silent too there: nothing missing.
+    assert missing_sound(write(tmp_path / "quiet.wav", np.zeros_like(game)),
+                         [write(tmp_path / "silent.wav", np.zeros(RATE * 40, np.float32))],
+                         10.0, 30.0) is None
+
+
+def test_a_sound_with_a_hole_is_made_again_then_the_render_stops(tmp_path, monkeypatch):
+    from ai_editor.errors import MediaProcessingFailed
+    from ai_editor.render import final
+
+    runs = []
+    monkeypatch.setattr(final, "run_ffmpeg", lambda args, **k: runs.append(args))
+    holes = iter([12.0, None])
+    monkeypatch.setattr(final, "missing_sound", lambda *a: next(holes))
+    final.make_sound(["x"], tmp_path / "s.wav", [], 100.0, 30.0, tmp_path)
+    assert len(runs) == 2          # made again, whole the second time
+    monkeypatch.setattr(final, "missing_sound", lambda *a: 749.7)
+    with pytest.raises(MediaProcessingFailed, match="at 0:16:41 in the recording"):
+        final.make_sound(["x"], tmp_path / "s.wav", [], 251.7, 1707.3, tmp_path)
+
+
+def test_a_sound_that_stops_early_is_missing_too(tmp_path):
+    """EP 5 Part 1's second render (25 Oct): the sound ended at 16:47 of 32:36."""
+    from ai_editor.render.final import missing_sound
+
+    short = write(tmp_path / "short.wav", noise(12, 0.02))
+    assert missing_sound(short, [], 0.0, 30.0) == 12.0
+
+
+@needs_ffmpeg
+def test_a_finished_file_whose_sound_stops_early_is_refused(tmp_path):
+    from ai_editor.errors import MediaProcessingFailed
+    from ai_editor.ffmpeg import run_ffmpeg
+    from ai_editor.render.final import check_finished
+
+    path = tmp_path / "piece.mkv"
+    run_ffmpeg(["-f", "lavfi", "-i", "color=c=black:s=320x180:r=30:d=6", "-f", "lavfi", "-i",
+                "anoisesrc=d=3", "-c:v", "libx264", "-c:a", "pcm_s16le", str(path)],
+               what="a test piece")
+    with pytest.raises(MediaProcessingFailed, match="The sound of piece stopped at 0:00:03"):
+        check_finished(path, 6.0)
+    check_finished(path, 3.0)

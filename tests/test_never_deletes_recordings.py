@@ -25,7 +25,8 @@ REVIEWED = {
     "ingest.py": 2,             # half-made preview copies and sound tracks, in the cache
     "models.py": 4,             # half-downloaded or damaged AI model files, in the models folder
     "companion/status.py": 1,   # the Companion's status and stop files, in the cache
-    "render/final.py": 2,       # a render's working folder, and an unfinished render
+    "render/final.py": 4,       # a render's working folder, an unfinished render, and each
+                                # piece's picture and sound once joined (in that working folder)
     "recipes/preview.py": 2,    # quick previews' working folders
     "cli.py": 1,                # the setup check's own write-test file
     "analysis/previews.py": 1,  # an old clip preview AI-Editor made

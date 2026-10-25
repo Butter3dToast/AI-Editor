@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
+
 from ..config import Effects, RenderPreset, Settings
 from ..effects import Effect, for_plan as effects_for_plan, summary as effects_summary
 from ..effects import picture as picture_fx, sfx
@@ -54,6 +56,11 @@ AUDIO_BITRATE = "320k"
 FADE_SEC = 0.015      # at every join: too short to hear as a dip, long enough to stop a click
 # The recording's sound is read from a second opening of it (segment_args).
 SOUND_INPUT = 1
+# Each piece's sound is checked against the tracks it's made from (missing_sound).
+CHECK_WINDOW_SEC = 1.0
+CHECK_HEARD_DB = -50.0    # a track with sound in it
+CHECK_MARGIN_DB = 20.0    # the mix this far under it: something's missing
+CHECK_RUN_SEC = 4.0       # for this long
 TRUE_PEAK_DB = -1.5   # headroom so YouTube's own encoding doesn't clip
 # The most any peak is held down to reach YouTube's loudness. 9 dB made the
 # characters' voices in EP 1 sound distorted (raised 11 dB from -25 LUFS, its
@@ -143,7 +150,8 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
                  lowered: list[tuple[float, float, float]] | None = None,
                  edge_fades: tuple[bool, bool] = (True, True),
                  music_skip: float = 0.0,
-                 game_lowered: list[tuple[float, float, float]] | None = None) -> list[str]:
+                 game_lowered: list[tuple[float, float, float]] | None = None,
+                 part: str = "both") -> list[str]:
     """FFmpeg arguments for one segment: picture, rebuilt sound, beeps out, soft edges.
 
     ``captions``: an ASS file's name, in the folder FFmpeg runs in. A bare name
@@ -165,7 +173,13 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
     ended the picture early: every EP 4 piece longer than about 6.5 minutes
     lost its picture there while the sound carried on, so the video froze
     (19 Oct). Picture alone, or with one track, was fine; so is this.
+
+    ``part``: "picture" or "sound" alone, each its own FFmpeg run (render_plan
+    joins them). Opened twice was still too much: EP 5 Part 1's 28-minute piece
+    lost the game track 12.5 minutes in while the mic carried on (25 Oct);
+    the same sound made on its own was whole.
     """
+    sound_input = SOUND_INPUT if part == "both" else 0
     finish = ([f"subtitles=filename={captions}"] if captions else []) + ["format=yuv420p"]
     moves = picture_fx.graph(effects or [], seg_in, preset.height, fx or Effects(),
                              "pic", "moved")
@@ -181,6 +195,7 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
         graph = [f"[0:v:0]{','.join(picture)}[{made}]"]
     if moves:
         graph += [*moves, f"[moved]{','.join(finish)}[v]"]
+    pictured = len(graph)   # the picture's part of the graph; the sound's follows
 
     notches = beep_filters(audio.beeps, seg_in, seg_in + length)
     for n, stream in enumerate(audio.streams):
@@ -189,15 +204,15 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
             chain += notches
         if stream == audio.game and game_lowered:
             chain.append(volume_text(game_lowered))
-        graph.append(f"[{SOUND_INPUT}:{stream}]{','.join(chain)}[a{n}]")
+        graph.append(f"[{sound_input}:{stream}]{','.join(chain)}[a{n}]")
     inputs = "".join(f"[a{n}]" for n in range(len(audio.streams)))
     if audio.music is not None:
         pieces, label = music_graph(audio.music, lowered or [], length, AUDIO_RATE,
                                     fade_in=music_fades[0], fade_out=music_fades[1],
-                                    input=SOUND_INPUT, skip=music_skip)
+                                    input=sound_input, skip=music_skip)
         graph += pieces
         inputs += label
-    extra, labels = sfx.chains(sounds or [], SOUND_INPUT + 1, AUDIO_RATE)
+    extra, labels = sfx.chains(sounds or [], sound_input + 1, AUDIO_RATE)
     graph += extra
     inputs += "".join(labels)
     count = len(audio.streams) + len(labels) + (audio.music is not None)
@@ -208,6 +223,17 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
         [f"afade=t=out:st={length - fade:.4f}:d={fade}"] if edge_fades[1] else [])
     graph.append(f"{inputs}{mix}{','.join(edges) or 'anull'}[a]")
 
+    if part == "picture":
+        return [
+            *(["-hwaccel", "cuda"] if gpu_decode else []),
+            "-ss", f"{seg_in:.3f}", "-i", str(source),
+            "-filter_complex", ";".join(graph[:pictured]), "-map", "[v]", "-an",
+            "-t", f"{length:.4f}", *codec, *COLOUR, str(target)]
+    if part == "sound":
+        return [
+            "-ss", f"{seg_in:.3f}", "-i", str(source), *sfx.input_args(sounds or []),
+            "-filter_complex", ";".join(graph[pictured:]), "-map", "[a]", "-vn",
+            "-t", f"{length:.4f}", "-c:a", "pcm_f32le", "-ar", str(AUDIO_RATE), str(target)]
     return [
         *(["-hwaccel", "cuda"] if gpu_decode else []),
         "-ss", f"{seg_in:.3f}", "-i", str(source),
@@ -218,6 +244,82 @@ def segment_args(source: Path, seg_in: float, length: float, audio: AudioChoice,
         "-c:a", "pcm_f32le", "-ar", str(AUDIO_RATE),
         str(target),
     ]
+
+
+def join_args(picture: Path, sound: Path, length: float, target: Path) -> list[str]:
+    """A piece's picture and sound, made apart, in one file: copied, not re-encoded."""
+    return ["-i", str(picture), "-i", str(sound), "-map", "0:v:0", "-map", "1:a:0",
+            "-c", "copy", "-t", f"{length:.4f}", str(target)]
+
+
+def _levels(path: Path, start_sec: float, seconds: float) -> np.ndarray:
+    """The sound's level each CHECK_WINDOW_SEC (dB), read a window at a time."""
+    import soundfile as sf
+
+    with sf.SoundFile(str(path)) as f:
+        rate = f.samplerate
+        f.seek(min(int(round(start_sec * rate)), f.frames))
+        found = []
+        for _ in range(int(seconds // CHECK_WINDOW_SEC)):
+            block = f.read(int(rate * CHECK_WINDOW_SEC), dtype="float32", always_2d=True)
+            if not len(block):
+                break
+            found.append(10 * np.log10(float(np.mean(block.astype(np.float64) ** 2)) + 1e-20))
+    return np.array(found)
+
+
+def missing_sound(made: Path, tracks: list[Path], seg_in: float,
+                  length: float) -> float | None:
+    """Where a piece's sound lost something the recording has, seconds into the
+    piece; None when it's whole.
+
+    The render's mix is never much quieter than the loudest track it's made
+    from: the game is lowered under your voice by MAX_LOWER_DB (12) at most.
+    So a stretch of CHECK_RUN_SEC where a track has sound and the mix is
+    CHECK_MARGIN_DB under it means a track went missing, as EP 5 Part 1's game
+    did (25 Oct: the recording's game at -38 dB, the render silent).
+    """
+    mix = _levels(made, 0.0, length)
+    # Stopped early altogether (EP 5 Part 1's second render, 25 Oct: the sound
+    # ended at 16:47 of 32:36, the picture ran on).
+    if len(mix) < int(length // CHECK_WINDOW_SEC) - 1:
+        return len(mix) * CHECK_WINDOW_SEC
+    tracks = [t for t in tracks if t.is_file()]
+    if not tracks or length < 3 * CHECK_WINDOW_SEC:
+        return None
+    loudest = np.full(len(mix), -200.0)
+    for track in tracks:
+        heard = _levels(track, seg_in, length)[:len(mix)]
+        loudest[:len(heard)] = np.maximum(loudest[:len(heard)], heard)
+    lost = (loudest > CHECK_HEARD_DB) & (mix < loudest - CHECK_MARGIN_DB)
+    lost[0] = lost[-1] = False   # the few-millisecond fades at the edges
+    run = 0
+    for n, gone in enumerate(lost):
+        run = run + 1 if gone else 0
+        if run * CHECK_WINDOW_SEC >= CHECK_RUN_SEC:
+            return (n - run + 1) * CHECK_WINDOW_SEC
+    return None
+
+
+def make_sound(args: list[str], sound: Path, tracks: list[Path], seg_in: float, length: float,
+               work: Path) -> None:
+    """A piece's sound, checked against the recording's tracks; made once more if
+    something went missing, and if it's missing again, the render stops and says
+    where rather than finishing a video with a hole in it."""
+    from ..analysis.captions import clock
+
+    for attempt in (1, 2):
+        run_ffmpeg(args, duration_sec=length, what="making the sound of part of a video",
+                   cwd=work)
+        gap = missing_sound(sound, tracks, seg_in, length)
+        if gap is None:
+            return
+        log.warning("Sound check: a track went missing %.1f s into a piece (recording %.1f s), "
+                    "attempt %d", gap, seg_in + gap, attempt)
+    raise MediaProcessingFailed(
+        f"The sound of part of the video lost one of your recording's tracks at "
+        f"{clock(seg_in + gap)} in the recording (the recording has sound there, the render "
+        "didn't), and it happened again when made a second time")
 
 
 def game_streams(conn: sqlite3.Connection, recording_id: int, audio: AudioChoice) -> list[int]:
@@ -290,6 +392,20 @@ def check_whole(path: Path, length: float) -> None:
         raise MediaProcessingFailed(
             f"The picture of part of the video stopped at {picture:.0f} s of {length:.0f} s, "
             "so it was made again the slower way, and that stopped short too")
+
+
+def check_finished(path: Path, length: float) -> None:
+    """A joined piece, or the finished video: its picture and its sound both run
+    the whole length. FFmpeg has stopped each early while saying all was well."""
+    from ..analysis.captions import clock
+
+    found = stream_lengths(path)
+    for kind, name in (("video", "picture"), ("audio", "sound")):
+        made = found.get(kind, 0.0)
+        if made < length - SHORT_PICTURE_SEC:
+            log.warning("%s: the %s stopped at %.1f s of %.1f s", path.name, name, made, length)
+            raise MediaProcessingFailed(
+                f"The {name} of {path.stem} stopped at {clock(made)} of {clock(length)}")
 
 
 def boost_limit(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> float | None:
@@ -528,22 +644,30 @@ def render_plan(
         sounds = sfx.within_piece(clip_sounds[index], piece.offset, length)
         # The music fades at a hard cut only; across a slide the sound crossfades.
         music_edges = (piece.cut_in and fades[index][0], piece.cut_out and fades[index][1])
-        while True:
-            encoder, gpu_decode = attempts[0]
-            args = segment_args(source, seg_in, length, audio[segment.recording_id],
-                                preset, size, video_codec(settings, preset, encoder), path,
+        # The picture and the sound in runs of their own, then joined (EP 5, 25 Oct).
+        picture, sound = work / f"{name}_picture.mkv", work / f"{name}_sound.wav"
+
+        def args_for(part: str, target: Path, encoder: str = "", gpu_decode: bool = False):
+            return segment_args(source, seg_in, length, audio[segment.recording_id],
+                                preset, size, video_codec(settings, preset, encoder)
+                                if encoder else [], target,
                                 gpu_decode=gpu_decode, captions=subtitles, vertical=vertical,
                                 effects=effects[index], sounds=sounds, fx=settings.effects,
                                 music_fades=music_edges, lowered=lowered,
                                 edge_fades=(piece.cut_in or piece.soft_in,
                                             piece.cut_out or piece.soft_out),
-                                music_skip=piece.music_skip, game_lowered=game_lowered)
+                                music_skip=piece.music_skip, game_lowered=game_lowered,
+                                part=part)
+
+        while True:
+            encoder, gpu_decode = attempts[0]
             try:
-                run_ffmpeg(args, duration_sec=length, what="rendering part of a video", cwd=work,
+                run_ffmpeg(args_for("picture", picture, encoder, gpu_decode), duration_sec=length,
+                           what="rendering part of a video", cwd=work,
                            on_progress=(lambda f, d=done: on_progress(0.85 * (d + f * length)
                                                                       / work_sec))
                            if on_progress else None)
-                check_whole(path, length)
+                check_whole(picture, length)
                 break
             except MediaProcessingFailed:
                 if len(attempts) == 1:
@@ -551,6 +675,12 @@ def render_plan(
                 log.warning("Rendering with %s%s failed; trying a slower way", encoder,
                             " and GPU decoding" if gpu_decode else "")
                 attempts.pop(0)
+        make_sound(args_for("sound", sound), sound, heard_in(segment), seg_in, length, work)
+        run_ffmpeg(join_args(picture, sound, length, path), duration_sec=length,
+                   what="joining a piece's picture and sound", cwd=work)
+        check_finished(path, length)
+        picture.unlink(missing_ok=True)
+        sound.unlink(missing_ok=True)
         done += length
 
     def render_replay(item: slide.Replay, path: Path) -> None:
@@ -619,6 +749,7 @@ def render_plan(
                     "-movflags", "+faststart", str(unfinished)],
                    duration_sec=total, what="finishing a video",
                    on_progress=(lambda f: on_progress(0.9 + 0.1 * f)) if on_progress else None)
+        check_finished(unfinished, total)   # never a finished video with a hole at the end
         target = move_into_place(unfinished, target, notes)
     finally:
         shutil.rmtree(work, ignore_errors=True)
