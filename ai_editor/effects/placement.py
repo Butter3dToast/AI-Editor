@@ -87,6 +87,8 @@ MARK_AFTER_SEC = 10.0
 # Two moments an effect rule names this close are one fight: the bigger keeps its
 # effects ("a zoom on every kill" put two zooms a second apart on a double kill, 24 Oct).
 RULE_GAP_SEC = 2.0
+# "Only on the biggest moments" (3A-3a): about three in a 10-minute video.
+BIGGEST_PER_MIN = 0.3
 
 
 def rise(db: np.ndarray, back: int = RISE_BACK_SEC) -> np.ndarray:
@@ -478,9 +480,13 @@ def place(conn: sqlite3.Connection, settings: Settings, plan: EditPlan,
 
     # A style profile's own limit per kind (2G-2): "at most 0.5 zooms a minute" keeps
     # zooms to the biggest moments; the other effects there still go.
+    # Your "only on the biggest moments" answers (3A-3a) work the same way.
+    rates = dict(fx.kind_per_min)
+    for kind in fx.only_biggest:
+        rates[kind] = min(rates.get(kind, BIGGEST_PER_MIN), BIGGEST_PER_MIN)
     allowed = {kind: {id(m) for m in sorted(chosen, key=lambda m: -m.strength)
                       [:how_many(rate, plan.total_sec, bool(chosen))]}
-               for kind, rate in fx.kind_per_min.items()}
+               for kind, rate in rates.items()}
     for m in ruled_now:
         for kind in allowed:
             allowed[kind].add(id(m))

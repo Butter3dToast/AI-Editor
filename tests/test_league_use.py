@@ -210,6 +210,16 @@ def test_a_style_profile_limits_one_kind_of_effect_to_the_biggest_moments(conn, 
     assert kinds == [[], ["shake", "sfx"], ["shake"]]     # the Double kill beats a single kill
 
 
+def test_only_on_the_biggest_moments_keeps_an_effect_to_the_biggest(conn, settings):
+    """Your answer to a nudge (3A-3a): the same as a style profile's limit."""
+    settings.effects.highlights_per_min = 6.0
+    settings.effects.only_biggest = ["sfx"]
+    plan = EditPlan("hl", "highlights", "t", None, 600,
+                    [Segment(1, 20, 40), Segment(1, 60, 90), Segment(1, 140, 165)])
+    placed = placement.place(conn, settings, plan, ["shake", "sfx"])
+    assert [[e.kind for e in effects] for effects in placed] == [[], ["shake", "sfx"], ["shake"]]
+
+
 # --- Your effect rules (2H-3b) ----------------------------------------------------------------
 
 

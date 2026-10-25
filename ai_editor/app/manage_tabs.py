@@ -171,6 +171,15 @@ def build(settings: Settings, worker: Worker) -> None:
                     info="Each big moment with the effects that suit it, none ticked: tick the "
                          "ones you want.")
             with gr.Row():
+                fx_biggest = gr.CheckboxGroup(
+                    fx_choices, value=settings.effects.only_biggest,
+                    label="Only on the biggest moments",
+                    info="Suggested about three times in a 10-minute video. Your answers when "
+                         "Review asked about an effect you hardly use.")
+                fx_never = gr.CheckboxGroup(fx_choices, value=settings.effects.not_suggested,
+                                            label="Don't suggest",
+                                            info="Not offered in Review at all.")
+            with gr.Row():
                 fx_folder = gr.Button("Open my sound effects folder")
                 fx_msg = gr.Markdown("Put your own sounds in its **boom** and **hit** folders "
                                      "(.wav, .mp3, .ogg or .flac). Until then AI-Editor uses "
@@ -329,6 +338,9 @@ def build(settings: Settings, worker: Worker) -> None:
             conn.close()
 
     settings_tab.select(taste_look, None, learn_status)
+    # Answered in Review since (3A-3a): show it, so Save doesn't put it back.
+    settings_tab.select(lambda: (settings.effects.only_biggest, settings.effects.not_suggested),
+                        None, [fx_biggest, fx_never])
     ai_check.click(ai_look, None, [ai_status, ai_agree])
 
     def pull():
@@ -356,7 +368,7 @@ def build(settings: Settings, worker: Worker) -> None:
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
              effects_lp, rate_hl, rate_sh, sfx_db, between, fights_whole, game_voice,
-             suggest, learn):
+             suggest, learn, biggest, never):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -392,6 +404,8 @@ def build(settings: Settings, worker: Worker) -> None:
             ("clips", "keep_fights_whole"): bool(fights_whole),
             ("render", "game_under_voice"): bool(game_voice),
             ("learning", "taste"): bool(learn),
+            ("effects", "only_biggest"): list(biggest or []),
+            ("effects", "not_suggested"): list(never or []),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -413,7 +427,8 @@ def build(settings: Settings, worker: Worker) -> None:
                           hl_order, cap_hl, cap_lp, lp_minutes, lp_card, comp_sound, comp_volume,
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
                           pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume,
-                          fx_between, whole_fights, game_under, fx_suggest, learn_on],
+                          fx_between, whole_fights, game_under, fx_suggest, learn_on,
+                          fx_biggest, fx_never],
                  settings_msg).then(taste_look, None, learn_status)
 
 

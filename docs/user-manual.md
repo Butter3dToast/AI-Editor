@@ -1537,6 +1537,13 @@ AI-Editor can add a few effects to the biggest moments of your highlights and Sh
   - Ticking **Flash**, **Screen shake** and the rest above it instead puts those kinds on every ticked moment: the same everywhere again.
   - The suggestions come from what AI-Editor knows about each moment: a jump in the game's sound suits a shake and a boom (and a replay when it's one of your biggest), you reacting suits a flash, a zoom and a hit.
   - To go back to the list as it was before 2H (only the moments with effects, all ticked, untick to leave one out), untick **Suggest effects in Review** in **Settings → Effects**.
+- **When you hardly use one (from 0.33.0):** each time you render a video, AI-Editor writes down which effects it suggested and which you used. Once one has been suggested at least 10 times over 3 or more videos and you used it less than 15% of the time, Review asks, under the effects:
+  > *In your last 5 videos AI-Editor suggested **slow-motion replays** 24 times, and you used 2. Change that?*
+  - **Only on the biggest moments:** it's still suggested, about three times in a 10-minute video, on the biggest moments.
+  - **Stop suggesting it:** it isn't offered any more.
+  - **Keep as is:** nothing changes, and it won't ask about that effect again for 10 videos.
+
+  Nothing changes until you answer, and an answer only ever cuts suggestions down: nothing is ever ticked for you. Your answers are in **Settings → Effects** (**Only on the biggest moments** and **Don't suggest**), where you can change them back.
 - **For every new video:** **Settings → Effects**, per kind of video. All off for now; Let's Plays have none unless you tick some there.
 - **How many:** **Settings → Effects**, big moments per minute.
 
@@ -1865,6 +1872,8 @@ You can change the recordings and output folders there. The cache and models fol
 | Effects | Sound effects volume (`effects.sfx_volume_db`) | -3 dB | Against the moment they're on. |
 | Effects | Between clips (`effects.between_clips`) | `cut` | Highlights: `cut`, or `slide` (the next clip slides in over the last, 19.2d). |
 | Effects | Suggest effects in Review (`effects.suggest`) | On | Review lists each big moment with the effects that suit it, none ticked (19.2d). |
+| Effects | Only on the biggest moments (`effects.only_biggest`) | none | Effects suggested only about three times in a 10-minute video, on the biggest moments. Set by answering Review's question about an effect you hardly use (19.2d). |
+| Effects | Don't suggest (`effects.not_suggested`) | none | Effects Review doesn't offer at all. Also set from Review's question (19.2d). |
 | Effects | Flash / shake strength (`effects.flash_strength`, `shake_strength`) | 0.35 / 0.02 | 1 would flash white; the shake's swing as a share of the picture's height. |
 | Shorts | Suggestions per stream (`shorts.per_recording`) | 5 (1–20) | Your Numpad − moments always, then the best others up to this (17.1). |
 | Shorts | Length (`shorts.min_length_sec`, `max_length_sec`) | 15–60 s | How long a Short may be. |

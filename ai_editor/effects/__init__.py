@@ -198,7 +198,9 @@ def suggestions(conn: sqlite3.Connection, settings: Settings,
 
     if plan.recipe == "letsplay":
         return []
-    every = place(conn, styled(settings, plan), plan, list(KINDS))
+    used = styled(settings, plan)
+    # "Stop suggesting it" (3A-3a): that effect isn't offered any more.
+    every = place(conn, used, plan, [k for k in KINDS if k not in used.effects.not_suggested])
     kept = for_plan(conn, settings, plan)
     begins, replays = _begins(conn, settings, plan, kept)
     found = []
@@ -238,6 +240,24 @@ def use_suggestions(conn: sqlite3.Connection, settings: Settings, plan: EditPlan
                        for s in chosen):
                 off.add(moment_key(seg.recording_id, e.at))
     plan.source["effects_off"] = sorted(off)
+
+
+def log_used(conn: sqlite3.Connection, settings: Settings, plan: EditPlan) -> dict | None:
+    """When a video is rendered: how often each effect was suggested in it and how
+    often you used it, for the nudges (3A-3a). Nothing when nothing was suggested."""
+    from ..recipes.review import log_feedback
+    from ..style.apply import styled
+
+    if plan.recipe == "letsplay" or not styled(settings, plan).effects.suggest:
+        return None
+    found = suggestions(conn, settings, plan)
+    if not found:
+        return None
+    offered = {k: sum(k in s.kinds for s in found) for k in KINDS}
+    used = {k: sum(s.on and k in s.now for s in found) for k in KINDS}
+    log_feedback(conn, "effects_used", plan, None, offered=offered, used=used,
+                 moments=len(found))
+    return {"offered": offered, "used": used}
 
 
 def set_moments_on(plan: EditPlan, all_keys: list[str], kept: list[str]) -> None:

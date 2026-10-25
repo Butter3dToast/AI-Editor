@@ -339,6 +339,13 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
                                     info="Slide: the next clip slides in over the last.")
             moments_box = gr.CheckboxGroup([], value=[], label="Each effect", visible=False,
                                            info="Untick one to leave just that moment out.")
+        # "Suggested 24 times, you used 2. Change that?" (3A-3a)
+        with gr.Row(visible=False) as nudge_row:
+            nudge_note = gr.Markdown()
+            nudge_big = gr.Button("Only on the biggest moments", scale=0, min_width=220)
+            nudge_never = gr.Button("Stop suggesting it", scale=0, min_width=200)
+            nudge_keep = gr.Button("Keep as is", scale=0, min_width=120)
+        nudge_kind = gr.State(None)
         with gr.Row():
             render_btn = gr.Button("Render the finished video", variant="primary")
             open_btn = gr.Button("Open the finished video")
@@ -730,6 +737,42 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         show_effects, plan_pick, effects_box).then(
         show_moments, plan_pick, moments_box).then(
         list_view, [plan_pick, sel], list_outputs)
+
+    def show_nudge():
+        from ..learning.nudges import PLURALS, effect_nudge
+
+        found = read(effect_nudge, settings)
+        if found is None:
+            return gr.Row(visible=False), "", None, gr.skip(), gr.skip()
+        return (gr.Row(visible=True), found.text, found.kind,
+                gr.Button(visible=found.kind not in settings.effects.only_biggest),
+                gr.Button(value=f"Stop suggesting {PLURALS[found.kind]}"))
+
+    nudge_outputs = [nudge_row, nudge_note, nudge_kind, nudge_big, nudge_never]
+    for event in (review_tab.select, ui.load):
+        event(show_nudge, None, nudge_outputs)
+
+    def answered(choice):
+        def run(kind):
+            from ..learning.nudges import answer
+            from .manage_tabs import apply
+
+            if kind is None:
+                return gr.Row(visible=False), ""
+            conn = init_db(settings.db_path)
+            try:
+                said, new = answer(conn, settings, kind, choice)
+            except AIEditorError as exc:
+                return gr.skip(), f"Not saved: {exc.user_message()}"
+            finally:
+                conn.close()
+            apply(settings, new)
+            return gr.Row(visible=False), said
+        return run
+
+    for button, choice in ((nudge_big, "biggest"), (nudge_never, "never"), (nudge_keep, "keep")):
+        button.click(answered(choice), nudge_kind, [nudge_row, review_msg]).then(
+            show_moments, plan_pick, moments_box).then(show_nudge, None, nudge_outputs)
 
     def show_between(plan_id):
         from ..render.slide import between

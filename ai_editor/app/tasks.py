@@ -575,6 +575,9 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
                                "recording and made that sound again: the video is whole. "
                                "It's written down in the Issues tab.")
             _publish_beside(conn, settings, plan_id, episode)
+            from ..effects import log_used
+
+            log_used(conn, settings, plan)   # for the effect nudges (3A-3a)
             marked = approve_plan(conn, plan_id)
             if plan.recipe == "shorts":
                 report.say("Saved in output\\shorts. This moment won't be suggested as a Short "

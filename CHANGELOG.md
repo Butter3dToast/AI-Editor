@@ -3,6 +3,31 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.33.0 — Phase 3A-3a: Effect nudges — 25 October 2026
+
+**New**
+
+- **Review asks about effects you hardly use.** Every render writes down which
+  effects Review suggested and which you used. Once one has been suggested at
+  least 10 times over 3 or more videos and you used it under 15% of the time,
+  Review asks under the effects: *"In your last 5 videos AI-Editor suggested
+  slow-motion replays 24 times, and you used 2. Change that?"*
+  - **Only on the biggest moments**: still suggested, about three times in a
+    10-minute video.
+  - **Stop suggesting it**: not offered any more.
+  - **Keep as is**: nothing changes, and it won't ask about that effect again
+    for 10 videos.
+- **Your answers are Settings** (Settings → Effects → **Only on the biggest
+  moments** and **Don't suggest**), kept in your private settings file and
+  changed back there.
+
+**Good to know**
+
+- Nothing changes until you answer, and an answer only ever cuts suggestions
+  down: nothing is ever ticked for you, so effects stay off by default.
+- Let's Plays have no effects, so they don't count. Highlight videos and Shorts
+  do. Leaving the suggestions unticked is exactly what it looks for.
+
 ## 0.32.0 — The Issues tab — 25 October 2026
 
 **New**

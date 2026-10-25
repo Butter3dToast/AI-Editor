@@ -546,6 +546,10 @@ class Effects(BaseModel):
     # (Phase 2H-1, the creator's tip "suggest where an effect can work and which
     # effect"). Ticking one uses them there; nothing is on until then.
     suggest: bool = True
+    # The creator's answers when Review says "suggested 24 times, you used 2"
+    # (3A-3a, learning/nudges.py): suggested only on the biggest moments, or not at all.
+    only_biggest: list[EffectKind] = []
+    not_suggested: list[EffectKind] = []
 
     @field_validator("between_clips", mode="before")
     @classmethod
