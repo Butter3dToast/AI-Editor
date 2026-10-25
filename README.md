@@ -56,6 +56,7 @@ a hard rule, not a preference.
 | **2I-2** | Who's who: name each friend's voice once, captions say who's talking | **Complete** |
 | **3A-1** | How well AI-Editor knows you (measured per game, per week); 🔖 Next video clips; effect ticks and used clips logged | **Complete** |
 | **3A-2** | "Your taste" score per game, learned from your ratings, used to pick clips only where it beats the usual score (switch in Settings); a copy of the library kept before every upgrade | **Complete** |
+| **Issues** | The Issues tab: problems written down with their details (private values hidden), AI-Editor's own failures recorded by themselves, a text file per issue, Copy diagnostic info (0.32.0) | **Complete** |
 | 3A-3 | Nudges about effects you keep unticking; your rated clips shown to the local AI as examples | Next |
 | 3B | Overnight work: analysis, draft video, Shorts and Let's Play plans (never renders or deletes) | |
 | 3C | Wardogs and Tarkov results read from the screen, then kill feeds | |

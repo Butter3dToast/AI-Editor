@@ -88,6 +88,9 @@ class RenderResult:
     audio: dict[int, AudioChoice] = field(default_factory=dict)  # per recording
     captions: int | None = None       # how many were burned in; None = captions off
     notes: list[str] = field(default_factory=list)
+    # Pieces whose sound check found something missing, made again and then
+    # whole: "0:16:41 in the recording" (for the Issues tab, 0.32.0).
+    repaired: list[str] = field(default_factory=list)
 
     @property
     def beeps_removed(self) -> int:
@@ -302,18 +305,21 @@ def missing_sound(made: Path, tracks: list[Path], seg_in: float,
 
 
 def make_sound(args: list[str], sound: Path, tracks: list[Path], seg_in: float, length: float,
-               work: Path) -> None:
+               work: Path) -> str | None:
     """A piece's sound, checked against the recording's tracks; made once more if
     something went missing, and if it's missing again, the render stops and says
-    where rather than finishing a video with a hole in it."""
+    where rather than finishing a video with a hole in it. Returns where it was
+    missing the first time ("0:16:41"), when making it again put that right."""
     from ..analysis.captions import clock
 
+    first = None
     for attempt in (1, 2):
         run_ffmpeg(args, duration_sec=length, what="making the sound of part of a video",
                    cwd=work)
         gap = missing_sound(sound, tracks, seg_in, length)
         if gap is None:
-            return
+            return first
+        first = first or clock(seg_in + gap)
         log.warning("Sound check: a track went missing %.1f s into a piece (recording %.1f s), "
                     "attempt %d", gap, seg_in + gap, attempt)
     raise MediaProcessingFailed(
@@ -598,6 +604,7 @@ def render_plan(
 
     cast = friends_cast(conn)   # your named friends' names and colours (2I-2)
     caption_count = 0
+    repaired: list[str] = []
     done = 0.0
     work_sec = sum(lengths) + sum(slides) + replayed   # each slide's ends are rendered alone
 
@@ -675,7 +682,10 @@ def render_plan(
                 log.warning("Rendering with %s%s failed; trying a slower way", encoder,
                             " and GPU decoding" if gpu_decode else "")
                 attempts.pop(0)
-        make_sound(args_for("sound", sound), sound, heard_in(segment), seg_in, length, work)
+        fixed = make_sound(args_for("sound", sound), sound, heard_in(segment), seg_in, length,
+                           work)
+        if fixed:
+            repaired.append(fixed)
         run_ffmpeg(join_args(picture, sound, length, path), duration_sec=length,
                    what="joining a piece's picture and sound", cwd=work)
         check_finished(path, length)
@@ -757,4 +767,4 @@ def render_plan(
     if on_progress:
         on_progress(1.0)
     return RenderResult(target, total, attempts[0][0], time.monotonic() - began, audio,
-                        caption_count if captions else None, notes)
+                        caption_count if captions else None, notes, repaired)

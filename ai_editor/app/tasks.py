@@ -563,6 +563,17 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
                 report.say(f"Saved {result.path.name} ({clock(result.length_sec)}).")
                 for note in result.notes:
                     report.say(note)
+                for where in result.repaired:   # written down, fixed already (0.32.0)
+                    from .. import issues
+
+                    issues.record(conn, settings, f"A piece's sound lost a track at {where} in "
+                                  f"the recording while rendering {result.path.stem}",
+                                  source=issues.AI_EDITOR, plan_id=plan_id, at=where,
+                                  status=issues.FIXED, note="Made again by itself and checked: "
+                                  "the finished video is whole.")
+                    report.say(f"AI-Editor's sound check caught a gap at {where} in the "
+                               "recording and made that sound again: the video is whole. "
+                               "It's written down in the Issues tab.")
             _publish_beside(conn, settings, plan_id, episode)
             marked = approve_plan(conn, plan_id)
             if plan.recipe == "shorts":

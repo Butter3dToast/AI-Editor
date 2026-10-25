@@ -114,8 +114,8 @@ class MediaProcessingFailed(AIEditorError):
     why = "FFmpeg stopped part-way with an error. The technical details are in the log file"
     fix = (
         "Check the recording plays normally in a video player. If it does, run the "
-        "same command again; if it fails again, use Copy diagnostic info and send it "
-        "to your engineer"
+        "same command again; if it fails again, it's written down in the Issues tab "
+        "with its details (or use Copy diagnostic info there) for your engineer"
     )
 
 

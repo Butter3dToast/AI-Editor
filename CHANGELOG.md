@@ -3,6 +3,35 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.32.0 — The Issues tab — 25 October 2026
+
+**New**
+
+- **An Issues tab** (the last tab) for writing problems down. Say what's
+  wrong, and optionally which video and where ("16:39"), then click **Record
+  it**. AI-Editor adds the details needed to fix it: its version, FFmpeg's and
+  Windows', the video's plan, the recording and its sound tracks, the log
+  lines that name that video plus the last 120, and your settings.
+- **Private values never go in**: the OBS password and anything named like a
+  password, secret, token or key show as [hidden], in the settings and in the
+  log lines. Tried with your real settings: the password wasn't in the file.
+- **AI-Editor writes down its own problems**, marked "From: AI-Editor": every
+  job that fails, and every render whose sound check had to make a piece's
+  sound again (that one already marked Fixed, since the video came out whole).
+- **A list to work through**: Open or All, newest first. Click one to mark it
+  Fixed, with the version it was fixed in and a note.
+- **A text file per issue** in `cache\issues`, kept up to date. Next session,
+  say "check the issues" and everything needed is there. Nothing is sent
+  anywhere.
+- **Copy diagnostic info**, at the bottom of the tab: everything about the
+  issue you clicked (or how things stand now), ready to paste. Error messages
+  have pointed to this button since Phase 1; it now exists.
+
+**Good to know**
+
+- Opening this version upgrades the library (one new table, for issues). A
+  copy of it as it was is kept first, as `ai-editor.before-v10.db`.
+
 ## 0.31.1 — Fix: the game's sound no longer drops out of long Let's Play pieces — 25 October 2026
 
 **Fixed**

@@ -353,8 +353,8 @@ def test_a_sound_with_a_hole_is_made_again_then_the_render_stops(tmp_path, monke
     monkeypatch.setattr(final, "run_ffmpeg", lambda args, **k: runs.append(args))
     holes = iter([12.0, None])
     monkeypatch.setattr(final, "missing_sound", lambda *a: next(holes))
-    final.make_sound(["x"], tmp_path / "s.wav", [], 100.0, 30.0, tmp_path)
-    assert len(runs) == 2          # made again, whole the second time
+    assert final.make_sound(["x"], tmp_path / "s.wav", [], 100.0, 30.0, tmp_path) == "0:01:52"
+    assert len(runs) == 2          # made again, whole the second time (and written down)
     monkeypatch.setattr(final, "missing_sound", lambda *a: 749.7)
     with pytest.raises(MediaProcessingFailed, match="at 0:16:41 in the recording"):
         final.make_sound(["x"], tmp_path / "s.wav", [], 251.7, 1707.3, tmp_path)

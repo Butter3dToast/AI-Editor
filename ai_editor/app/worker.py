@@ -115,6 +115,8 @@ class Worker:
         self._tasks: list[Task] = []
         self._ids = itertools.count(1)
         self._thread: threading.Thread | None = None
+        # Told about every job that fails, to write it down as an issue (0.32.0).
+        self.on_failure: Callable[[Task, str], None] | None = None
         # Goes up whenever a job starts, finishes or says something, so the
         # window knows when the library might have changed.
         self.version = 0
@@ -185,6 +187,11 @@ class Worker:
                 self._pause.clear()
                 self.version += 1
             status, error = self._run(task)
+            if status == FAILED and self.on_failure is not None:
+                try:
+                    self.on_failure(task, error or "")
+                except Exception:  # noqa: BLE001 -- writing it down must never break the queue
+                    log.exception("Couldn't write down job '%s' as an issue", task.title)
             with self._lock:
                 task.status, task.error, task.finished = status, error, time.monotonic()
                 if status == PAUSED:

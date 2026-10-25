@@ -1899,6 +1899,27 @@ Every message AI-Editor shows you ends with a code in brackets, like `(Help: man
 
 > **[Engineer: this list grows with each phase. Codes E001–E052 exist as of Phase 1D.]**
 
+### 25.1 The Issues tab: writing a problem down
+
+When something's wrong, write it down in the **Issues** tab (the last tab). AI-Editor adds the details needed to fix it, so you don't have to dig through the log or take screenshots of it.
+
+1. **What's wrong:** in your own words, e.g. *"EP 5 Part 1 loses the game's sound from 16:39"*.
+2. **Which video** (optional): pick the video (its plan) or the recording it's about.
+3. **Where** (optional): e.g. *16:39*.
+4. Click **Record it**. It becomes **#1**, **#2**… in the list below, with:
+   - AI-Editor's version, FFmpeg's version and Windows.
+   - The video's plan (title, pieces, parts), and its recording (the file, whether it's still there, its sound tracks).
+   - The log lines that name that video, and the last 120 lines of the log.
+   - Your settings, with **the OBS password and anything named like a password, secret, token or key replaced by [hidden]**, there and in the log lines.
+
+**AI-Editor writes down its own problems too**, marked **From: AI-Editor**: every job that fails (with what it said), and every render whose sound check had to make a piece's sound again (19.2), that one already marked **Fixed**.
+
+**The list:** **Open** ones (or **All**), newest first. Click one to see it; set **Status** to **Fixed**, fill in **Fixed in** (the version, e.g. 0.31.1) and a **Note**, then **Save**.
+
+**Each issue is also a text file** in your cache folder, under `issues` (for you, `F:\AI-Editor\cache\issues\issue 0001.txt` and so on), kept up to date when you change it. Next time you work on AI-Editor with your engineer, say **"check the issues"**: everything they need is in those files. Nothing is sent anywhere.
+
+**Copy diagnostic info** (at the bottom of the tab): **Get diagnostic info** fills a box with everything about the issue you clicked (or, with none clicked, how things stand now), with a copy button, to paste anywhere.
+
 ### Error codes
 
 | Code | Message | What it means | What to do |
@@ -2003,7 +2024,7 @@ AI-Editor saves the subtitles as `proxy.srt` next to `proxy.mp4`, and VLC normal
 - Turn off **Screen reading** for Wardogs in Settings → Game profiles. Audio detection continues. Update AI-Editor when a fix is available.
 
 ### Getting help
-Click **Help → Copy diagnostic info** and share it with your engineer. It includes logs and settings but no video files.
+Write it down in the **Issues** tab (25.1). For pasting somewhere else, use **Issues → Copy diagnostic info**. Both include the log lines and settings (private values hidden), but no video files.
 
 ---
 

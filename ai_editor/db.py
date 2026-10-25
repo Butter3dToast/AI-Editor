@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 _V1 = """
@@ -416,8 +416,25 @@ CREATE TABLE taste_models (
 );
 """
 
+# Problems written down, by the creator or by AI-Editor itself (0.32.0, issues.py).
+_V10 = """
+CREATE TABLE issues (
+    id              INTEGER PRIMARY KEY,
+    made_at         TEXT    NOT NULL,
+    source          TEXT    NOT NULL,          -- you | ai-editor
+    what            TEXT    NOT NULL,
+    plan_id         TEXT,
+    recording_id    INTEGER,
+    at_text         TEXT,                      -- where in the video, as the creator put it
+    status          TEXT    NOT NULL DEFAULT 'open',   -- open | fixed
+    fixed_in        TEXT,
+    note            TEXT,
+    details_json    TEXT                       -- version, plan, log lines, settings (hidden)
+);
+"""
+
 MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8,
-                              9: _V9}
+                              9: _V9, 10: _V10}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

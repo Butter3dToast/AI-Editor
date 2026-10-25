@@ -34,8 +34,8 @@ from ..db import init_db  # noqa: E402
 from ..errors import AIEditorError  # noqa: E402
 from ..games import canonical_game  # noqa: E402
 from ..logging_setup import get_logger  # noqa: E402
-from . import (companion_panel, friends_panel, library, manage_tabs, rules_tab,  # noqa: E402
-               style_tab, tasks, video_tabs)
+from . import (companion_panel, friends_panel, issues_tab, library, manage_tabs,  # noqa: E402
+               rules_tab, style_tab, tasks, video_tabs)
 from ..companion import status as companion_status  # noqa: E402
 from .worker import DONE, FAILED, PAUSED, RUNNING, WAITING, Task, Worker  # noqa: E402
 from .worker import submitted as submitted_message  # noqa: E402
@@ -242,6 +242,7 @@ def build(settings: Settings, worker: Worker):
             style_tab.build(settings, worker, timer)
             rules_tab.build(settings)
             manage_tabs.build(settings, worker)
+            issues_tab.build(settings, worker)   # 0.32.0
 
         seen = gr.State(-1)
 
