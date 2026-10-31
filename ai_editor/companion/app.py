@@ -327,7 +327,8 @@ class Companion:
 
     @property
     def game(self) -> str | None:
-        return game_for_scene(self.scene, self.settings.companion.scene_games)
+        return game_for_scene(self.scene, self.settings.companion.scene_games,
+                              self.settings.lets_play.games)
 
     def _read_scene(self) -> None:
         try:

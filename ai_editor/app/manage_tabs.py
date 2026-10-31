@@ -20,7 +20,8 @@ from ..analysis.ai_rating import agreement_text
 from ..config import Settings, save_local_settings
 from ..db import init_db
 from ..errors import AIEditorError
-from . import friends_panel, storage
+from ..games import canonical_game
+from . import friends_panel, overnight_panel, storage
 from .worker import Worker, submitted
 
 ORDERS = [("As it happened, the teaser's moment saved for last", "timeline"),
@@ -192,6 +193,17 @@ def build(settings: Settings, worker: Worker) -> None:
                 lp_card = gr.Textbox(value=lp.title_card, label="Title card on each part",
                                      placeholder="Empty for none, or e.g. Ep {episode} - Part {part}",
                                      info="{episode} and {part} are filled in.")
+            with gr.Row():
+                lp_games = gr.Dropdown(choices=list(lp.games), value=list(lp.games),
+                                       multiselect=True, scale=3, label="Let's Play games",
+                                       info="Recorded as episodes: made into parts, kept out of "
+                                            "stream highlights. Recognised by name in your OBS "
+                                            "scene and file names. Click × to remove one: saved "
+                                            "straight away.")
+                lp_new = gr.Textbox(label="New Let's Play game", scale=2, max_lines=1,
+                                    placeholder="Its name, as in your OBS scene")
+                lp_add = gr.Button("Add", size="sm", scale=0, min_width=80)
+            lp_msg = gr.Markdown()
         with gr.Accordion("Stream Companion and Twitch", open=True):
             with gr.Row():
                 comp_sound = gr.Checkbox(
@@ -217,6 +229,7 @@ def build(settings: Settings, worker: Worker) -> None:
                                     label="Let's Play title",
                                     info="{subtitle} is the AI's idea; {game}, {episode} and "
                                          "{part} are filled in.")
+        overnight_panel.build_settings(settings, worker)   # Phase 3B
         friends_panel.build_settings(settings)   # Phase 2I-2
         with gr.Accordion("Learning your taste", open=True):
             learn_on = gr.Checkbox(value=settings.learning.taste, label="Learn my taste",
@@ -364,6 +377,35 @@ def build(settings: Settings, worker: Worker) -> None:
         return f"Opened {root}."
 
     fx_folder.click(open_sfx, None, fx_msg)
+
+    def save_games(chosen):
+        """The Let's Play games, saved as soon as one is added or removed: Save
+        settings at the bottom of the page was easy to miss (31 Oct)."""
+        games = list(dict.fromkeys(canonical_game(g) for g in chosen or [] if str(g).strip()))
+        if games == list(settings.lets_play.games):
+            return ""
+        try:
+            new = save_local_settings(settings.source_path, {("lets_play", "games"): games})
+        except AIEditorError as exc:
+            return f"Not saved: {exc.user_message()}"
+        apply(settings, new)
+        listed = ", ".join(games) or "no Let's Play games"
+        return (f"Saved: {listed}. Restart the Stream Companion so it recognises them by their "
+                "OBS scene.")
+
+    def add_game(chosen, typed):
+        name = canonical_game(typed or "")
+        chosen = list(chosen or [])
+        if not name:
+            return gr.skip(), gr.skip(), "Type the game's name first."
+        if name.lower() in {g.lower() for g in chosen}:
+            return gr.skip(), "", f"{name} is already in the list."
+        chosen.append(name)
+        return gr.update(choices=chosen, value=chosen), "", save_games(chosen)
+
+    lp_add.click(add_game, [lp_games, lp_new], [lp_games, lp_new, lp_msg])
+    lp_new.submit(add_game, [lp_games, lp_new], [lp_games, lp_new, lp_msg])
+    lp_games.input(save_games, lp_games, lp_msg)   # × on one
 
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,

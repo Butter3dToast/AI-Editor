@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 _V1 = """
@@ -433,8 +433,28 @@ CREATE TABLE issues (
 );
 """
 
+_V11 = """
+-- Overnight work (3B): one row a night, for the morning note.
+CREATE TABLE overnight_nights (
+    id              INTEGER PRIMARY KEY,
+    night           TEXT,                      -- its date (2026-11-01); NULL for Run it now
+    started_at      TEXT    NOT NULL,
+    finished_at     TEXT,
+    status          TEXT    NOT NULL DEFAULT 'waiting',  -- waiting|working|done|stopped|paused|closed
+    done_json       TEXT    NOT NULL DEFAULT '{}',       -- what it did
+    seen            INTEGER NOT NULL DEFAULT 0           -- the morning note was closed
+);
+-- Each recording is drafted once, whatever came of it.
+CREATE TABLE overnight_drafts (
+    recording_id    INTEGER PRIMARY KEY REFERENCES recordings(id) ON DELETE CASCADE,
+    night_id        INTEGER REFERENCES overnight_nights(id) ON DELETE SET NULL,
+    plan_ids_json   TEXT    NOT NULL DEFAULT '[]',
+    made_at         TEXT    NOT NULL
+);
+"""
+
 MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8,
-                              9: _V9, 10: _V10}
+                              9: _V9, 10: _V10, 11: _V11}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

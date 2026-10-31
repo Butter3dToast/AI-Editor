@@ -59,7 +59,7 @@ a hard rule, not a preference.
 | **Issues** | The Issues tab: problems written down with their details (private values hidden), AI-Editor's own failures recorded by themselves, a text file per issue, Copy diagnostic info (0.32.0) | **Complete** |
 | **3A-3a** | Effect nudges: "suggested 24 times, you used 2. Change that?" (only on the biggest moments / stop suggesting / keep), answers in Settings | **Complete** |
 | **3A-3b** | The local AI sees your recent 👍 and 👎 as examples when it rates clips (63% agreement, from 54%); its rating joins Your taste where it helps | **Complete** |
-| 3B | Overnight work: analysis, draft video, Shorts and Let's Play plans (never renders or deletes) | |
+| **3B** | Overnight work: imports, analyses and drafts highlight, Shorts and Let's Play plans at the time you set, giving way to OBS and a busy graphics card (never renders or deletes); add new Let's Play games in Settings | **Complete** |
 | 3C | Wardogs and Tarkov results read from the screen, then kill feeds | |
 | 3D | Thumbnail prompts written for Gemini, sent only when you tick them (up to 3) | |
 

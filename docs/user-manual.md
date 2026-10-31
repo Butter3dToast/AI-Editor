@@ -424,7 +424,7 @@ If you have **one OBS scene per game**, the Companion notes every time you switc
 - include that recording when you make highlights of **either** game;
 - set the recording's game to whichever was played longest, if you didn't give one at import.
 
-A scene named after its game is recognised on its own: "Wardogs", "Escape From Tarkov", "League of legends" and "The Blood Of Dawnwalker" all work, whatever the capital letters. Scenes like "Brb", "Start With Timer" or "Ending Screen" aren't a game, and nothing changes while they're showing.
+A scene named after its game is recognised on its own: "Wardogs", "Escape From Tarkov", "League of legends" and "The Blood Of Dawnwalker" all work, whatever the capital letters. So does a **Let's Play game you've added** in Settings (15.1b); restart the Companion after adding one. Scenes like "Brb", "Start With Timer" or "Ending Screen" aren't a game, and nothing changes while they're showing.
 
 If a scene's name doesn't say the game (say, "Scene 2"), tell AI-Editor in `config/settings.yaml`:
 
@@ -506,7 +506,7 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 
 **After the stream**
 4. Open AI-Editor → **Import** → add the local recording (and/or paste the Twitch VOD link for chat).
-5. Tag the **game** and click **Start analysis**. Let it run (or queue it overnight).
+5. Tag the **game** and click **Start analysis**. Let it run, or leave it for **overnight work** (11.4).
 6. When analysis finishes, go to **Create video** → **Highlights** or **Shorts**.
 7. Review, render, and upload.
 
@@ -523,8 +523,8 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 
 ### 9.3 Suggested weekly routine
 
-- Queue analysis for every new recording overnight.
-- Each morning, review and render what's ready.
+- Switch on **overnight work** (11.4): new recordings are imported, analysed and drafted while you sleep.
+- Each morning, read the note at the top of the window, then review and render what's ready.
 - Once a week, check **Learning** suggestions (chapter 22) and clean up old cache (chapter 23).
 
 ---
@@ -783,7 +783,30 @@ For a 2-hour recording, expect **around 45–50 minutes**, a bit longer for Twit
 
 If your PC restarts or AI-Editor closes during analysis, reopen AI-Editor and press **Analyse (or resume)** on that recording in the **Library** (10.5). Finished steps are not repeated.
 
-**Not built yet:** reordering jobs, running overnight at a set time, and shutting down the PC when finished.
+**Not built yet:** reordering jobs, and shutting down the PC when finished.
+
+### 11.4 Overnight work
+
+While you sleep, AI-Editor can do the slow work for you, so in the morning your new recordings are ready to review. Switch it on in **Settings → Overnight work**: tick **Work overnight**, set **Start at** (24-hour clock, for example `02:00`), and click **Save overnight work**.
+
+**What it does**, in this order:
+1. **Imports** the new recordings in your raw folder (the ones Import lists as *New in your raw folder*), working out the game from the file name or the Stream Companion's log (8.1b), as an import with an empty Game box does.
+2. **Finishes** any import or analysis that was cut short, and analyses anything imported but not analysed yet. The local AI rates the clips, as usual.
+3. **Drafts** the plans for each recording that has none yet: for a stream, a **highlight plan** and **3 Shorts**; for a **Let's Play game** (15.1b), its **parts**. They wait in **Review** as drafts.
+
+**What it never does:** render, or delete anything. Each recording is drafted only once, and a recording you've already made a plan from, or whose video you've deleted, is left alone.
+
+**What you need:** AI-Editor open at the start time (minimised is fine) and the PC on, not asleep. If it was closed then, it starts when opened within the hour after; otherwise next night.
+
+**It gives way to you.** It never looks at which programs are running (chapter 27); instead:
+- It asks **OBS** whether it's recording or streaming, about every 30 seconds, even in the middle of a step. It uses the same connection as the Stream Companion, but doesn't need the Companion running. If OBS is recording, it stops the step it's in and waits. OBS open but idle, or closed, is fine.
+- Before each step it reads how busy the **graphics card** is, over about a minute (NVIDIA's own load figure, no program names). Busier than **Wait while the graphics card is busier than** (60%), it waits: a game, or anything else heavy. Your card idles at about 26-38%. **Read the graphics card** shows it now, so you can see what your games do and set the level.
+- It looks again every minute, and carries on once it's free. Like **Pause**, the step it gave way in starts over; finished steps are kept.
+- A game started **without OBS** in the middle of a step is noticed when that step ends, usually within minutes. **Pause** in Jobs always works.
+
+**Stop by** (for example `10:00`) ends the night then, even if it isn't finished; the rest carries on the next night. Empty: it carries on until it's done. **Shorts per new stream** sets how many Shorts it drafts (your own Shorts setting stays as it is). **Run it now** starts the same work straight away, to try it.
+
+**In the morning** a note at the top of the window says what it did, for example: *"Overnight work imported 1 new recording; analysed 1 recording; drafted 1 highlight plan and 3 Shorts for #29 2026-11-01 19-55-01. They're drafts in Review: nothing was rendered. Waited 25 min for OBS."* Press **OK** to hide it. Anything that went wrong with a recording is written down in the **Issues** tab, and the night carries on with the next one.
 
 ---
 
@@ -1071,6 +1094,16 @@ On 24 Oct, on your League stream of 19 October, "A zoom on every kill" suggested
 
 To move where parts end, use the Part Planner (15.4).
 
+### 15.1b Starting a new Let's Play series
+
+AI-Editor treats a recording as a Let's Play episode when its game is in **Settings → Let's Play → Let's Play games** (The Blood of Dawnwalker is there already). Episodes are made into parts, are listed first under Episode recording, and stay out of stream highlights.
+
+To start a new series:
+1. Type the game's name in **New Let's Play game**, as your OBS scene for it is named, and click **Add** (or press Enter). It's saved straight away: the line under the list says so.
+2. Restart the Stream Companion, so it reads the new name.
+
+From then on the game is recognised by name, like the four built-in games: an OBS scene called after it (8.1b), or a recording whose file name has it in. Overnight work (11.4) drafts its parts. When a series ends, click **×** on its name (saved straight away): recordings already in the library keep their game.
+
 ### 15.1a From the command line (until the app window arrives)
 
 ```powershell
@@ -1189,7 +1222,7 @@ When the Stream Companion was running, no clip runs into your "BRB", "Starting" 
 ai-editor highlights --open
 ```
 
-This makes **stream highlights**: the best **unused** clips from all your analysed streams, whatever games you played, so a stream where you switched from Wardogs to Tarkov gives a mixed video. Recordings of your **Let's Play games** are left out: those become Let's Play episodes instead (chapter 15). The Let's Play games are listed in `config/settings.yaml` under `lets_play: games:`, and The Blood of Dawnwalker is there already.
+This makes **stream highlights**: the best **unused** clips from all your analysed streams, whatever games you played, so a stream where you switched from Wardogs to Tarkov gives a mixed video. Recordings of your **Let's Play games** are left out: those become Let's Play episodes instead (chapter 15). The Let's Play games are listed in **Settings → Let's Play → Let's Play games** (15.1b), and The Blood of Dawnwalker is there already.
 
 For **one game only**, add `--game`:
 
@@ -1825,7 +1858,9 @@ You can change the recordings and output folders there. The cache and models fol
 | Performance | Proxy resolution | 540p | Size of preview copies. |
 | Performance | Proxy frame rate | 30 fps (10–60) | Smoothness of preview copies. Higher makes smoother previews but bigger, slower-to-make copies. Your finished videos always use the original frame rate, whatever this is set to. |
 | Tools | FFmpeg folder | Empty (found automatically) | Only set this if the setup check can't find FFmpeg. Point it at the folder containing `ffmpeg.exe`. |
-| Queue | Overnight start time | Off | Starts the queue automatically. |
+| Overnight | Work overnight / Start at / Stop by | Off / 02:00 / until done | Imports, analyses and drafts while you sleep; never renders or deletes (11.4). |
+| Overnight | Wait while the graphics card is busier than | 60% | It waits while a game or anything heavy runs. |
+| Overnight | Shorts per new stream | 3 | Shorts drafted for each new stream. |
 | Companion | Mark moment hotkey | `numpad+` | Logs a moment. While the Companion runs, this key belongs to it and games won't see it, so pick one they don't use. Numpad keys, F13–F24 and combinations such as `ctrl+alt+m` all work; the numpad's Enter key can't (chapter 6, step 5). |
 | Companion | Mark Short-worthy hotkey | `numpad-` | Logs a Short moment. |
 | Companion | Confirmation sound | Off | A click when you mark. Off because a microphone can pick it up and send it to your stream, which happened on 26 Sep (chapter 8.2). |

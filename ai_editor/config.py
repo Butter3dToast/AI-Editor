@@ -53,19 +53,42 @@ class Performance(BaseModel):
     ffmpeg_threads: int = Field(0, ge=0, le=64)
 
 
-class Queue(BaseModel):
-    overnight_start_time: str | None = None
-    shutdown_when_finished: bool = False
+def _clock_time(v: str | None, name: str) -> str | None:
+    """'02:00' as typed in Settings: None (or empty) stays None."""
+    if v is None or not str(v).strip():
+        return None
+    v = str(v).strip()
+    hh, _, mm = v.partition(":")
+    if not (hh.isdigit() and mm.isdigit() and 0 <= int(hh) < 24 and 0 <= int(mm) < 60):
+        raise ValueError(f"{name} must look like '02:00', got {v!r}")
+    return f"{int(hh):02d}:{int(mm):02d}"
 
-    @field_validator("overnight_start_time")
+
+class Overnight(BaseModel):
+    """Phase 3B: imports, analyses and drafts plans while you sleep (overnight.py).
+    Never renders, never deletes."""
+
+    enabled: bool = False
+    start: str = "02:00"
+    # Stops for the night at this time even if it isn't finished. None: until done.
+    stop_by: str | None = None
+    # Waits while the graphics card is busier than this (%), with AI-Editor idle.
+    # Idle, the creator's card sits at 26-38% (Wallpaper Engine, NVIDIA Broadcast).
+    gpu_busy_percent: int = Field(60, ge=10, le=100)
+    shorts: int = Field(3, ge=0, le=10)  # Shorts drafted per new stream
+
+    @field_validator("start")
     @classmethod
-    def _check_time(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        hh, _, mm = v.partition(":")
-        if not (hh.isdigit() and mm.isdigit() and 0 <= int(hh) < 24 and 0 <= int(mm) < 60):
-            raise ValueError(f"overnight_start_time must look like '02:00', got {v!r}")
-        return v
+    def _check_start(cls, v: str) -> str:
+        found = _clock_time(v, "overnight.start")
+        if found is None:
+            raise ValueError("overnight.start needs a time, e.g. '02:00'")
+        return found
+
+    @field_validator("stop_by")
+    @classmethod
+    def _check_stop(cls, v: str | None) -> str | None:
+        return _clock_time(v, "overnight.stop_by")
 
 
 class Companion(BaseModel):
@@ -682,7 +705,7 @@ class Settings(BaseModel):
     folders: Folders
     tools: Tools = Tools()
     performance: Performance = Performance()
-    queue: Queue = Queue()
+    overnight: Overnight = Overnight()
     companion: Companion = Companion()
     obs: Obs = Obs()
     analysis: Analysis = Analysis()

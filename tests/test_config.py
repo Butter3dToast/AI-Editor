@@ -137,12 +137,26 @@ def test_bad_overnight_time_is_rejected(tmp_path):
         tmp_path,
         BASE_FOLDERS.format(root=tmp_path.as_posix())
         + """
-    queue:
-      overnight_start_time: "25:99"
+    overnight:
+      stop_by: "25:99"
     """,
     )
     with pytest.raises(SettingsInvalid):
         load_settings(path)
+
+
+def test_overnight_times_are_tidied(tmp_path):
+    path = _write(
+        tmp_path,
+        BASE_FOLDERS.format(root=tmp_path.as_posix())
+        + """
+    overnight:
+      start: "2:30"
+      stop_by: ""
+    """,
+    )
+    night = load_settings(path).overnight
+    assert night.start == "02:30" and night.stop_by is None and not night.enabled
 
 
 def test_db_and_log_paths_sit_under_cache(tmp_path):

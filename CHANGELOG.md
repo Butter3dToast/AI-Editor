@@ -3,6 +3,39 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.35.0 — Phase 3B: Overnight work — 31 October 2026
+
+**New**
+
+- **Overnight work** (Settings → Overnight work, off until you switch it on):
+  at the time you set, AI-Editor imports the new recordings in your raw
+  folder, finishes any import or analysis that was cut short, and drafts the
+  plans: a highlight plan and 3 Shorts for each new stream, the parts for each
+  new Let's Play episode. They wait in Review. **It never renders and never
+  deletes anything**, and each recording is drafted only once.
+- **It gives way to you**: it asks OBS whether it's recording or streaming
+  about every 30 seconds, and stops the step it's in if so; and before each
+  step it waits while the graphics card is busier than your level (60%), for
+  a game. It never looks at which programs are running (the anti-cheat rule).
+  The step it gave way in starts again later; finished steps are kept.
+- **Stop by**: an optional time it stops at even if it isn't finished; the
+  rest carries on the next night. **Run it now** starts it straight away.
+- **A morning note** at the top of the window says what it did. Anything that
+  went wrong with a recording goes in the Issues tab, and the night carries on.
+- **Let's Play games in Settings**: add a new series' game by name (Settings →
+  Let's Play), or remove a finished one. It's then recognised by its OBS scene
+  and file names, like the four built-in games.
+
+**Good to know**
+
+- AI-Editor must be open at the start time (minimised is fine), with the PC on.
+- A game started without OBS in the middle of a step is noticed when that step
+  ends. Pause in Jobs always works.
+- The library is upgraded (version 11); a full copy of it is kept beside it
+  first (`ai-editor.before-v11.db`).
+- Your raw folder has 6 recordings from 25-30 October not imported yet: the
+  first night imports and drafts them all.
+
 ## 0.34.0 — Phase 3A-3b: The local AI learns from your verdicts — 25 October 2026
 
 **New**

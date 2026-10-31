@@ -25,9 +25,17 @@ performance:
   proxy_fps: 30 # Frame rate of the preview copy. Final renders always use the original.
   ffmpeg_threads: 0 # 0 = let FFmpeg decide
 
-queue:
-  overnight_start_time: null # e.g. "02:00" to start the queue automatically
-  shutdown_when_finished: false
+overnight:
+  # Overnight work (manual 9.6): imports new recordings, analyses them and drafts
+  # their plans while you sleep. Never renders, never deletes. AI-Editor must be
+  # open at the start time. Set these in Settings, Overnight work.
+  enabled: false
+  start: "02:00"
+  stop_by: null # e.g. "10:00": stop for the night then, even if not finished. Empty: until done
+  # It waits while OBS records or streams, and while the graphics card is busier
+  # than this (%) with AI-Editor itself idle: a game, or anything else heavy.
+  gpu_busy_percent: 60
+  shorts: 3 # Shorts drafted per new stream
 
 companion:
   # Who catches the marker keys. obs = you bind them in OBS's own hotkey settings

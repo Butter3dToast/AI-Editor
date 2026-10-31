@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 from .config import Settings
 from .errors import (
@@ -100,6 +100,7 @@ def register_recording(
     game: str | None = None,
     track_roles: str | None = None,
     source_type: str | None = None,
+    known_games: Sequence[str] = (),
 ) -> Registration:
     """Add a recording to the library, or find it if it's already there.
 
@@ -115,7 +116,7 @@ def register_recording(
         raise NoAudioTrack(media_path.name)
 
     roles = parse_track_roles(track_roles, info) if track_roles else info.track_roles_guess()
-    chosen_game = canonical_game(game) if game else suggest_game(media_path.stem)
+    chosen_game = canonical_game(game) if game else suggest_game(media_path.stem, known_games)
     digest = content_hash(media_path)
 
     existing = conn.execute(
@@ -465,7 +466,8 @@ def ingest_recording(
     is relinked.
     """
     registration = register_recording(conn, path, game=game, track_roles=track_roles,
-                                      source_type=source_type)
+                                      source_type=source_type,
+                                      known_games=settings.lets_play.games)
     if twitch_vod_id or recorded_at:
         # For a VOD, "recorded" is when the stream happened, not when the file
         # was downloaded -- that is what VOD expiry is counted from.

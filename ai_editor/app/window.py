@@ -35,7 +35,7 @@ from ..errors import AIEditorError  # noqa: E402
 from ..games import canonical_game  # noqa: E402
 from ..logging_setup import get_logger  # noqa: E402
 from . import (companion_panel, friends_panel, issues_tab, library, manage_tabs,  # noqa: E402
-               rules_tab, style_tab, tasks, video_tabs)
+               overnight, overnight_panel, rules_tab, style_tab, tasks, video_tabs)
 from ..companion import status as companion_status  # noqa: E402
 from .worker import DONE, FAILED, PAUSED, RUNNING, WAITING, Task, Worker  # noqa: E402
 from .worker import submitted as submitted_message  # noqa: E402
@@ -148,6 +148,7 @@ def build(settings: Settings, worker: Worker):
     with gr.Blocks(title=__product_name__, analytics_enabled=False) as ui:
         gr.Markdown(f"# {__product_name__}\n<sub>Version {__version__}. Runs on this PC only. "
                     "To quit, close the black AI-Editor window.</sub>")
+        overnight_panel.build_note(settings, ui)   # Phase 3B: the morning note
 
         with gr.Accordion("Jobs", open=True):
             activity = gr.HTML(activity_html(worker.snapshot()))
@@ -468,6 +469,7 @@ def recover(settings: Settings) -> None:
         conn.execute("UPDATE recordings SET analysis_status = 'paused' "
                      "WHERE analysis_status = 'running'")
         conn.commit()
+        overnight.recover(conn)
     finally:
         conn.close()
 
@@ -517,6 +519,7 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
     worker = Worker()
     ui = build(settings, worker)
     find_marks(settings, worker)
+    overnight.start_clock(settings, worker)   # Phase 3B: starts at the time in Settings
     print(f"\n  {__product_name__} {__version__} is running at {url}\n"
           "  Only this PC can open it.\n\n"
           "  Leave this window open while you use AI-Editor.\n"

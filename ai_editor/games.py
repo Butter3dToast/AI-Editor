@@ -10,6 +10,7 @@ gets no game-specific extras (manual chapter 26).
 from __future__ import annotations
 
 import re
+from typing import Iterable
 
 # Canonical name -> words that identify it in a filename or stream title.
 # Aliases are matched as whole words, so "lol" will not match inside "lollipop".
@@ -56,29 +57,37 @@ def _normalise(text: str) -> str:
     return " " + re.sub(r"[^a-z0-9]+", " ", text.lower()).strip() + " "
 
 
-def suggest_game(text: str) -> str | None:
-    """Guess the game from a filename or stream title. None if unsure."""
+def suggest_game(text: str, extra: Iterable[str] = ()) -> str | None:
+    """Guess the game from a filename or stream title. None if unsure.
+
+    ``extra``: more games known by their full name, such as the Let's Play
+    games added in Settings (3B), so a new series needs no code change."""
     haystack = _normalise(text)
     matches = [
         name
         for name, aliases in KNOWN_GAMES.items()
         if any(_normalise(alias) in haystack for alias in aliases)
     ]
+    matches += [name for name in dict.fromkeys(extra)
+                if name not in KNOWN_GAMES and _normalise(name).strip()
+                and _normalise(name) in haystack]
     # Two different games in one title is ambiguous; better to ask than guess.
     return matches[0] if len(matches) == 1 else None
 
 
-def game_for_scene(scene: str | None, overrides: dict[str, str] | None = None) -> str | None:
+def game_for_scene(scene: str | None, overrides: dict[str, str] | None = None,
+                   extra: Iterable[str] = ()) -> str | None:
     """Which game an OBS scene shows: from Settings first, then from its name.
 
     None for scenes that aren't a game, such as "Starting Soon" or "BRB".
+    ``extra``: as in suggest_game.
     """
     if not scene:
         return None
     for name, game in (overrides or {}).items():
         if name.strip().lower() == scene.strip().lower():
             return canonical_game(game)
-    return suggest_game(scene)
+    return suggest_game(scene, extra)
 
 
 def canonical_game(name: str) -> str:
