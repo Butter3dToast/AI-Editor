@@ -15,6 +15,10 @@ The **living** manual — the one kept accurate as each phase lands — is
 [`docs/user-manual.md`](docs/user-manual.md). Edit that one, never the drafts in
 `docs/source/`.
 
+Phase 4 (the window and the installer) is specified in [`packaging.md`](packaging.md),
+and the design it should match is in [`mockups/`](mockups/) — open `mockups/Main.dc.html`
+in a browser to click through the screens.
+
 Everything runs offline on one PC. No paid services, no subscriptions, and
 **no interaction with any game process** — see specification section 6, which is
 a hard rule, not a preference.
