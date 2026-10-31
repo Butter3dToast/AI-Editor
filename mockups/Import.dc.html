@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Import</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}</style></helmet>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Main.dc.html">Library<em class="tally">17</em></a>
+      <a class="on" href="Import.dc.html">Import</a>
+      <a href="Clips.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create.dc.html">Create video</a>
+      <a href="Review.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style.dc.html">Style Profiles</a>
+      <a href="Rules.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage.dc.html">Storage</a>
+      <a href="Settings.dc.html">Settings</a>
+      <a href="Issues.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Import</h1><p>Your file is read where it is — never copied, moved or changed</p></div>
+      <div class="spacer"></div>
+      <div class="seg"><button type="button" class="on">From this PC</button><button type="button">From Twitch</button></div>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <header><h3>New in your raw folder</h3><p>F:\AI-Editor\raw · three not imported yet</p></header>
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>File</th><th>Length</th><th>Recorded</th><th>Sound</th><th>Game</th></tr></thead>
+              <tbody>
+                <tr class="on"><td><b>2026-10-30 19-02-11.mkv</b></td><td>2:11:44</td><td>Yesterday</td><td>5 tracks</td><td>Escape from Tarkov</td></tr>
+                <tr><td><b>2026-10-29 18-55-20.mkv</b></td><td>1:47:02</td><td>Thu</td><td>5 tracks</td><td>Wardogs</td></tr>
+                <tr><td><b>Dawnwalker ep 10.mkv</b></td><td>2:08:30</td><td>Thu</td><td>5 tracks</td><td>The Blood of Dawnwalker</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="sec">
+          <div class="panel">
+            <div class="row">
+              <div class="field"><label for="imp-path">Or a file anywhere on this PC</label>
+                <input class="input" id="imp-path" type="text" value="F:\AI-Editor\raw\2026-10-30 19-02-11.mkv"></div>
+              <button class="btn" type="button">Browse…</button>
+            </div>
+            <div class="row" style="margin-top:20px;align-items:center">
+              <label class="check"><i class="tick"></i>Analyse straight after importing</label>
+              <div class="spacer" style="margin-left:auto"></div>
+              <button class="btn quiet" type="button">Sound tracks, Twitch link…</button>
+              <button class="btn primary" type="button">Import</button>
+            </div>
+          </div>
+          <div class="disclose">The game is worked out from the file name or the Stream Companion unless you set it</div>
+        </section>
+
+        <section class="sec">
+          <header><h3>A Twitch VOD</h3><p>Downloads it, imports it and attaches the chat</p></header>
+          <div class="panel">
+            <div class="row">
+              <div class="field"><label for="imp-link">Twitch link</label>
+                <input class="input" id="imp-link" type="url" value="https://www.twitch.tv/videos/2875855539"></div>
+              <button class="btn" type="button">Check</button>
+            </div>
+            <div class="facts" style="margin-top:24px">
+              <div><dt>Title</dt><dd>Tarkov nights, late labs runs</dd></div>
+              <div><dt>Length</dt><dd>2:11:44</dd></div>
+              <div><dt>Streamed</dt><dd>Thu 30 Oct</dd></div>
+              <div><dt>Twitch deletes it</dt><dd><span class="state wait">in 11 days</span></dd></div>
+            </div>
+            <div class="row" style="margin-top:24px;align-items:center">
+              <label class="check"><i class="tick"></i>Download the chat too</label>
+              <div class="spacer" style="margin-left:auto"></div>
+              <button class="btn primary" type="button">Download and import</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Analysing Tarkov</span><span class="state run">Running</span></div>
+          <div class="jm">38 min in · about 20 min left</div>
+          <div class="step"><span>Sound signals</span><div class="bar"><div style="width:62%"></div></div><span>62%</span></div>
+          <div class="step"><span>Clips</span><div class="bar"><div style="width:0%"></div></div><span>0%</span></div>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">Twitch VOD 2875855539</span><span class="state wait">Waiting</span></div>
+          <div class="jm">starts when the analysis finishes</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

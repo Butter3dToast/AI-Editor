@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rules</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}</style></helmet>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Main.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import.dc.html">Import</a>
+      <a href="Clips.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create.dc.html">Create video</a>
+      <a href="Review.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style.dc.html">Style Profiles</a>
+      <a class="on" href="Rules.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage.dc.html">Storage</a>
+      <a href="Settings.dc.html">Settings</a>
+      <a href="Issues.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Rules</h1><p>Say it the way you'd say it out loud. The AI turns it into a rule and shows you what it understood.</p></div>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <div class="panel">
+            <div class="row">
+              <div class="field"><label for="ru-tip">Your tip</label>
+                <textarea class="input" id="ru-tip">Never cut cutscenes or dialogue in Dawnwalker</textarea></div>
+              <button class="btn primary" type="button">Understand it</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3 style="margin:0 0 6px;font-size:15px;font-weight:600">In The Blood of Dawnwalker, protect cutscenes and dialogue from being cut.</h3>
+            <p class="note" style="margin:0 0 20px">Change it if the AI got it wrong. Empty means everywhere.</p>
+            <div class="row">
+              <div class="field"><label for="ru-games">Games</label>
+                <select class="input" id="ru-games"><option>The Blood of Dawnwalker</option></select></div>
+              <div class="field"><label>Videos</label>
+                <div class="row tight"><span class="pill on">Let's Play</span><span class="pill">Highlights</span><span class="pill">Shorts</span></div></div>
+              <button class="btn primary" type="button">Save</button>
+              <button class="btn quiet" type="button">Try again</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <header><h3>Your rules</h3><p>9 saved · 8 on</p></header>
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>What it does</th><th>Where</th><th>Your words</th><th>On</th></tr></thead>
+              <tbody>
+                <tr><td><b>Cut silences longer than 1.5 s</b></td><td>Highlights · Shorts</td><td>cut the dead air in highlights</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>Protect cutscenes and dialogue</b></td><td>Dawnwalker · Let's Play</td><td>never cut cutscenes</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>Speed up travel over 30 s to 4×</b></td><td>Dawnwalker</td><td>speed up the horse riding</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>Cut stash and flea market time</b></td><td>Tarkov</td><td>nobody wants to watch me sort my stash</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>Keep the 30 s before a raid ends</b></td><td>Tarkov</td><td>always keep the run up to extract</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>No teaser</b></td><td>League · Highlights</td><td>no teaser in League highlights</td><td><span class="state off">Off</span></td></tr>
+                <tr><td><b>Clips under 20 seconds</b></td><td>League · Highlights</td><td>keep League clips under 20 seconds</td><td><span class="state done">On</span></td></tr>
+                <tr><td><b>Never caption in-game dialogue</b></td><td>Everywhere</td><td>captions are for me, not the game</td><td><span class="state done">On</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="disclose">Click a rule to turn it off or delete it</div>
+        </section>
+      </main>
+
+      <aside class="rail slim">
+        <button class="open" type="button" aria-label="Open the jobs panel">‹</button>
+        <h2>Jobs</h2>
+        <i class="resting" aria-hidden="true"></i>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

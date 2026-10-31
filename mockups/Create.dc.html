@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Create video</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}</style></helmet>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Main.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import.dc.html">Import</a>
+      <a href="Clips.dc.html">Clips<em class="tally">212</em></a>
+      <a class="on" href="Create.dc.html">Create video</a>
+      <a href="Review.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style.dc.html">Style Profiles</a>
+      <a href="Rules.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage.dc.html">Storage</a>
+      <a href="Settings.dc.html">Settings</a>
+      <a href="Issues.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Create video</h1><p>Builds a plan you can change before anything renders</p></div>
+      <div class="spacer"></div>
+      <div class="seg"><button type="button" class="on">Highlights</button><button type="button">Let's Play</button><button type="button">Shorts</button></div>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <div class="panel">
+            <div class="row">
+              <div class="field"><label for="cv-game">Game</label>
+                <select class="input" id="cv-game"><option>All my streams</option><option>Escape from Tarkov</option><option>Wardogs</option><option>League of Legends</option></select></div>
+              <div class="field" style="max-width:200px"><label for="cv-len">Length</label>
+                <input class="input" id="cv-len" type="text" value="10 minutes"></div>
+            </div>
+            <div class="row" style="margin-top:24px">
+              <div class="field"><label for="cv-style">Style profile</label>
+                <select class="input" id="cv-style"><option>Tarkov Hype Highlights — picked for this game</option><option>No profile</option><option>Chill Dawnwalker</option></select></div>
+            </div>
+            <div class="row" style="margin-top:24px">
+              <div class="field"><label>Which clips</label>
+                <div class="row tight"><span class="pill on">AI-Editor picks</span><span class="pill">My 👍 clips</span><span class="pill">My 🔖 clips</span></div></div>
+            </div>
+          </div>
+          <div class="disclose">Pick particular streams, or reuse clips already in a video</div>
+        </section>
+
+        <section class="sec">
+          <header><h3>What it will use</h3><p>Oldest unused clips first, so the next video starts fresh</p></header>
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>Stream</th><th>Recorded</th><th>Clips free</th><th>Best score</th></tr></thead>
+              <tbody>
+                <tr><td><b>Wardogs</b></td><td>Wed 28 Oct</td><td>31</td><td>0.91</td></tr>
+                <tr><td><b>Escape from Tarkov</b></td><td>23 Oct</td><td>12</td><td>0.86</td></tr>
+                <tr><td><b>League of Legends</b></td><td>25 Oct</td><td>24</td><td>0.83</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="row">
+            <a class="btn primary" href="Review.dc.html">Make the plan</a>
+            <span class="note">Under a minute. It opens in Review.</span>
+          </div>
+        </section>
+      </main>
+
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Building the plan</span><span class="state run">Running</span></div>
+          <div class="jm">21 seconds in</div>
+          <div class="step"><span>Choosing clips</span><div class="bar"><div class="done" style="width:100%"></div></div><span>100%</span></div>
+          <div class="step"><span>Ordering</span><div class="bar"><div style="width:48%"></div></div><span>48%</span></div>
+          <ul><li>22 clips over the 10 min target</li><li>Teaser: clutch at the extract</li></ul>
+        </div>
+        <div class="idle">Nothing else running.</div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

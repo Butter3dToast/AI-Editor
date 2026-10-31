@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Storage</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}</style></helmet>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Main.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import.dc.html">Import</a>
+      <a href="Clips.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create.dc.html">Create video</a>
+      <a href="Review.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style.dc.html">Style Profiles</a>
+      <a href="Rules.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a class="on" href="Storage.dc.html">Storage</a>
+      <a href="Settings.dc.html">Settings</a>
+      <a href="Issues.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Storage</h1><p>Drive F: · 412 GB free of 2 TB</p></div>
+      <div class="spacer"></div>
+      <button class="btn quiet" type="button">Look again</button>
+      <button class="btn primary" type="button">Free 9.6 GB</button>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <div class="panel">
+            <div class="facts">
+              <div><dt>Recordings</dt><dd>612 GB · never touched</dd></div>
+              <div><dt>Working files</dt><dd>41 GB · safe to free</dd></div>
+              <div><dt>Finished videos</dt><dd>28 GB · 23 videos</dd></div>
+              <div><dt>Clips and ratings</dt><dd>3 GB · keep these</dd></div>
+            </div>
+          </div>
+          <p class="note" style="margin:0">Freeing working files deletes prepared sound, separated voices and scratch files — about 1–2 GB per stream. Your clips, ratings, plans and recordings all stay.</p>
+        </section>
+
+        <section class="sec">
+          <header><h3>By recording</h3><p>Tick the ones to tidy</p></header>
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>Recording</th><th>Recording file</th><th>Sound</th><th>Preview</th><th>Working files</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td><b>Tarkov · 30 Oct</b></td><td>44.1 GB</td><td>1.8 GB</td><td>2.1 GB</td><td>3.4 GB</td><td><span class="state run">Analysing</span></td></tr>
+                <tr class="on"><td><b>Wardogs · 28 Oct</b></td><td>39.6 GB</td><td>1.6 GB</td><td>1.9 GB</td><td>2.9 GB</td><td><span class="state done">Analysed</span></td></tr>
+                <tr class="on"><td><b>Dawnwalker ep 9</b></td><td>41.8 GB</td><td>1.7 GB</td><td>2.0 GB</td><td>3.1 GB</td><td><span class="state done">Analysed</span></td></tr>
+                <tr class="on"><td><b>League · 25 Oct</b></td><td>47.2 GB</td><td>1.9 GB</td><td>2.2 GB</td><td>3.6 GB</td><td><span class="state done">Analysed</span></td></tr>
+                <tr><td><b>Tarkov · 23 Oct</b></td><td>36.4 GB</td><td>1.5 GB</td><td>1.8 GB</td><td>2.7 GB</td><td><span class="state wait">Paused</span></td></tr>
+                <tr><td><b>Wardogs · 21 Oct</b></td><td>—</td><td>1.6 GB</td><td>1.9 GB</td><td>0 B</td><td><span class="state off">Video deleted</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="disclose">Three ticked · frees 9.6 GB · your recordings are never deleted by AI-Editor</div>
+        </section>
+      </main>
+
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Analysing Tarkov</span><span class="state run">Running</span></div>
+          <div class="jm">38 min in</div>
+          <div class="step"><span>Sound signals</span><div class="bar"><div style="width:62%"></div></div><span>62%</span></div>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">Weekly backup</span><span class="state done">Finished</span></div>
+          <div class="jm">clips, ratings, rules and profiles · 212 MB</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

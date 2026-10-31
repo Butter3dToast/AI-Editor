@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Issues — light</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#6d28d9}a:hover{color:#5b21b6}</style></helmet>
+<div class="app light">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Library-light.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import-light.dc.html">Import</a>
+      <a href="Clips-light.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create-light.dc.html">Create video</a>
+      <a href="Review-light.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style-light.dc.html">Style Profiles</a>
+      <a href="Rules-light.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage-light.dc.html">Storage</a>
+      <a href="Settings-light.dc.html">Settings</a>
+      <a class="on" href="Issues-light.dc.html">Issues<em class="tally">2</em></a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Issues</h1><p>What went wrong, and anything you want to pass to your engineer</p></div>
+      <div class="spacer"></div>
+      <div class="seg"><button type="button" class="on">Open</button><button type="button">All</button></div>
+      <button class="btn quiet" type="button">Copy diagnostic info</button>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <div class="panel">
+            <div class="row">
+              <div class="field"><label for="is-what-l">Report a problem</label>
+                <textarea class="input" id="is-what-l" placeholder="e.g. The Wardogs kill feed stopped being read after the game update"></textarea></div>
+            </div>
+            <div class="row" style="margin-top:20px;align-items:center">
+              <span class="note">The log, versions and settings go with it. No video, no chat.</span>
+              <div class="spacer" style="margin-left:auto"></div>
+              <button class="btn primary" type="button">Report it</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>What</th><th>When</th><th>From</th><th>Video</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="on"><td><b>Wardogs end-of-match screen not recognised</b></td><td>Today 18:02</td><td>AI-Editor</td><td>—</td><td><span class="state wait">Open</span></td></tr>
+                <tr><td><b>Captions sat over the Dawnwalker subtitles</b></td><td>Yesterday</td><td>You</td><td>Dawnwalker Part 8</td><td><span class="state wait">Open</span></td></tr>
+                <tr><td><b>Twitch chat download timed out, then finished</b></td><td>28 Oct</td><td>AI-Editor</td><td>—</td><td><span class="state done">Closed</span></td></tr>
+                <tr><td><b>The AI was too slow — a game had the graphics card</b></td><td>25 Oct</td><td>AI-Editor</td><td>League highlights</td><td><span class="state done">Closed</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="sec">
+          <header><h3>Wardogs end-of-match screen not recognised</h3><p>Today 18:02 · while analysing Wardogs, 28 Oct</p></header>
+          <div class="panel">
+            <div class="kv"><span>What AI-Editor did</span>Carried on with sound only. Fights and your marked moments were still found.</div>
+            <div class="kv"><span>What you can do</span>Leave screen reading off for Wardogs until the templates are updated — it's in early access and its screens keep changing.</div>
+            <div class="row tight" style="margin-top:20px">
+              <button class="btn" type="button">Open the log folder</button>
+              <button class="btn quiet" type="button">Mark as closed</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Analysing Tarkov</span><span class="state fail">Stopped</span></div>
+          <div class="jm">41 min in</div>
+          <div class="step"><span>Sound signals</span><div class="bar"><div class="done" style="width:100%"></div></div><span>100%</span></div>
+          <div class="step"><span>Clips</span><div class="bar"><div style="width:18%"></div></div><span>18%</span></div>
+          <div class="err">Ran out of space on F: while writing the clip list. Free some room and press Resume — finished steps won't be repeated.</div>
+          <div class="row tight"><button class="btn" type="button">Resume</button><a class="btn quiet" href="Storage-light.dc.html">Free up space</a></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

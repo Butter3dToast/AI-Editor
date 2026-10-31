@@ -1,0 +1,47 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-31T17:20:00Z" },
+  "title": "AI-Editor UI mockups",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html":        { "x": 0,     "y": 0,    "w": 1512, "h": 982, "title": "Library", "expand": "fill" },
+    "Import.dc.html":      { "x": 1632,  "y": 0,    "w": 1512, "h": 982, "title": "Import", "expand": "fill" },
+    "Clips.dc.html":       { "x": 3264,  "y": 0,    "w": 1512, "h": 982, "title": "Clips", "expand": "fill" },
+    "Create.dc.html":      { "x": 4896,  "y": 0,    "w": 1512, "h": 982, "title": "Create video", "expand": "fill" },
+    "Review.dc.html":      { "x": 6528,  "y": 0,    "w": 1512, "h": 982, "title": "Review", "expand": "fill" },
+    "Style.dc.html":       { "x": 8160,  "y": 0,    "w": 1512, "h": 982, "title": "Style Profiles", "expand": "fill" },
+    "Rules.dc.html":       { "x": 9792,  "y": 0,    "w": 1512, "h": 982, "title": "Rules", "expand": "fill" },
+    "Storage.dc.html":     { "x": 11424, "y": 0,    "w": 1512, "h": 982, "title": "Storage", "expand": "fill" },
+    "Settings.dc.html":    { "x": 13056, "y": 0,    "w": 1512, "h": 982, "title": "Settings", "expand": "fill" },
+    "Issues.dc.html":      { "x": 14688, "y": 0,    "w": 1512, "h": 982, "title": "Issues", "expand": "fill" },
+
+    "Library-light.dc.html":  { "x": 0,     "y": 1282, "w": 1512, "h": 982, "title": "Library — light", "expand": "fill" },
+    "Import-light.dc.html":   { "x": 1632,  "y": 1282, "w": 1512, "h": 982, "title": "Import — light", "expand": "fill" },
+    "Clips-light.dc.html":    { "x": 3264,  "y": 1282, "w": 1512, "h": 982, "title": "Clips — light", "expand": "fill" },
+    "Create-light.dc.html":   { "x": 4896,  "y": 1282, "w": 1512, "h": 982, "title": "Create video — light", "expand": "fill" },
+    "Review-light.dc.html":   { "x": 6528,  "y": 1282, "w": 1512, "h": 982, "title": "Review — light", "expand": "fill" },
+    "Style-light.dc.html":    { "x": 8160,  "y": 1282, "w": 1512, "h": 982, "title": "Style Profiles — light", "expand": "fill" },
+    "Rules-light.dc.html":    { "x": 9792,  "y": 1282, "w": 1512, "h": 982, "title": "Rules — light", "expand": "fill" },
+    "Storage-light.dc.html":  { "x": 11424, "y": 1282, "w": 1512, "h": 982, "title": "Storage — light", "expand": "fill" },
+    "Settings-light.dc.html": { "x": 13056, "y": 1282, "w": 1512, "h": 982, "title": "Settings — light", "expand": "fill" },
+    "Issues-light.dc.html":   { "x": 14688, "y": 1282, "w": 1512, "h": 982, "title": "Issues — light", "expand": "fill" },
+
+    "Jobs.dc.html":  { "x": 0,    "y": 2564, "w": 1512, "h": 982, "title": "Jobs rail — every state", "expand": "fill" },
+    "Empty.dc.html": { "x": 1632, "y": 2564, "w": 1512, "h": 982, "title": "Empty states", "expand": "fill" }
+  },
+  "order": [
+    "Main.dc.html", "Import.dc.html", "Clips.dc.html", "Create.dc.html", "Review.dc.html",
+    "Style.dc.html", "Rules.dc.html", "Storage.dc.html", "Settings.dc.html", "Issues.dc.html",
+    "Library-light.dc.html", "Import-light.dc.html", "Clips-light.dc.html", "Create-light.dc.html",
+    "Review-light.dc.html", "Style-light.dc.html", "Rules-light.dc.html", "Storage-light.dc.html",
+    "Settings-light.dc.html", "Issues-light.dc.html",
+    "Jobs.dc.html", "Empty.dc.html"
+  ],
+  "notes": {
+    "n1": { "x": 0, "y": -300, "text": "Dark — every screen", "kind": "title1", "maxW": 16200 },
+    "n2": { "x": 0, "y": 982, "text": "Light — the same screens, same markup, swapped tokens", "kind": "title1", "maxW": 16200 },
+    "n3": { "x": 0, "y": 2264, "text": "Jobs mid-job, and the empty states", "kind": "title1", "maxW": 3100 }
+  },
+  "designSystems": []
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Empty states</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}
+.board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;padding:36px;
+min-height:982px;background:var(--bg);box-sizing:border-box}
+.case{display:flex;flex-direction:column;gap:12px}
+.case>h4{margin:0;font-size:12px;letter-spacing:.7px;text-transform:uppercase;color:var(--dim)}
+.case>.panel{flex:1;display:flex;align-items:center;justify-content:center}</style></helmet>
+<div class="app dark">
+  <div class="board">
+    <div class="case">
+      <h4>Library · nothing imported yet</h4>
+      <div class="panel">
+        <div class="empty">
+          <b>No recordings yet</b>
+          <p>Point AI-Editor at a stream or a Let's Play recording and it finds the moments worth keeping. Your file is read where it is and never changed.</p>
+          <div class="row tight" style="justify-content:center">
+            <a class="btn primary" href="Import.dc.html">Import a recording</a>
+            <button class="btn quiet" type="button">Set your raw folder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case">
+      <h4>Clips · the recording isn't analysed</h4>
+      <div class="panel">
+        <div class="empty">
+          <b>Nothing to show yet</b>
+          <p>Wardogs, Wed 28 Oct hasn't been analysed. That takes about 45 minutes for a two-hour stream, and it only happens once.</p>
+          <div class="row tight" style="justify-content:center">
+            <button class="btn primary" type="button">Analyse it now</button>
+            <button class="btn quiet" type="button">Queue it for tonight</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case">
+      <h4>Review · no plan open</h4>
+      <div class="panel">
+        <div class="empty">
+          <b>No video plan yet</b>
+          <p>A plan is the cut before it renders: every clip, in order, with its effects. You can change anything in it, and nothing is final until you press Render.</p>
+          <div class="row tight" style="justify-content:center">
+            <a class="btn primary" href="Create.dc.html">Create a video</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case">
+      <h4>Clips · everything used, and Style · no profile</h4>
+      <div class="panel" style="flex-direction:column;gap:0;padding:0">
+        <div class="empty" style="padding:48px 32px;border-bottom:1px solid var(--line)">
+          <b>Every clip is in a video</b>
+          <p>All 46 Wardogs clips have been used. Rendering uses clips up so the next video starts fresh — turn reuse on in Create video if you want them again.</p>
+        </div>
+        <div class="empty" style="padding:48px 32px">
+          <b>No style profiles yet</b>
+          <p>Paste two or three YouTube videos whose editing you like and AI-Editor measures their pace, zooms and captions into a profile you can adjust.</p>
+          <div class="row tight" style="justify-content:center">
+            <a class="btn" href="Style.dc.html">Make a profile</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

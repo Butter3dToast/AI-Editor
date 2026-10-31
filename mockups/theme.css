@@ -1,0 +1,196 @@
+/* AI-Editor UI mockups — one sheet, two themes. Swap .dark / .light on .app.
+   Layers step up in value and are split by hairlines, not boxes or shadows.
+   Colour means state: nothing is tinted for decoration. */
+.app{--bg:#111113;--surf:#17171a;--surf2:#1f1f23;--line:rgba(255,255,255,.08);
+--line2:rgba(255,255,255,.14);--ink:#ececef;--mid:#b6b8bf;--dim:#8d9099;
+--accent:#a78bfa;--accent-ink:#2e1f54;--sel:rgba(167,139,250,.14);
+--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--media:#09090b}
+.app.light{--bg:#f7f7f8;--surf:#ffffff;--surf2:#f1f1f3;--line:rgba(0,0,0,.09);
+--line2:rgba(0,0,0,.16);--ink:#18181b;--mid:#4b4d55;--dim:#6b6e78;
+--accent:#6d28d9;--accent-ink:#ffffff;--sel:rgba(109,40,217,.08);
+--ok:#15803d;--warn:#92400e;--bad:#b91c1c;--media:#1c1c1f}
+
+.app{display:flex;min-height:982px;background:var(--bg);color:var(--ink);
+font-family:"Segoe UI",system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;
+-webkit-font-smoothing:antialiased}
+.app *{box-sizing:border-box}
+
+/* ---- navigation ---- */
+.side{width:248px;flex:0 0 248px;background:var(--surf);border-right:1px solid var(--line);
+display:flex;flex-direction:column;padding:28px 0 24px}
+.brand{padding:0 24px 24px}
+.brand b{display:block;font-size:15px;font-weight:600;letter-spacing:-.1px}
+.brand span{color:var(--dim);font-size:12px}
+.navlabel{padding:24px 24px 8px;color:var(--dim);font-size:11px;letter-spacing:.8px;
+text-transform:uppercase}
+.nav{display:flex;flex-direction:column;padding:0 12px}
+.nav a{display:flex;align-items:center;gap:12px;padding:0 12px;height:40px;border-radius:8px;
+color:var(--mid);text-decoration:none}
+.nav a:hover{background:var(--surf2);color:var(--ink)}
+.nav a.on{background:var(--sel);color:var(--ink);font-weight:600}
+.nav .tally{margin-left:auto;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums;
+font-style:normal;font-weight:400}
+.side-foot{margin-top:auto;padding:24px 24px 0}
+.comp{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12px}
+.comp .led{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 7px}
+.comp .led.off{background:var(--warn)}
+.comp b{display:block;color:var(--mid);font-weight:600;font-size:12.5px}
+
+/* ---- frame ---- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:16px;padding:26px 36px;border-bottom:1px solid var(--line)}
+.top h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.3px}
+.top p{margin:4px 0 0;color:var(--dim);font-size:13px}
+.top .spacer{margin-left:auto}
+.wrap{flex:1;display:flex;min-height:0}
+.body{flex:1;min-width:0;padding:36px;display:flex;flex-direction:column;gap:36px;overflow:auto}
+.rail{width:340px;flex:0 0 340px;border-left:1px solid var(--line);padding:26px 24px;
+display:flex;flex-direction:column;gap:20px;overflow:auto}
+.rail h2{margin:0;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);
+font-weight:600}
+/* nothing running: the rail collapses to a strip and the screen gets the space */
+.rail.slim{width:52px;flex:0 0 52px;padding:26px 0;align-items:center;gap:18px;overflow:visible}
+.rail.slim h2{writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:1.4px}
+.rail.slim .open{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);
+background:transparent;color:var(--dim);font:inherit;font-size:13px;line-height:1;cursor:pointer}
+.rail.slim .open:hover{background:var(--surf2);color:var(--ink)}
+.rail.slim .resting{width:7px;height:7px;border-radius:50%;border:1px solid var(--line2)}
+
+/* ---- sections ---- */
+.sec{display:flex;flex-direction:column;gap:16px}
+.sec>header{display:flex;align-items:baseline;gap:12px}
+.sec>header h3{margin:0;font-size:15px;font-weight:600}
+.sec>header p{margin:0;color:var(--dim);font-size:12.5px}
+.panel{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:24px}
+.panel.flush{padding:0;overflow:hidden}
+.note{color:var(--dim);font-size:12.5px}
+
+/* ---- controls ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;
+padding:0 16px;border-radius:8px;border:1px solid var(--line2);background:transparent;
+color:var(--ink);font:inherit;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--surf2)}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-ink);font-weight:600}
+.btn.quiet{border-color:transparent;color:var(--mid)}
+.btn.danger{border-color:transparent;color:var(--bad)}
+.row{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
+.row.tight{gap:8px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.field>label{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);
+font-weight:600}
+.field small{color:var(--dim);font-size:12px}
+.input{height:38px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);
+background:var(--surf2);color:var(--ink);font:inherit;font-size:13.5px;width:100%}
+textarea.input{height:auto;min-height:76px;padding:10px 12px;resize:vertical}
+.seg{display:inline-flex;gap:4px;padding:4px;border-radius:9px;background:var(--surf2)}
+.seg button{height:30px;padding:0 14px;border:0;border-radius:6px;background:transparent;
+color:var(--dim);font:inherit;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--surf);color:var(--ink);font-weight:600}
+.app.dark .seg button.on{background:#2b2b31}
+.check{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--mid)}
+.check i{width:16px;height:16px;border-radius:5px;border:1px solid var(--line2);
+display:inline-block;flex:0 0 16px}
+.check i.tick{background:var(--accent);border-color:transparent;position:relative}
+.check i.tick::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;
+border:solid var(--accent-ink);border-width:0 2px 2px 0;transform:rotate(42deg)}
+.pill{display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:999px;
+border:1px solid var(--line2);font-size:12.5px;color:var(--dim)}
+.pill.on{border-color:transparent;background:var(--sel);color:var(--ink)}
+
+/* ---- tables: hairlines, no stripes ---- */
+table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);
+padding:14px 20px;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap}
+td{padding:16px 20px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--mid)}
+td:first-child,th:first-child{padding-left:24px}
+td:last-child,th:last-child{padding-right:24px}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surf2)}
+tbody tr.on td{background:var(--sel);color:var(--ink)}
+td b{color:var(--ink);font-weight:600}
+
+/* ---- state: colour only where something is happening ---- */
+.state{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim)}
+.state::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.state.run{color:var(--accent)}
+.state.done{color:var(--ok)}
+.state.wait{color:var(--warn)}
+.state.fail{color:var(--bad)}
+.state.off::before{background:transparent;border:1px solid var(--line2)}
+
+/* ---- jobs ---- */
+.job{display:flex;flex-direction:column;gap:10px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.job:last-of-type{border-bottom:0}
+.job .jh{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.job .jt{font-weight:600;font-size:13.5px}
+.job .jm{color:var(--dim);font-size:12px}
+.step{display:grid;grid-template-columns:minmax(92px,1fr) 1.6fr 36px;gap:12px;align-items:center;
+font-size:12px;color:var(--dim)}
+.bar{height:4px;border-radius:2px;background:var(--line2);overflow:hidden}
+.bar>div{height:100%;background:var(--accent);border-radius:2px}
+.bar>div.done{background:var(--ok)}
+.job ul{margin:0;padding-left:18px;font-size:12px;color:var(--dim);line-height:1.7}
+.job .err{color:var(--bad);font-size:12.5px}
+.idle{color:var(--dim);font-size:12.5px;line-height:1.7}
+
+/* ---- media ---- */
+.player{background:var(--media);border-radius:12px;aspect-ratio:16/9;display:flex;
+align-items:flex-end;padding:16px;color:var(--dim);font-size:12.5px}
+.player.tall{aspect-ratio:9/16;max-height:420px;margin:0 auto}
+.player.empty{background:transparent;border:1px dashed var(--line2);align-items:center;
+justify-content:center}
+
+/* ---- the length bar ---- */
+.lenbar{position:relative;display:flex;height:44px;border-radius:10px;overflow:hidden;
+background:var(--surf2)}
+.lenbar .blk{display:flex;align-items:center;justify-content:center;font-size:11.5px;
+color:#f4f3ff;border-right:1px solid rgba(0,0,0,.4)}
+.blk.c0{background:#4c3a86}.blk.c1{background:#5d47a3}.blk.teaser{background:#8a6d1f}
+.blk.replay{background:#1f5f6b}.blk.sel{outline:2px solid var(--accent);outline-offset:-2px}
+.app.light .blk.c0{background:#6d28d9}.app.light .blk.c1{background:#7c3aed}
+.app.light .blk.teaser{background:#a16207}.app.light .blk.replay{background:#0e7490}
+.lenbar .target{position:absolute;top:0;bottom:0;width:2px;background:var(--ok)}
+.legend{display:flex;gap:18px;color:var(--dim);font-size:12px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* ---- lists and empties ---- */
+.kv{display:flex;justify-content:space-between;gap:20px;padding:14px 0;
+border-bottom:1px solid var(--line);font-size:13.5px;color:var(--mid)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--dim)}
+.kv b{font-weight:600;color:var(--ink)}
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px}
+.facts div{display:flex;flex-direction:column;gap:4px}
+.facts dt{color:var(--dim);font-size:11px;letter-spacing:.6px;text-transform:uppercase;font-weight:600}
+.facts dd{margin:0;font-size:13.5px;color:var(--mid)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;
+padding:72px 32px}
+.empty b{font-size:17px;font-weight:600}
+.empty p{margin:0;color:var(--dim);font-size:13.5px;max-width:420px;line-height:1.6}
+.disclose{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:13px;
+padding:14px 0;border-top:1px solid var(--line)}
+
+/* the viewing stage: the picture is the biggest thing on the screen */
+.stage{display:flex;gap:28px;align-items:stretch}
+.stage>.view{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px}
+.stage>.meta{width:280px;flex:0 0 280px;display:flex;flex-direction:column;gap:14px}
+.stage .player{aspect-ratio:auto;min-height:440px}
+.transport{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12.5px}
+.transport .track{flex:1;height:4px;border-radius:2px;background:var(--line2);position:relative}
+.transport .track>div{position:absolute;inset:0 62% 0 0;background:var(--accent);border-radius:2px}
+.transport .mark{position:absolute;top:-4px;width:2px;height:12px;background:var(--warn)}
+
+.split{display:flex;gap:36px;align-items:flex-start}
+.split>.l{flex:3;min-width:0;display:flex;flex-direction:column;gap:24px}
+.split>.r{flex:2;min-width:0;display:flex;flex-direction:column;gap:20px}
+@media (max-width:960px){.side,.rail{display:none}.split{flex-direction:column}
+.facts{grid-template-columns:repeat(2,minmax(0,1fr))}.body{padding:24px}}
+
+/* ---- opening these files straight from the repo ----
+   On the design canvas the runtime lays <x-dc> out. Opened as plain files in a
+   browser it is an unknown inline element, so it is made a block here and the
+   <helmet> wrapper (whose <style> still applies) is hidden. Nothing else differs
+   from the canvas copy. */
+x-dc{display:block}
+helmet{display:none}

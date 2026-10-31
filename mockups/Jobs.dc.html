@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jobs rail — every state</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}
+.board{display:flex;gap:28px;padding:36px;min-height:982px;background:var(--bg);box-sizing:border-box}
+.case{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px}
+.case>h4{margin:0;font-size:12px;letter-spacing:.7px;text-transform:uppercase;color:var(--dim)}
+.case>.rail{width:auto;flex:1;border-left:0;border:1px solid var(--line);border-radius:12px;
+background:var(--surf)}</style></helmet>
+<div class="app dark">
+  <div class="board">
+    <div class="case" style="flex:0 0 300px">
+      <h4>Nothing running · collapsed</h4>
+      <div style="display:flex;gap:16px;flex:1">
+        <aside class="rail slim">
+          <button class="open" type="button" aria-label="Open the jobs panel">‹</button>
+          <h2>Jobs</h2>
+          <i class="resting" aria-hidden="true"></i>
+        </aside>
+        <aside class="rail" style="flex:1">
+          <h2>Jobs · opened</h2>
+          <div class="idle">Nothing running. Importing, analysing and rendering show their progress here, and keep going while you use the other screens.</div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="case">
+      <h4>Mid-job, with one waiting</h4>
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Analysing Tarkov</span><span class="state run">Running</span></div>
+          <div class="jm">38 min in · about 20 min left</div>
+          <div class="step"><span>Voices apart</span><div class="bar"><div class="done" style="width:100%"></div></div><span>100%</span></div>
+          <div class="step"><span>Transcript</span><div class="bar"><div class="done" style="width:100%"></div></div><span>100%</span></div>
+          <div class="step"><span>Sound signals</span><div class="bar"><div style="width:62%"></div></div><span>62%</span></div>
+          <div class="step"><span>Reading clips</span><div class="bar"><div style="width:0%"></div></div><span>0%</span></div>
+          <ul><li>Chat attached · 14,208 messages</li><li>4 marked moments found</li></ul>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">Twitch VOD 2875855539</span><span class="state wait">Waiting</span></div>
+          <div class="jm">starts when the analysis finishes</div>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">Tarkov highlights</span><span class="state done">Finished</span></div>
+          <div class="jm">took 9 min · in your output folder</div>
+        </div>
+        <div class="row tight"><button class="btn quiet" type="button">Pause all</button><button class="btn quiet" type="button">Clear finished</button></div>
+      </aside>
+    </div>
+
+    <div class="case">
+      <h4>Paused, and stopped on a problem</h4>
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Analysing Wardogs</span><span class="state wait">Paused</span></div>
+          <div class="jm">stopped at 41% · nothing is lost</div>
+          <div class="step"><span>Sound signals</span><div class="bar"><div style="width:41%"></div></div><span>41%</span></div>
+          <div class="row tight"><button class="btn" type="button">Resume</button></div>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">Rendering Part 9</span><span class="state fail">Stopped</span></div>
+          <div class="jm">21 min in</div>
+          <div class="step"><span>Encoding</span><div class="bar"><div style="width:74%"></div></div><span>74%</span></div>
+          <div class="err">Ran out of space on F:. Free some room and press Resume — finished steps won't be repeated.</div>
+          <div class="row tight"><button class="btn" type="button">Resume</button><a class="btn quiet" href="Storage.dc.html">Free up space</a></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="case">
+      <h4>Overnight run, seen in the morning</h4>
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Overnight · 3 recordings</span><span class="state done">Finished</span></div>
+          <div class="jm">ran 02:00 – 04:46</div>
+          <ul><li>Tarkov, Wardogs and Dawnwalker ep 9 analysed</li><li>118 clips found · 9 moments you marked</li><li>Working files freed · 9.6 GB</li></ul>
+        </div>
+        <div class="job">
+          <div class="jh"><span class="jt">League of Legends</span><span class="state wait">Skipped</span></div>
+          <div class="jm">the recording wasn't in your raw folder</div>
+        </div>
+        <div class="row tight"><button class="btn quiet" type="button">Clear finished</button></div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

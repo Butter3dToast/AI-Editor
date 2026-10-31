@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#a78bfa}a:hover{color:#c4b5fd}</style></helmet>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Main.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import.dc.html">Import</a>
+      <a href="Clips.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create.dc.html">Create video</a>
+      <a href="Review.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a href="Style.dc.html">Style Profiles</a>
+      <a href="Rules.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage.dc.html">Storage</a>
+      <a class="on" href="Settings.dc.html">Settings</a>
+      <a href="Issues.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Settings</h1><p>Saved on this PC · they work straight away</p></div>
+      <div class="spacer"></div>
+      <div class="seg"><button type="button" class="on">Videos</button><button type="button">Folders</button><button type="button">Companion</button><button type="button">AI</button></div>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="sec">
+          <header><h3>Highlights</h3><p>What a new highlight plan starts with</p></header>
+          <div class="panel">
+            <div class="row">
+              <div class="field" style="max-width:220px"><label for="se-len">Length</label>
+                <input class="input" id="se-len" type="text" value="10 minutes"></div>
+              <div class="field" style="max-width:220px"><label for="se-bar">Quality bar</label>
+                <input class="input" id="se-bar" type="text" value="0.60"></div>
+              <div class="field"><label>Order of the clips</label>
+                <div class="row tight"><span class="pill on">As it happened</span><span class="pill">Best last</span><span class="pill">Mixed</span></div></div>
+            </div>
+            <p class="note" style="margin:16px 0 0">Clips under the bar aren't picked. Your 👍 clips and marked moments always go in.</p>
+          </div>
+        </section>
+
+        <section class="sec">
+          <header><h3>Let's Play parts</h3><p>From a two-hour recording, about four parts</p></header>
+          <div class="panel">
+            <div class="row">
+              <div class="field" style="max-width:220px"><label for="se-part">Part length</label>
+                <input class="input" id="se-part" type="text" value="30 minutes"></div>
+              <div class="field" style="max-width:220px"><label for="se-ext">Stretch to, for a story mission</label>
+                <input class="input" id="se-ext" type="text" value="45 minutes"></div>
+              <div class="field" style="max-width:220px"><label for="se-max">Never longer than</label>
+                <input class="input" id="se-max" type="text" value="60 minutes"></div>
+            </div>
+            <div class="row" style="margin-top:20px">
+              <label class="check"><i class="tick"></i>Prefer ending a part on a big moment</label>
+              <label class="check"><i class="tick"></i>Carry a short leftover into the next session</label>
+            </div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <header><h3>Captions, sound and effects</h3></header>
+          <div class="panel">
+            <div class="row">
+              <label class="check"><i class="tick"></i>Captions on highlights</label>
+              <label class="check"><i class="tick"></i>Captions on Shorts</label>
+              <label class="check"><i></i>Captions on Let's Play parts</label>
+            </div>
+            <div class="row tight" style="margin-top:20px">
+              <span class="pill on">Flash</span><span class="pill">Screen shake</span><span class="pill on">Sound effects</span>
+              <span class="pill on">Slow-motion replay</span><span class="pill">Zoom</span>
+            </div>
+            <div class="row" style="margin-top:20px">
+              <div class="kv" style="flex:1"><span>Loudness target</span><b>−14 LUFS</b></div>
+              <div class="kv" style="flex:1"><span>Music under speech</span><b>−18 dB</b></div>
+            </div>
+          </div>
+          <div class="disclose">Theme follows Windows · version 0.37.0 · backup runs weekly</div>
+        </section>
+      </main>
+
+      <aside class="rail slim">
+        <button class="open" type="button" aria-label="Open the jobs panel">‹</button>
+        <h2>Jobs</h2>
+        <i class="resting" aria-hidden="true"></i>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

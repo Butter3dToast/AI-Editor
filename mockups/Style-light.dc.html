@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Style Profiles — light</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./theme.css">
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#6d28d9}a:hover{color:#5b21b6}</style></helmet>
+<div class="app light">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span>0.37.0</span></div>
+    <div class="navlabel">Make</div>
+    <nav class="nav">
+      <a href="Library-light.dc.html">Library<em class="tally">17</em></a>
+      <a href="Import-light.dc.html">Import</a>
+      <a href="Clips-light.dc.html">Clips<em class="tally">212</em></a>
+      <a href="Create-light.dc.html">Create video</a>
+      <a href="Review-light.dc.html">Review<em class="tally">3</em></a>
+    </nav>
+    <div class="navlabel">Teach it</div>
+    <nav class="nav">
+      <a class="on" href="Style-light.dc.html">Style Profiles</a>
+      <a href="Rules-light.dc.html">Rules</a>
+    </nav>
+    <div class="navlabel">App</div>
+    <nav class="nav">
+      <a href="Storage-light.dc.html">Storage</a>
+      <a href="Settings-light.dc.html">Settings</a>
+      <a href="Issues-light.dc.html">Issues</a>
+    </nav>
+    <div class="side-foot">
+      <div class="comp"><i class="led"></i><div><b>Companion running</b>4 marks today</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1>Tarkov Hype Highlights</h1><p>Escape from Tarkov · highlights · built from 3 reference videos</p></div>
+      <div class="spacer"></div>
+      <button class="btn quiet" type="button">New profile</button>
+      <button class="btn primary" type="button">Save</button>
+    </header>
+
+    <div class="wrap">
+      <main class="body">
+        <section class="stage">
+          <div class="view">
+            <div class="player">Preview · your clip with this profile applied</div>
+            <div class="row tight">
+              <button class="btn" type="button">Preview on another clip</button>
+              <div class="spacer" style="margin-left:auto"></div>
+              <select class="input" style="max-width:260px"><option>Tarkov Hype Highlights</option><option>Chill Dawnwalker</option><option>League Shorts</option></select>
+            </div>
+          </div>
+          <div class="meta">
+            <div class="kv"><span>Cuts per minute</span><b>14</b></div>
+            <div class="kv"><span>Longest dead air</span><b>0.6 s</b></div>
+            <div class="kv"><span>Zooms per minute</span><b>3</b></div>
+            <div class="kv"><span>Zoom strength</span><b>1.25×</b></div>
+            <div class="kv"><span>Captions</span><b>Word pop · large</b></div>
+            <div class="kv"><span>Sound effects</span><b>2 / min</b></div>
+            <div class="kv"><span>Hook</span><b>5 s</b></div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <header><h3>Reference videos</h3><p>Studied on this PC only — their footage never ends up in your videos</p></header>
+          <div class="panel flush">
+            <table>
+              <thead><tr><th>Video</th><th>Length</th><th>Cuts / min</th><th>Zooms / min</th><th>Read</th></tr></thead>
+              <tbody>
+                <tr><td><b>Tarkov raid highlights — late night labs</b></td><td>11:42</td><td>14.2</td><td>3.1</td><td><span class="state done">Done</span></td></tr>
+                <tr><td><b>Best extracts of the wipe</b></td><td>9:05</td><td>12.8</td><td>2.6</td><td><span class="state done">Done</span></td></tr>
+                <tr><td><b>Insane 1v4 compilation</b></td><td>14:20</td><td>16.1</td><td>4.0</td><td><span class="state run">Reading · 55%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="row">
+            <div class="field"><label for="st-add-l">Add a reference</label>
+              <input class="input" id="st-add-l" type="url" placeholder="Paste a YouTube link, or browse for a file on this PC"></div>
+            <button class="btn" type="button">Add</button>
+          </div>
+          <div class="disclose">It noticed: freeze frame on deaths · slow-motion on clutch kills · hard cuts · big low captions</div>
+        </section>
+      </main>
+
+      <aside class="rail">
+        <h2>Jobs</h2>
+        <div class="job">
+          <div class="jh"><span class="jt">Reading a reference</span><span class="state run">Running</span></div>
+          <div class="jm">3 min in</div>
+          <div class="step"><span>Cuts &amp; zooms</span><div class="bar"><div style="width:55%"></div></div><span>55%</span></div>
+          <div class="step"><span>Frames to the AI</span><div class="bar"><div style="width:0%"></div></div><span>0%</span></div>
+        </div>
+        <div class="idle">Nothing else running.</div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1512,"height":982}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
