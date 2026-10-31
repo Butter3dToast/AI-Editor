@@ -265,3 +265,20 @@ def browse_for_video(start: Path, title: str = "Pick a recording to import") -> 
     result = subprocess.run([sys.executable, "-c", _PICKER, str(start), title], capture_output=True,
                             text=True, encoding="utf-8", timeout=600)
     return str(Path(result.stdout)) if result.stdout.strip() else ""
+
+
+_FOLDER_PICKER = """
+import sys, tkinter
+from tkinter import filedialog
+root = tkinter.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+print(filedialog.askdirectory(parent=root, title=sys.argv[2], initialdir=sys.argv[1]) or "", end="")
+"""
+
+
+def browse_for_folder(start: Path, title: str) -> str:
+    """Windows' own folder picker, as browse_for_video. '' if cancelled."""
+    result = subprocess.run([sys.executable, "-c", _FOLDER_PICKER, str(start), title],
+                            capture_output=True, text=True, encoding="utf-8", timeout=600)
+    return str(Path(result.stdout)) if result.stdout.strip() else ""

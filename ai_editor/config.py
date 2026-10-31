@@ -712,6 +712,21 @@ class Learning(BaseModel):
     taste: bool = True
 
 
+class Backup(BaseModel):
+    """Backups of the library and your Settings (backup.py). The program itself
+    is on GitHub; these are what isn't."""
+
+    # Where they go: pick it in Settings. A Google Drive for desktop folder puts
+    # them on Drive. Empty: no backups yet.
+    folder: Path | None = None
+    weekly: bool = True  # also once a week by itself, while AI-Editor is open
+
+    @field_validator("folder", mode="before")
+    @classmethod
+    def _empty_is_none(cls, v):
+        return None if v is None or not str(v).strip() else v
+
+
 class Logging(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
 
@@ -721,6 +736,7 @@ class Settings(BaseModel):
     tools: Tools = Tools()
     performance: Performance = Performance()
     overnight: Overnight = Overnight()
+    backup: Backup = Backup()
     companion: Companion = Companion()
     obs: Obs = Obs()
     analysis: Analysis = Analysis()

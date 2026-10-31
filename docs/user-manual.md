@@ -189,9 +189,14 @@ Your Style Profiles, Rules, ratings, learned taste and Clip Library live in one 
 
 **Before an update changes how the library is laid out**, AI-Editor keeps a whole copy of it as it was, beside it, for example `ai-editor.before-v9.db`. AI-Editor never deletes it. Once the new version has been working for a while, you can delete it yourself.
 
-**To back up yourself:** close AI-Editor, then copy `ai-editor.db` somewhere else (a USB drive or a cloud folder). To restore, close AI-Editor and copy it back. Backups do **not** include your video files.
+**The Backup button** (Settings → **Backup**) saves both as one zip, named by date, e.g. `AI-Editor backup 2026-10-31 18-05.zip` (your 165 MB library makes about 42 MB). The AI-Editor program itself is on GitHub; your videos and recordings aren't in a backup.
 
-**Not built yet:** a Backup button in Settings.
+1. Pick the **Backup folder** (**Browse...**) and click **Save backup settings**. A folder on another drive is safest. With **Google Drive for desktop** installed (free, from Google), a folder inside it, e.g. `G:\My Drive\AI-Editor backups`, puts every backup on your Drive: Drive uploads it, AI-Editor never goes online.
+2. **Back up now** makes one straight away (it shows in Jobs, a few seconds). With **Also back up once a week by itself** ticked (the default), AI-Editor makes one a week after the last, while it's open.
+3. **Your OBS password is never in a backup**, nor any other password or key, so a backup is safe on a USB stick or in the cloud.
+4. **AI-Editor never deletes a backup.** Settings shows how many there are and how much space they take: delete old ones yourself when you like.
+
+**To restore:** pick the backup under **Restore a backup**, click **Restore...**, then **Yes, restore it**. Your library and Settings go back to how they were then. First, the library as it is now is backed up (`... (before restore).zip`), so a restore can be undone the same way. Your OBS password on this PC stays. Wait until Jobs is empty first, then close AI-Editor and open it again. A backup made by a newer AI-Editor, or a damaged one, is refused and nothing changes.
 
 ---
 
@@ -331,7 +336,7 @@ Our standard track setup:
 4. Keep **Enable Authentication** ticked.
 5. Click **Show Connect Info**, then click **Copy** next to **Server Password**.
 6. Click **OK**.
-7. In AI-Editor's setup wizard (until the app window arrives: run `ai-editor setup-obs` in a terminal with OBS open), paste the password. It doesn't show as you type or paste; press **Enter**.
+7. With OBS open, run `ai-editor setup-obs` in a terminal (Windows Terminal or PowerShell, in the AI-Editor folder) and paste the password. It doesn't show as you type or paste; press **Enter**.
 8. You should see **Connected to OBS** and the OBS version.
 
 The password is only saved once OBS accepts it, in `config/settings.local.yaml`. That file stays on your PC: it's never uploaded to GitHub, and it isn't part of `settings.yaml`. The password itself never travels, even to OBS: AI-Editor answers a one-time question from OBS that proves it knows the password.
@@ -600,7 +605,7 @@ The VOD must be public. For a private one, download it from your Twitch dashboar
 
 Because Twitch VODs have one mixed audio track, AI-Editor automatically separates your voice from game sound and teammates using your voice sample. This adds some time to analysis.
 
-### 10.2a Twitch VODs from the command line (until the app window arrives)
+### 10.2a Twitch VODs from the command line
 
 > **[Engineer: command-line versions of 10.2 and 10.3, used while AI-Editor is being built.]**
 
@@ -679,7 +684,7 @@ For each recording AI-Editor:
 8. Asks the local AI (5.2) about each clip: a rating out of 10, a one-line summary, and whether it works as a Short (12.3). About 2 minutes per stream. Skipped, with a note, if the AI isn't set up.
 9. Saves everything into your Clip Library.
 
-### 11.1a Analysing from the command line (until the app window arrives)
+### 11.1a Analysing from the command line
 
 > **[Engineer: this section covers the command-line tool used while AI-Editor is being built. The app window arrives in Phase 1H.]**
 
@@ -719,7 +724,7 @@ For each recording AI-Editor:
 - **Stopping partway is safe.** Press `Ctrl + C`; run the same command again later and it carries on.
 - **Changed the silence threshold?** Run `ai-editor analyze` again — it takes seconds, because nothing slow is redone; the saved results are simply re-read with the new setting.
 
-### 11.1b Ranking the best moments (until the app window arrives)
+### 11.1b Ranking the best moments
 
 Analysis records *what* it heard, second by second. Ranking turns all of it into one number per second — **how good is this moment** — so the best bits can be found without watching the whole recording.
 
@@ -747,7 +752,7 @@ Scores are worked out fresh each time, so changing a weight and running `ai-edit
 
 **This is the list to argue with.** Jump to the times in VLC and tell your engineer which are wrong; the weights exist to be corrected.
 
-### 11.1c Clips (until the app window arrives)
+### 11.1c Clips
 
 After analysis, AI-Editor cuts the best moments into **clips**: the candidates every video recipe chooses from later. You don't have to do anything for this — it happens at the end of every analysis, and takes a couple of seconds.
 
@@ -834,7 +839,9 @@ The **Clips** tab shows every moment AI-Editor found in a recording, best first.
 
 3. **Click a clip** to play it beside the list. It plays from the preview copy, so it starts straight away; the finished video is full quality. Underneath are what the AI says about it, all its words, its game, and the video it's used in.
 
-**Not built yet:** thumbnails, pinning, trimming, and filtering by game or date.
+To trim a clip, open its video in Review and use **Adjust the cut** (18.3).
+
+**Not built yet:** thumbnails, pinning, and filtering by game or date.
 
 ### 12.2 Rating clips
 
@@ -1094,17 +1101,7 @@ On 24 Oct, on your League stream of 19 October, "A zoom on every kill" suggested
 
 To move where parts end, use the Part Planner (15.4).
 
-### 15.1b Starting a new Let's Play series
-
-AI-Editor treats a recording as a Let's Play episode when its game is in **Settings → Let's Play → Let's Play games** (The Blood of Dawnwalker is there already). Episodes are made into parts, are listed first under Episode recording, and stay out of stream highlights.
-
-To start a new series:
-1. Type the game's name in **New Let's Play game**, as your OBS scene for it is named, and click **Add** (or press Enter). It's saved straight away: the line under the list says so.
-2. Restart the Stream Companion, so it reads the new name.
-
-From then on the game is recognised by name, like the four built-in games: an OBS scene called after it (8.1b), or a recording whose file name has it in. Overnight work (11.4) drafts its parts. When a series ends, click **×** on its name (saved straight away): recordings already in the library keep their game.
-
-### 15.1a From the command line (until the app window arrives)
+### 15.1a From the command line
 
 ```powershell
 ai-editor letsplay 1 --open
@@ -1132,6 +1129,16 @@ Happy with the parts? Render them as finished videos with `ai-editor render <pla
 **Story missions (The Blood of Dawnwalker).** The first time you make an episode's plan, AI-Editor reads the game's **quest tracker** (top right: the time of day, then the quest you're following, such as "Where Loyalty Lies") every 15 seconds, from the preview copy. That takes about 4-5 minutes for a 2-hour episode, shows under Jobs as **Reading the quest tracker**, and is kept, so it never runs twice for the same episode (it works even after you've deleted the recording). It uses a small text reader that runs offline on the processor, leaving the graphics card alone.
 
 With that, a part is **never split in the middle of a quest** if it can be helped: it ends just before the quest begins, or runs on to its end (up to 45 minutes, 60 at most). Every quest the tracker shows counts; the "Rescue your family" line above it doesn't. Just after a quest ends, and as the time of day changes (Noon → Afternoon), are good places to end a part. A quest longer than an hour still has to be split: that part is flagged, with the quest's name, for you to check. The plan's notes list the quests it found.
+
+### 15.1b Starting a new Let's Play series
+
+AI-Editor treats a recording as a Let's Play episode when its game is in **Settings → Let's Play → Let's Play games** (The Blood of Dawnwalker is there already). Episodes are made into parts, are listed first under Episode recording, and stay out of stream highlights.
+
+To start a new series:
+1. Type the game's name in **New Let's Play game**, as your OBS scene for it is named, and click **Add** (or press Enter). It's saved straight away: the line under the list says so.
+2. Restart the Stream Companion, so it reads the new name.
+
+From then on the game is recognised by name, like the four built-in games: an OBS scene called after it (8.1b), or a recording whose file name has it in. Overnight work (11.4) drafts its parts. When a series ends, click **×** on its name (saved straight away): recordings already in the library keep their game.
 
 ### 15.2 Length settings explained
 
@@ -1216,7 +1223,7 @@ When the Stream Companion was running, no clip runs into your "BRB", "Starting" 
 5. Check the **Style profile** box: a profile made for this game and highlights is picked by itself (chapter 13.0). Or choose **No profile (my Settings)**.
 6. Click **Make the plan**. It shows under **Jobs**, then opens in **Review** (chapter 18).
 
-### 16.1a From the command line (until the app window arrives)
+### 16.1a From the command line
 
 ```powershell
 ai-editor highlights --open
@@ -1336,14 +1343,15 @@ Each app covers parts of the screen with its own buttons, your username and the 
 
 ### 17.4 Adjusting a Short
 
-On the Review screen for Shorts you can:
+On the Review screen for a Short you can:
 
-- Drag the **gameplay crop box** to reposition it.
-- Drag the **facecam box** to resize or move it.
-- Edit **caption text** if a word was misheard.
-- Change the **start and end** of the clip.
+- Switch the **layout** (17.1).
+- Change its **start and end**: click its row and use **Adjust the cut** (18.3).
+- Fix **caption words** that were misheard, or hide a line (18.5).
 
-**Built so far:** switching the layout (17.1). **Not built yet:** moving the crop or facecam box by dragging, editing caption words, and changing the start and end.
+Where the crop sits left to right is set per game in `settings.yaml` (`shorts.crop_centre`), and how much of the height it fills with `shorts.crop_fill` (17.2).
+
+**Not built yet:** moving the crop by dragging it in Review.
 
 ### 17.5 Using Shorts to grow your channel
 
@@ -1454,7 +1462,7 @@ Expected times: about 3½ minutes for a 12-minute highlight, about 7 minutes for
 
 **Not built yet in the window:** choosing another preset (1080p30, vertical). It's set in `settings.yaml` (`render.preset`).
 
-### 19.2a From the command line (until the app window arrives)
+### 19.2a From the command line
 
 1. See your plans, numbered newest first:
 
@@ -1540,7 +1548,7 @@ What's captioned:
 
 - **Only your words**, from your mic track. The words are exactly as transcribed, including the spelling fixes (chapter 24). Nothing is added or reworded, and swearing is shown as you said it.
 - **Let's Plays need your mic on its own track.** In a recording with only a mixed track, the game characters' lines are in the transcript too: EP 1 would have captioned Anca's "How about Petronius?" under the game's own subtitle. So a Let's Play recording without a separate mic track gets no captions, and the render says so. Your OBS is set up for separate tracks now (chapter 7.3), so new recordings are fine.
-- **Highlights from older streams** (before 27 Sep, one mixed track) can include a friend's words from Discord, and the odd game voice. Telling voices apart comes in a later phase.
+- **Highlights from older streams** (before 27 Sep, one mixed track) can include a friend's words from Discord, and the odd game voice: on a single mixed track, voices can't be told apart. Recordings with Discord on its own track show your friends' words in their own colour, with their name (below).
 
 ### 19.2d Effects on the big moments
 
@@ -1787,24 +1795,23 @@ Not built yet.
 
 ## 22. How AI-Editor learns from you
 
-AI-Editor doesn't retrain AI. Instead it quietly remembers your decisions and adjusts.
+AI-Editor never retrains an AI model. It keeps your decisions and works out what you like from them, on this PC, separately for each game. Nothing is sent anywhere.
 
 ### 22.1 What it learns from
 
-- Thumbs up / down in the Clip Browser.
-- Segments you remove, restore, trim, or reorder on the Review screen.
-- Effects you switch off.
-- Split points you move.
+- Your **👍, 🔖 and 👎** on clips (12.2). These are what it learns from most. Unrated clips teach nothing.
+- Every clip that ends up in a rendered video or Short, and the effects you tick or untick in Review.
 
 ### 22.2 What changes
 
-- **Clip scoring** — the kinds of moments you keep score higher; the kinds you remove score lower. Learned separately for each game.
-- **Effect suggestions** — if you keep removing an effect, AI-Editor asks whether to use it less. Example: *"You've removed 8 zooms this week. Lower zoom frequency in 'Tarkov Hype Highlights'?"* Click **Yes**, **No**, or **Ask me later**.
+- **The clip order, and which clips are picked:** **Your taste** (12.2b), once a game has 30 ratings from 3 streams, and only where it does better than the usual score.
+- **The local AI's rating:** it's shown your recent 👍 and 👎 from other streams of the game as examples, so it rates the way you would (12.3).
+- **Effect suggestions:** when you hardly use an effect Review suggests, Review asks whether to suggest it less (19.2d).
 
-### 22.3 Viewing and resetting
+### 22.3 Checking how it's doing, and switching it off
 
-- **Learning → Summary** shows what AI-Editor has learned in plain language, for example *"You prefer funny deaths over long fights in Tarkov."*
-- **Learning → Reset** clears learned preferences for one game or all games. Your profiles and rules are not affected.
+- **Clips → How well AI-Editor knows you** (12.2a): per game and week, how many of its top clips you liked.
+- **Settings → Learning your taste** says, per game, how well your taste ranks your clips against the usual score, and whether it's in use. Untick **Learn my taste** to go back to the usual score everywhere. Your ratings are kept either way.
 
 ---
 
@@ -1864,7 +1871,7 @@ AI-Editor itself never deletes your recordings: only you do. An automatic test c
 
 The **Settings** tab has the ones you'll change most: your folders (each with an **Open** button), and the main options for highlights, captions, Let's Plays, the Stream Companion and Twitch. Click **Save settings**: they work straight away, and are saved on this PC only (`config/settings.local.yaml`, beside your OBS password). A value AI-Editor can't use is refused with the reason, and nothing is saved.
 
-The **Publish** section has the lines under every description and the Let's Play title pattern (chapter 20). The **AI (on this PC)** section shows whether the local AI is ready, with **Download model**, and how often it agrees with you (12.3).
+The **Publish** section has the lines under every description, the Let's Play title pattern, and the text and look for thumbnail prompts (chapter 20). **Let's Play** also lists your Let's Play games (15.1b). **Overnight work** has its own **Save overnight work** button (11.4), and **Backup** its own **Save backup settings** (Backing up your settings, chapter 5). **Effects** (19.2d), **Your friends** (19.2c) and **Learning your taste** (12.2b) are there too. The **AI (on this PC)** section shows whether the local AI is ready, with **Download model**, and how often it agrees with you (12.3).
 
 You can change the recordings and output folders there. The cache and models folders are set in `config/settings.yaml`, because moving them means moving their files too. Every other setting is in `config/settings.yaml` as well:
 
@@ -1879,6 +1886,7 @@ You can change the recordings and output folders there. The cache and models fol
 | Overnight | Work overnight / Start at / Stop by | Off / 02:00 / until done | Imports, analyses and drafts while you sleep; never renders or deletes (11.4). |
 | Overnight | Wait while the graphics card is busier than | 60% | It waits while a game or anything heavy runs. |
 | Overnight | Shorts per new stream | 3 | Shorts drafted for each new stream. |
+| Backup | Backup folder / Also back up once a week | none / on | Where backups of your library and Settings go (chapter 5, Backing up). |
 | Companion | Mark moment hotkey | `numpad+` | Logs a moment. While the Companion runs, this key belongs to it and games won't see it, so pick one they don't use. Numpad keys, F13–F24 and combinations such as `ctrl+alt+m` all work; the numpad's Enter key can't (chapter 6, step 5). |
 | Companion | Mark Short-worthy hotkey | `numpad-` | Logs a Short moment. |
 | Companion | Confirmation sound | Off | A click when you mark. Off because a microphone can pick it up and send it to your stream, which happened on 26 Sep (chapter 8.2). |
@@ -2155,10 +2163,10 @@ Yes. On a recording's timeline, select a range → **Create clip**, then **Make 
 
 | Item | Detail |
 |---|---|
-| Manual version | 1.0 (pre-build draft) |
+| Manual version | Kept with AI-Editor: each release updates it (see CHANGELOG.md) |
 | Written for | AI-Editor, as described in *Stream Auto-Editor — Project Specification v2.0* |
 | Maintained by | The engineer, updated with every release |
-| Where it lives | `docs/user-manual.md` in the project repository, and in the app under **Help** |
+| Where it lives | `docs/user-manual.md` in the AI-Editor folder |
 
 **Update checklist for each release**
 

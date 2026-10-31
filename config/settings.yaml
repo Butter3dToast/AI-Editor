@@ -366,6 +366,12 @@ publish: # Titles, description, chapters and thumbnails for each video (manual 2
 learning: # AI-Editor learning your taste from your ratings (manual 12.2b)
   taste: true # Your taste picks clips in a game once it beats the usual score there
 
+backup: # Backups of your library and Settings (manual chapter 5, Backing up). Never deleted by AI-Editor.
+  # Pick the folder in Settings, Backup. A folder inside Google Drive for desktop
+  # puts each backup on your Drive. Your OBS password is never in a backup.
+  folder: null
+  weekly: true # also once a week by itself, while AI-Editor is open
+
 logging:
   # What appears on screen. The log file always records everything.
   level: WARNING # DEBUG | INFO | WARNING | ERROR

@@ -34,8 +34,8 @@ from ..db import init_db  # noqa: E402
 from ..errors import AIEditorError  # noqa: E402
 from ..games import canonical_game  # noqa: E402
 from ..logging_setup import get_logger  # noqa: E402
-from . import (companion_panel, friends_panel, issues_tab, library, manage_tabs,  # noqa: E402
-               overnight, overnight_panel, rules_tab, style_tab, tasks, video_tabs)
+from . import (backup_panel, companion_panel, friends_panel, issues_tab, library,  # noqa: E402
+               manage_tabs, overnight, overnight_panel, rules_tab, style_tab, tasks, video_tabs)
 from ..companion import status as companion_status  # noqa: E402
 from .worker import DONE, FAILED, PAUSED, RUNNING, WAITING, Task, Worker  # noqa: E402
 from .worker import submitted as submitted_message  # noqa: E402
@@ -520,6 +520,7 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
     ui = build(settings, worker)
     find_marks(settings, worker)
     overnight.start_clock(settings, worker)   # Phase 3B: starts at the time in Settings
+    backup_panel.start_weekly(settings, worker)   # once a week, if a folder is chosen
     print(f"\n  {__product_name__} {__version__} is running at {url}\n"
           "  Only this PC can open it.\n\n"
           "  Leave this window open while you use AI-Editor.\n"

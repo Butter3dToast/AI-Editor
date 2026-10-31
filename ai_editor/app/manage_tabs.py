@@ -21,7 +21,7 @@ from ..config import Settings, save_local_settings
 from ..db import init_db
 from ..errors import AIEditorError
 from ..games import canonical_game
-from . import friends_panel, overnight_panel, storage
+from . import backup_panel, friends_panel, overnight_panel, storage
 from .worker import Worker, submitted
 
 ORDERS = [("As it happened, the teaser's moment saved for last", "timeline"),
@@ -242,6 +242,7 @@ def build(settings: Settings, worker: Worker) -> None:
                                        info="Added to every thumbnail prompt, so they look "
                                             "like a set. Empty: none.")
         overnight_panel.build_settings(settings, worker)   # Phase 3B
+        backup_look, backup_view = backup_panel.build_settings(settings, worker)
         friends_panel.build_settings(settings)   # Phase 2I-2
         with gr.Accordion("Learning your taste", open=True):
             learn_on = gr.Checkbox(value=settings.learning.taste, label="Learn my taste",
@@ -363,6 +364,7 @@ def build(settings: Settings, worker: Worker) -> None:
             conn.close()
 
     settings_tab.select(taste_look, None, learn_status)
+    settings_tab.select(backup_look, None, backup_view)
     # Answered in Review since (3A-3a): show it, so Save doesn't put it back.
     settings_tab.select(lambda: (settings.effects.only_biggest, settings.effects.not_suggested),
                         None, [fx_biggest, fx_never])

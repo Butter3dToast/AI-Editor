@@ -62,6 +62,7 @@ a hard rule, not a preference.
 | **3B** | Overnight work: imports, analyses and drafts highlight, Shorts and Let's Play plans at the time you set, giving way to OBS and a busy graphics card (never renders or deletes); add new Let's Play games in Settings | **Complete** |
 | 3C | Wardogs and Tarkov results read from the screen, then kill feeds (waiting for a Wardogs, then a Tarkov, recording) | |
 | **3D** | Thumbnail prompts: the local AI writes one per best frame, to paste into the Gemini app with the frame (nothing sent online); highlights clean, Let's Play parts say EP and part | **Complete** |
+| Extra | Backup button (library and Settings, weekly, restore) and manual tidy-up | **Complete** |
 
 ---
 

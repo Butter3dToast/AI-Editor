@@ -3,6 +3,33 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.37.0 — Backup button, and the manual brought up to date — 31 October 2026
+
+**New**
+
+- **Settings → Backup**: saves your library (ratings, your taste, plans, rules,
+  style profiles, issues) and your Settings changes as one zip in the folder
+  you pick, e.g. inside Google Drive for desktop so it's on your Drive. Your
+  165 MB library makes about 42 MB, in a few seconds.
+- **Once a week by itself** while AI-Editor is open (switch off in Settings),
+  and **Back up now** any time.
+- **Restore**: puts a backup's library and Settings back, after backing up the
+  library as it is now, so a restore can be undone.
+
+**Good to know**
+
+- Your OBS password, and any other password or key, is never in a backup.
+  Restoring keeps the one on this PC.
+- AI-Editor never deletes a backup: Settings shows how much space they take.
+
+**The manual, tidied**
+
+- Chapter 22 (how AI-Editor learns) describes what was really built in
+  Phase 3; the old "Learning → Summary" and "Reset" were never built.
+- What's built for Shorts (start and end, caption words) and Clips is now
+  stated correctly; old "until the app window arrives" headings are gone; the
+  Settings chapter lists every section.
+
 ## 0.36.0 — Phase 3D: Thumbnail prompts for Gemini — 31 October 2026
 
 **New**
