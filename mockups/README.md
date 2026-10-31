@@ -15,6 +15,11 @@ work, so you can click through the whole dark set, and the whole light set from
 They also live on a design canvas where they sit side by side and can be commented on.
 Ask Trent for that link; it is private until shared.
 
+These copies differ from the canvas ones in two harmless ways, both marked in the files:
+the canvas runtime's `support.js` tag is removed (it belongs to the design tool, not to
+AI-Editor, and nothing here needs it), and `theme.css` ends with two rules that lay the
+pages out correctly when opened as plain files.
+
 ## What is here
 
 | File | Screen |
