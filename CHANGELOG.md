@@ -3,6 +3,18 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.38.1 — The window opens straight away — 31 October 2026
+
+**New**
+
+- **A starting screen**: the window now appears in about half a second,
+  saying **Starting AI-Editor** with a bar that moves as each real step
+  finishes (loading the editor, opening your library, almost there). AI-Editor
+  replaces it a few seconds later, as before. Before, nothing showed for about
+  5 seconds.
+- It follows Windows' light or dark setting, in the new design's colours, and
+  if AI-Editor can't start it says why there, in red.
+
 ## 0.38.0 — Phase 4A: AI-Editor in its own window — 31 October 2026
 
 **New**

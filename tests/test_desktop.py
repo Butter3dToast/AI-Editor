@@ -172,3 +172,67 @@ def test_the_window_entry_point_never_replaces_the_command_line():
     console, gui = project["scripts"], project["gui-scripts"]
     assert gui == {"ai-editor-window": "ai_editor.desktop:main"}
     assert not {n.lower() for n in console} & {n.lower() for n in gui}
+
+
+# --- the starting screen (0.38.1) -------------------------------------------------------
+
+
+class FakeWindow:
+    def __init__(self):
+        self.calls = []
+
+    def evaluate_js(self, script):
+        self.calls.append(("js", script))
+
+    def load_url(self, url):
+        self.calls.append(("load", url))
+
+
+def test_the_starting_screen_moves_with_each_real_step_then_shows_the_page(settings,
+                                                                            monkeypatch):
+    from ai_editor.app import window as app_window
+
+    monkeypatch.setattr(app_window, "already_running", lambda port: False)
+    monkeypatch.setattr(app_window, "start",
+                        lambda s, port, open_browser: ("the page", "the jobs"))
+    win, started = FakeWindow(), {}
+    desktop.boot(settings, win, started)
+    steps = [c[1] for c in win.calls if c[0] == "js"]
+    assert [s.split(", ")[1] for s in steps] == ['"Loading the editor"', '"Opening your library"',
+                                                 '"Almost there"']
+    assert steps[0].startswith("window.step && window.step(0.62,")
+    assert win.calls[-1] == ("load", "http://127.0.0.1:7865/")
+    assert started == {"ui": "the page", "worker": "the jobs", "url": "http://127.0.0.1:7865/"}
+
+
+def test_if_the_browser_version_is_open_the_window_shows_that_one(settings, monkeypatch):
+    from ai_editor.app import window as app_window
+
+    monkeypatch.setattr(app_window, "already_running", lambda port: True)
+    monkeypatch.setattr(app_window, "start", lambda *a, **k: 1 / 0)   # never a second server
+    started = {}
+    desktop.boot(settings, FakeWindow(), started)
+    assert started == {"url": "http://127.0.0.1:7865/"}               # nothing of ours to close
+
+
+def test_a_start_that_fails_says_so_on_the_starting_screen(settings, monkeypatch):
+    from ai_editor.app import window as app_window
+
+    monkeypatch.setattr(app_window, "already_running", lambda port: False)
+
+    def broken(*a, **k):
+        raise RuntimeError("the library is locked")
+
+    monkeypatch.setattr(app_window, "start", broken)
+    win = FakeWindow()
+    desktop.boot(settings, win, {})
+    last = win.calls[-1][1]
+    assert "couldn't start (RuntimeError: the library is locked)" in last and last.endswith("true)")
+    assert not any(c[0] == "load" for c in win.calls)
+
+
+def test_the_starting_screen_has_the_bar_and_both_themes():
+    page = desktop.starting_page()
+    assert "Starting AI-Editor" in page and 'id="fill"' in page
+    assert "prefers-color-scheme: light" in page and f"Version {desktop.__version__}" in page
+    assert "http" not in page                                          # nothing from online

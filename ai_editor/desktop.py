@@ -123,6 +123,106 @@ def pause_jobs(worker, wait: float = STOP_WAIT_SEC) -> None:
         time.sleep(0.2)
 
 
+# --- The starting screen (0.38.1) ---------------------------------------------------
+# The window opens at once with this, and the bar moves as each real step
+# finishes; the page replaces it when it's ready. Colours from the Phase 4
+# design (mockups/theme.css), dark or light as Windows is set.
+
+STARTING = """<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--bg:#111113;--ink:#ececef;--dim:#8d9099;--track:rgba(255,255,255,.08);--accent:#a78bfa;
+--bad:#f87171}
+@media (prefers-color-scheme: light){:root{--bg:#f7f7f8;--ink:#18181b;--dim:#6b6e78;
+--track:rgba(0,0,0,.09);--accent:#6d28d9;--bad:#b91c1c}}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;
+display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;
+cursor:default;user-select:none}
+.box{width:320px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.3px}
+.bar{height:4px;border-radius:2px;background:var(--track);overflow:hidden}
+.bar div{height:100%;width:4%;background:var(--accent);border-radius:2px;
+transition:width 2.4s cubic-bezier(.2,.8,.2,1)}
+.step{color:var(--dim);font-size:13px;min-height:20px}
+.step.bad{color:var(--bad)}
+.ver{color:var(--dim);font-size:12px;margin-top:18px}
+</style></head><body><div class="box">
+<h1>Starting AI-Editor</h1>
+<div class="bar"><div id="fill"></div></div>
+<div class="step" id="step">Opening the window</div>
+<div class="ver">VERSION_HERE</div>
+</div><script>
+window.step = function (fraction, text, bad) {
+  document.getElementById("fill").style.width = Math.round(fraction * 100) + "%";
+  var s = document.getElementById("step");
+  s.textContent = text;
+  s.className = bad ? "step bad" : "step";
+};
+</script></body></html>"""
+
+# The steps, and how far along the bar each one ends. Loading the editor is the
+# long one (about 3.5 s: Gradio and the screens), so the bar glides into it.
+STEPS = (("Loading the editor", 0.62), ("Opening your library", 0.9), ("Almost there", 0.97))
+
+
+def starting_page() -> str:
+    return STARTING.replace("VERSION_HERE", f"Version {__version__}")
+
+
+def light_windows() -> bool:
+    """Windows' own setting for apps: light or dark (a registry read)."""
+    if sys.platform != "win32":
+        return False
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows"
+                            r"\CurrentVersion\Themes\Personalize") as key:
+            return bool(winreg.QueryValueEx(key, "AppsUseLightTheme")[0])
+    except OSError:
+        return False
+
+
+def show_step(window, fraction: float, text: str, bad: bool = False) -> None:
+    """Move the bar on the starting screen. Harmless if the page isn't there yet."""
+    import json
+
+    try:
+        window.evaluate_js(f"window.step && window.step({fraction}, {json.dumps(text)}, "
+                           f"{'true' if bad else 'false'})")
+    except Exception:  # noqa: BLE001 -- the starting screen is only decoration
+        pass
+
+
+def boot(settings: Settings, window, started: dict) -> None:
+    """Behind the starting screen: load the editor, start the page, show it.
+    ``started`` gets the page and the jobs, for closing them later."""
+    from .logging_setup import get_logger
+
+    log = get_logger(__name__)
+    try:
+        show_step(window, STEPS[0][1], STEPS[0][0])
+        from .app import window as app_window
+
+        port = app_window.PORT
+        running = app_window.already_running(port)
+        if running is None:            # another program has the usual port
+            port = free_port()
+        show_step(window, STEPS[1][1], STEPS[1][0])
+        if not running:
+            started["ui"], started["worker"] = app_window.start(settings, port=port,
+                                                                open_browser=False)
+        show_step(window, STEPS[2][1], STEPS[2][0])
+        url = app_window.url_for(port)
+        started["url"] = url
+        log.info("%s %s in its own window, at %s", __product_name__, __version__, url)
+        window.load_url(url)
+    except Exception as exc:  # noqa: BLE001 -- said on the starting screen, written down
+        log.exception("AI-Editor couldn't start")
+        show_step(window, 1.0, f"AI-Editor couldn't start ({type(exc).__name__}: {exc}). The "
+                               "details are in the log file. Close this window and try again.",
+                  bad=True)
+
+
 def main() -> None:
     """The desktop shortcut: AI-Editor in its own window."""
     _quiet_streams()
@@ -148,35 +248,40 @@ def main() -> None:
         ask_to_come_forward(settings)
         return
 
-    from .app import window as app_window
     from .logging_setup import get_logger
 
     log = get_logger(__name__)
-    port = app_window.PORT
-    running = app_window.already_running(port)
-    ui = worker = None
-    if running is None:            # another program has the usual port
-        port = free_port()
-    if not running:
-        ui, worker = app_window.start(settings, port=port, open_browser=False)
-    url = app_window.url_for(port)
-    log.info("%s %s in its own window, at %s", __product_name__, __version__, url)
+    started: dict = {}
     try:
         import webview
 
-        win = webview.create_window(__product_name__, url, width=1512, height=982,
-                                    min_size=(1100, 760), background_color="#0b0b10")
+        win = webview.create_window(__product_name__, html=starting_page(), width=1512,
+                                    height=982, min_size=(1100, 760),
+                                    background_color="#f7f7f8" if light_windows() else "#111113")
         threading.Thread(target=watch_for_second_start, args=(settings, win),
                          name="ai-editor-front", daemon=True).start()
-        webview.start()            # returns when the window is closed
+        webview.start(boot, (settings, win, started))   # returns when the window is closed
     except Exception as exc:  # noqa: BLE001 -- no WebView2: the browser, as before
         log.warning("Couldn't open AI-Editor's own window (%s); using the browser", exc)
-        webbrowser.open(url)
-        message("AI-Editor couldn't open its own window, so it opened in your browser "
-                "instead.\n\nKeep this message open while you use AI-Editor. Click OK to close "
-                "AI-Editor.")
+        if "url" not in started:
+            boot(settings, _NoWindow(), started)
+        if "url" in started:
+            webbrowser.open(started["url"])
+            message("AI-Editor couldn't open its own window, so it opened in your browser "
+                    "instead.\n\nKeep this message open while you use AI-Editor. Click OK to "
+                    "close AI-Editor.")
     finally:
-        if worker is not None:
-            pause_jobs(worker)
-        if ui is not None:
-            ui.close()
+        if started.get("worker") is not None:
+            pause_jobs(started["worker"])
+        if started.get("ui") is not None:
+            started["ui"].close()
+
+
+class _NoWindow:
+    """Stands in for the window when there's none: the browser fallback."""
+
+    def evaluate_js(self, script):
+        pass
+
+    def load_url(self, url):
+        pass

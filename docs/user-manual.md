@@ -157,6 +157,7 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 
 **In its own window (from 0.38.0).** AI-Editor opens like any other program: its own window, no black console window and no browser tab. It's still a page on your own PC, not a website: nothing goes online, and nothing else on your network can see it.
 
+- **It opens straight away** on a **Starting AI-Editor** screen, with a bar that moves as each step finishes (loading the editor, opening your library), and then shows AI-Editor itself, a few seconds later. If it can't start, that screen says why, in red.
 - **Closing the window quits AI-Editor.** Quitting while a job is running is safe: the job pauses, along with any FFmpeg or Twitch download it started. Next time, press **Resume** (11.3). Finished steps aren't repeated.
 - **Opening it again** while it's open brings the open window to the front; it never starts a second copy.
 - **No console windows:** FFmpeg and the other helper programs work out of sight too. (The Stream Companion keeps its own small window, as before.)
