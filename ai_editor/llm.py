@@ -90,6 +90,19 @@ def installed_models(settings: Settings) -> list[str]:
         return []
 
 
+def model_size(settings: Settings) -> int | None:
+    """How big the chosen model is (bytes), as Ollama lists it. None if unknown."""
+    name = settings.llm.model or ""
+    try:
+        models = _request(settings, "/api/tags", timeout=2.0).get("models", [])
+    except (OSError, ValueError, AttributeError):
+        return None
+    for m in models:
+        if m.get("name") in (name, f"{name}:latest"):
+            return int(m.get("size") or 0) or None
+    return None
+
+
 def has_model(settings: Settings, name: str | None = None) -> bool:
     name = name or settings.llm.model
     if not name:

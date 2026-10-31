@@ -62,6 +62,29 @@ def _make_job() -> int | None:
     return job
 
 
+_CONSOLE_OF_ITS_OWN = 0x00000010 | 0x00000008   # CREATE_NEW_CONSOLE | DETACHED_PROCESS
+_NO_WINDOW = 0x08000000                          # CREATE_NO_WINDOW
+
+
+def hide_consoles() -> None:
+    """In AI-Editor's own window (Phase 4A) there's no console, so each console
+    program it starts (FFmpeg, nvidia-smi, the downloader, Python helpers) would
+    flash a black window of its own. From here on, every one gets none, unless
+    it asks for its own console (the Stream Companion does). Windowed programs,
+    such as Explorer and the file pickers, show as before."""
+    if sys.platform != "win32" or getattr(subprocess.Popen, "_aie_no_console", False):
+        return
+    original = subprocess.Popen.__init__
+
+    def __init__(self, *args, creationflags: int = 0, **kwargs):
+        if not creationflags & _CONSOLE_OF_ITS_OWN:
+            creationflags |= _NO_WINDOW
+        original(self, *args, creationflags=creationflags, **kwargs)
+
+    subprocess.Popen.__init__ = __init__
+    subprocess.Popen._aie_no_console = True
+
+
 def keep_with_us(process: subprocess.Popen) -> None:
     """Have Windows end ``process`` (and what it starts) when AI-Editor ends.
 

@@ -350,7 +350,10 @@ def build(settings: Settings, worker: Worker) -> None:
             agree = agreement_text(conn)
         finally:
             conn.close()
-        return llm.status(settings), agree
+        from ..hardware import ai_note
+
+        note = ai_note(settings) if llm.ready(settings) else None   # 4A: a smaller card
+        return llm.status(settings) + (f" {note}" if note else ""), agree
 
     settings_tab.select(ai_look, None, [ai_status, ai_agree])
 

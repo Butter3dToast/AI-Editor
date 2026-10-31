@@ -155,15 +155,21 @@ Because analysis only happens once, you can make a Let's Play, a highlight video
 
 Double-click **AI-Editor** on your desktop (the purple play-button icon).
 
-- A black window opens first. It says **AI-Editor is running**. **Leave it open** while you use AI-Editor. **Closing it quits AI-Editor.**
-- A moment later, AI-Editor opens in your web browser. It's a page on your own PC, not a website. Nothing goes online, and nothing else on your network can see it. (The address is `http://127.0.0.1:7865`, where 127.0.0.1 means "this PC".)
-- Closed the browser tab by mistake? Double-click the desktop icon again. It reopens the page; it doesn't start a second copy.
-- After you close the black window, the browser page shows **"Connection to the server was lost"**. That's expected: AI-Editor has quit. Close the tab.
-- Quitting while a job is running is safe. The job pauses, along with any FFmpeg or Twitch download it started. Next time, press **Resume** (11.3). Finished steps aren't repeated.
+**In its own window (from 0.38.0).** AI-Editor opens like any other program: its own window, no black console window and no browser tab. It's still a page on your own PC, not a website: nothing goes online, and nothing else on your network can see it.
 
-**Shortcut missing?** In a terminal in the AI-Editor folder, run `.\.venv\Scripts\ai-editor shortcut`. It puts the icon back on your desktop.
+- **Closing the window quits AI-Editor.** Quitting while a job is running is safe: the job pauses, along with any FFmpeg or Twitch download it started. Next time, press **Resume** (11.3). Finished steps aren't repeated.
+- **Opening it again** while it's open brings the open window to the front; it never starts a second copy.
+- **No console windows:** FFmpeg and the other helper programs work out of sight too. (The Stream Companion keeps its own small window, as before.)
+- **If the window can't open** (Windows without WebView2, the Edge engine every Windows 11 PC has), AI-Editor opens in your browser instead, with a small message: keep it open while you work, and click **OK** to close AI-Editor.
+- **If something goes wrong** and AI-Editor has to close, a message says so and where the details are; the Issues tab can copy them for you (25.1).
 
-**"Another program is using port 7865"?** Something else is using AI-Editor's address. Run `ai-editor app --port 7866` instead.
+**The browser way still works.** In a terminal in the AI-Editor folder, `.\.venv\Scripts\ai-editor app` opens AI-Editor in your browser with the black window, exactly as before 0.38.0. If AI-Editor is already open that way, the desktop icon shows the same page in a window (closing that window then leaves the browser one running).
+
+**Shortcut missing, or still opening the browser?** In a terminal in the AI-Editor folder, run `.\.venv\Scripts\ai-editor shortcut`. It puts the icon on your desktop, opening AI-Editor in its own window. `ai-editor shortcut --browser` makes it open the browser way instead.
+
+**"Another program is using port 7865"?** Only the browser way can say this: the window finds a free address by itself. Run `ai-editor app --port 7866` instead.
+
+**Before every job, AI-Editor checks this PC can do it** (from 0.38.0). A job that can't work isn't started, and Jobs says why in plain words: FFmpeg missing, no NVIDIA graphics card for analysing, or under 5 GB free on the drive it writes to. A job that will only be slower starts anyway, with a line saying so: a graphics card with less memory than the local AI needs (it runs partly on the processor: slower, same answers), or no NVIDIA video encoder. On your PC (RTX 4070 Ti, 12 GB) every job just starts. Settings → **AI (on this PC)** says too when the card is smaller than the AI needs.
 
 ### 5.2 The local AI (Ollama)
 

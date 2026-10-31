@@ -117,6 +117,9 @@ class Worker:
         self._thread: threading.Thread | None = None
         # Told about every job that fails, to write it down as an issue (0.32.0).
         self.on_failure: Callable[[Task, str], None] | None = None
+        # Asked before each job starts whether this PC can do it (4A, hardware.py):
+        # (why it can't, or None; what will make it slower).
+        self.precheck: Callable[[Task], tuple[str | None, list[str]]] | None = None
         # Goes up whenever a job starts, finishes or says something, so the
         # window knows when the library might have changed.
         self.version = 0
@@ -186,6 +189,17 @@ class Worker:
                 task.status, task.started, task.finished = RUNNING, time.monotonic(), None
                 self._pause.clear()
                 self.version += 1
+            problem, slower = self.precheck(task) if self.precheck else (None, [])
+            if problem:
+                # Not a fault to write down: this PC can't do it, and says why.
+                with self._lock:
+                    task.status, task.error, task.finished = FAILED, problem, time.monotonic()
+                    self.version += 1
+                continue
+            if slower:
+                with self._lock:
+                    task.lines.extend(slower)
+                    self.version += 1
             status, error = self._run(task)
             if status == FAILED and self.on_failure is not None:
                 try:

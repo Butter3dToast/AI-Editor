@@ -67,6 +67,7 @@ a hard rule, not a preference.
 | 3C | Wardogs and Tarkov results read from the screen, then kill feeds (waiting for a Wardogs, then a Tarkov, recording) | |
 | **3D** | Thumbnail prompts: the local AI writes one per best frame, to paste into the Gemini app with the frame (nothing sent online); highlights clean, Let's Play parts say EP and part | **Complete** |
 | Extra | Backup button (library and Settings, weekly, restore) and manual tidy-up | **Complete** |
+| **4A** | AI-Editor in its own window (no console, one copy, closing pauses jobs); a check before every job that this PC can do it | **Complete** |
 
 ---
 
@@ -89,8 +90,9 @@ pip install torch --index-url https://download.pytorch.org/whl/cu126
 .\.venv\Scripts\Activate.ps1      # or: py -3.11 -m venv .venv  (first time)
 pip install -e ".[dev]"
 
-ai-editor shortcut                # Put the AI-Editor icon on the desktop (once)
-ai-editor app                     # The app window: everything below, with buttons
+ai-editor shortcut                # Put the AI-Editor icon on the desktop: its own window (once)
+ai-editor-window                  # AI-Editor in its own window, no console (what the icon opens)
+ai-editor app                     # The same, in your browser with a console window
 ai-editor doctor                  # Check the setup
 ai-editor probe "path\to\recording.mp4" --hash
 ai-editor import "path\to\recording.mp4"    # Proxy + audio into the library

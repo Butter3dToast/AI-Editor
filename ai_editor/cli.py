@@ -2143,7 +2143,7 @@ def app_window(
         DEFAULT_SETTINGS_PATH, "--settings", "-s", help="Path to settings.yaml"
     ),
 ) -> None:
-    """Open the app window (the desktop shortcut runs this).
+    """Open AI-Editor in your browser (``ai-editor-window`` opens its own window).
 
     A page in your browser that only this PC can open. Leave the black
     window open while you use it; close it to quit.
@@ -2156,12 +2156,15 @@ def app_window(
 
 
 @app.command("shortcut")
-def shortcut_command() -> None:
-    """Put an AI-Editor shortcut on your desktop that opens the app window."""
+def shortcut_command(
+    browser: bool = typer.Option(False, "--browser",
+                                 help="Open AI-Editor in your browser, as before 0.38.0"),
+) -> None:
+    """Put an AI-Editor shortcut on your desktop: AI-Editor in its own window."""
     from .app.window import make_shortcut
 
     try:
-        path = make_shortcut()
+        path = make_shortcut(browser=browser)
     except (OSError, subprocess.CalledProcessError) as exc:
         console.print(f"[red]Couldn't make the shortcut:[/red] {exc}")
         raise typer.Exit(code=1) from exc

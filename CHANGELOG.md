@@ -3,6 +3,29 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.38.0 — Phase 4A: AI-Editor in its own window — 31 October 2026
+
+**New**
+
+- **Its own window.** The desktop icon opens AI-Editor like any other program:
+  its own window, no black console window, no browser tab. Same screens as
+  before; the new design comes in the next steps of Phase 4.
+- **Closing the window quits it**, pausing a running job first, so Resume
+  carries on next time. Opening it again brings the open window to the front.
+- **No more console windows** from FFmpeg and the other helper programs.
+- **A check before every job**: a job this PC can't do (no FFmpeg, no NVIDIA
+  graphics card for analysing, under 5 GB free) isn't started, and Jobs says
+  why. One that will only be slower (a graphics card with less memory than the
+  local AI needs, no NVIDIA video encoder) starts with a line saying so. The
+  same AI everywhere, for its sharpness: your choice.
+
+**Good to know**
+
+- **The browser way still works**: `ai-editor app`, exactly as before. To make
+  the desktop icon open the new window, run `ai-editor shortcut` once.
+- The window uses WebView2, the Edge engine built into Windows 11 (new: the
+  pywebview package). Without it, AI-Editor opens in the browser instead.
+
 ## 0.37.0 — Backup button, and the manual brought up to date — 31 October 2026
 
 **New**

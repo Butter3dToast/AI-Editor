@@ -498,7 +498,32 @@ def _ignore_dropped_connections(record: logging.LogRecord) -> bool:
     return not isinstance(error, ConnectionResetError)
 
 
+def start(settings: Settings, *, port: int, open_browser: bool) -> tuple[gr.Blocks, Worker]:
+    """Start AI-Editor's page on ``port`` in the background: the window, the
+    jobs, the overnight and backup clocks. Returns once it's answering. Used by
+    ``ai-editor app`` (the browser) and the desktop window (Phase 4A)."""
+    from .. import hardware
+
+    recover(settings)
+    logging.getLogger("asyncio").addFilter(_ignore_dropped_connections)
+    worker = Worker()
+    worker.precheck = hardware.precheck(settings)   # 4A: can this PC do the job?
+    ui = build(settings, worker)
+    find_marks(settings, worker)
+    overnight.start_clock(settings, worker)   # Phase 3B: starts at the time in Settings
+    backup_panel.start_weekly(settings, worker)   # once a week, if a folder is chosen
+    ui.queue(default_concurrency_limit=4).launch(
+        server_name=ADDRESS, server_port=port, inbrowser=open_browser, share=False,
+        show_error=True, quiet=True, ssr_mode=False, favicon_path=str(ICON),
+        footer_links=[], allowed_paths=[str(settings.folders.cache / "recordings"),
+                                       str(settings.folders.output)],
+        theme=gr.themes.Soft(primary_hue="violet"), css=CSS, head=HEAD,
+        prevent_thread_lock=True)
+    return ui, worker
+
+
 def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) -> None:
+    """``ai-editor app``: the page in your browser, this console window keeping it open."""
     url = url_for(port)
     running = already_running(port)
     if running:
@@ -514,24 +539,13 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
         import ctypes
 
         ctypes.windll.kernel32.SetConsoleTitleW(f"{__product_name__} (close to quit)")
-    recover(settings)
-    logging.getLogger("asyncio").addFilter(_ignore_dropped_connections)
-    worker = Worker()
-    ui = build(settings, worker)
-    find_marks(settings, worker)
-    overnight.start_clock(settings, worker)   # Phase 3B: starts at the time in Settings
-    backup_panel.start_weekly(settings, worker)   # once a week, if a folder is chosen
+    ui, _ = start(settings, port=port, open_browser=open_browser)
     print(f"\n  {__product_name__} {__version__} is running at {url}\n"
           "  Only this PC can open it.\n\n"
           "  Leave this window open while you use AI-Editor.\n"
           "  Close it to quit. Any job still running pauses and can be resumed next time.\n",
           flush=True)
-    ui.queue(default_concurrency_limit=4).launch(
-        server_name=ADDRESS, server_port=port, inbrowser=open_browser, share=False,
-        show_error=True, quiet=True, ssr_mode=False, favicon_path=str(ICON),
-        footer_links=[], allowed_paths=[str(settings.folders.cache / "recordings"),
-                                       str(settings.folders.output)],
-        theme=gr.themes.Soft(primary_hue="violet"), css=CSS, head=HEAD)
+    ui.block_thread()
 
 
 # --- the desktop shortcut -------------------------------------------------------
@@ -541,7 +555,7 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $path = Join-Path $desktop 'AI-Editor.lnk'
 $link = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
 $link.TargetPath = $env:AIE_TARGET
-$link.Arguments = 'app'
+$link.Arguments = $env:AIE_ARGS
 $link.WorkingDirectory = $env:AIE_FOLDER
 $link.IconLocation = $env:AIE_ICON
 $link.Description = 'Open AI-Editor'
@@ -550,13 +564,14 @@ Write-Output $path
 """
 
 
-def make_shortcut() -> Path:
-    """Put 'AI-Editor' on the desktop: double-click to open the app window."""
-    target = Path(sys.executable).with_name("ai-editor.exe")
+def make_shortcut(browser: bool = False) -> Path:
+    """Put 'AI-Editor' on the desktop: double-click to open AI-Editor in its own
+    window (Phase 4A), or with ``browser`` in the browser as before."""
+    target = Path(sys.executable).with_name("ai-editor.exe" if browser else "ai-editor-window.exe")
     if not target.is_file():
         raise FileNotFoundError(f"Couldn't find {target}. Reinstall AI-Editor (README, step 3).")
     env = dict(os.environ, AIE_TARGET=str(target), AIE_FOLDER=str(PROJECT_ROOT),
-               AIE_ICON=str(ICON))
+               AIE_ICON=str(ICON), AIE_ARGS="app" if browser else "")
     result = subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-Command", _SHORTCUT],
         capture_output=True, text=True, env=env, check=True)
