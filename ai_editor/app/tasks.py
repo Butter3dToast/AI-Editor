@@ -302,6 +302,54 @@ def write_publish(settings: Settings, plan_id: str, *, parts: list[int] | None =
     return run
 
 
+def write_prompts(settings: Settings, plan_id: str, *, parts: list[int] | None = None,
+                  episode: int | None = None) -> Job:
+    """Thumbnail prompts for the Gemini app (3D), for frames already picked by
+    Write titles, description and chapters: for videos prepared before 3D, or
+    to have them written again."""
+
+    def run(report: Reporter) -> None:
+        from .. import llm, publish
+        from ..recipes.plan import load_plan, save_plan
+        from ..render import parts as lp
+
+        conn = init_db(settings.db_path)
+        try:
+            found = load_plan(conn, plan_id)
+            if found is None:
+                raise TaskFailed("That plan isn't there any more.")
+            plan, status = found
+            numbers = [None]
+            if plan.recipe == "letsplay":
+                if episode is None:
+                    raise TaskFailed("Which episode is this? Fill in the episode number in "
+                                     "Review first: it goes on the thumbnail.")
+                numbers = parts or lp.part_numbers(plan)
+            with llm.session(settings):
+                for n in numbers:
+                    label = f"Part {n}: " if n else ""
+                    made = publish.saved(plan, n)
+                    if made is None or not any(t.path.is_file() for t in made.thumbnails):
+                        report.say(f"{label}no thumbnail frames yet. Press Write titles, "
+                                   "description and chapters first: it picks them.")
+                        continue
+                    publish.thumbnail_prompts(
+                        settings, plan, made.thumbnails, part=n, episode=episode,
+                        title=made.title or (made.titles[0] if made.titles else plan.title),
+                        chapters=[name for _, name in made.chapters],
+                        on_progress=lambda f, label=label: report.progress(
+                            label + "Writing thumbnail prompts", f))
+                    plan.publish[publish.key_of(n)] = made.as_dict()
+                    save_plan(conn, plan, status)
+                    report.say(f"{label}{sum(bool(t.prompt) for t in made.thumbnails)} "
+                               "thumbnail prompts. They're in Review, under Publish.")
+            report.keep(prompts=plan_id)
+        finally:
+            conn.close()
+
+    return run
+
+
 def publish_videos(settings: Settings, plan, part: int | None, episode: int | None) -> list[Path]:
     """The finished video(s) this text belongs with, captioned or not, that exist."""
     from ..render import parts as lp

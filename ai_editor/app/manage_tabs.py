@@ -229,6 +229,18 @@ def build(settings: Settings, worker: Worker) -> None:
                                     label="Let's Play title",
                                     info="{subtitle} is the AI's idea; {game}, {episode} and "
                                          "{part} are filled in.")
+            with gr.Row():
+                pub_thumb_text = gr.Textbox(value=settings.publish.thumbnail_text,
+                                            label="Text on a Let's Play thumbnail",
+                                            info="In its thumbnail prompts. {episode}, {part} and "
+                                                 "{game} are filled in. Empty: no text. "
+                                                 "Highlights stay clean.")
+                pub_style = gr.Textbox(value=settings.publish.thumbnail_style,
+                                       label="Your thumbnail look",
+                                       placeholder="e.g. bold yellow text, purple glow, dark "
+                                                   "background",
+                                       info="Added to every thumbnail prompt, so they look "
+                                            "like a set. Empty: none.")
         overnight_panel.build_settings(settings, worker)   # Phase 3B
         friends_panel.build_settings(settings)   # Phase 2I-2
         with gr.Accordion("Learning your taste", open=True):
@@ -410,7 +422,7 @@ def build(settings: Settings, worker: Worker) -> None:
     def save(raw, output, minutes, bar, order, cap_h, cap_l, part, card, sound, volume, days,
              space, use_ai, model, weight, keep_music, footer, lp_title, effects_hl, effects_sh,
              effects_lp, rate_hl, rate_sh, sfx_db, between, fights_whole, game_voice,
-             suggest, learn, biggest, never):
+             suggest, learn, biggest, never, thumb_text, style):
         raw_path, output_path = Path(str(raw).strip().strip('"')), Path(str(output).strip().strip('"'))
         if not raw_path.is_dir():
             return f"There's no folder at {raw_path}."
@@ -448,6 +460,8 @@ def build(settings: Settings, worker: Worker) -> None:
             ("learning", "taste"): bool(learn),
             ("effects", "only_biggest"): list(biggest or []),
             ("effects", "not_suggested"): list(never or []),
+            ("publish", "thumbnail_text"): (thumb_text or "").strip(),
+            ("publish", "thumbnail_style"): (style or "").strip(),
         }
         if float(part) != settings.lets_play.target_min:
             changes.update(part_lengths(settings, float(part)))
@@ -470,7 +484,7 @@ def build(settings: Settings, worker: Worker) -> None:
                           vod_days, space_gb, ai_on, ai_model, ai_weight, music, pub_footer,
                           pub_lp, fx_hl, fx_sh, fx_lp, fx_hl_rate, fx_sh_rate, fx_volume,
                           fx_between, whole_fights, game_under, fx_suggest, learn_on,
-                          fx_biggest, fx_never],
+                          fx_biggest, fx_never, pub_thumb_text, pub_style],
                  settings_msg).then(taste_look, None, learn_status)
 
 

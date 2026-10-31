@@ -20,6 +20,12 @@ after the colon.
 **Thumbnails**: up to 12 full-size frames from the strongest moments, each
 shown to the AI, best 6 kept as PNGs to finish in a free editor (spec 7.6).
 
+**Thumbnail prompts** (3D): for the best frames of a highlight video or a Let's
+Play part, the local AI writes a prompt for the creator to paste into the
+Gemini app, with the frame attached, under their own subscription. AI-Editor
+sends nothing online. Highlights stay clean; a Let's Play part's says its
+episode and part (publish.thumbnail_text), the creator's choice (31 Oct).
+
 Everything is kept with the plan and in a .txt file beside the video.
 """
 
@@ -256,6 +262,7 @@ class Thumbnail:
     path: Path
     rating: int
     reason: str
+    prompt: str = ""   # for the Gemini app, with this frame attached (3D)
 
 
 @dataclass
@@ -279,8 +286,8 @@ class Publish:
     def as_dict(self) -> dict:
         return {"titles": self.titles, "description": self.description, "tags": self.tags,
                 "chapters": [list(c) for c in self.chapters],
-                "thumbnails": [{"path": str(t.path), "rating": t.rating, "reason": t.reason}
-                               for t in self.thumbnails],
+                "thumbnails": [{"path": str(t.path), "rating": t.rating, "reason": t.reason,
+                                "prompt": t.prompt} for t in self.thumbnails],
                 "fingerprint": self.fingerprint, "made_at": self.made_at,
                 "prompt_version": PROMPT_VERSION, "edited": self.edited, "short": self.short}
 
@@ -289,8 +296,8 @@ class Publish:
         return cls(list(data.get("titles", [])), data.get("description", ""),
                    list(data.get("tags", [])),
                    [(float(t), str(name)) for t, name in data.get("chapters", [])],
-                   [Thumbnail(Path(t["path"]), int(t.get("rating", 0)), t.get("reason", ""))
-                    for t in data.get("thumbnails", [])],
+                   [Thumbnail(Path(t["path"]), int(t.get("rating", 0)), t.get("reason", ""),
+                              t.get("prompt", "")) for t in data.get("thumbnails", [])],
                    data.get("fingerprint", ""), data.get("made_at", ""),
                    bool(data.get("short")), data.get("edited"))
 
@@ -478,6 +485,97 @@ def thumbnails(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, fol
     return final
 
 
+# --- Thumbnail prompts, for the Gemini app (3D) ---------------------------------------
+
+PROMPTS = 5   # frames that get a prompt, best first
+
+PROMPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {"type": "string", "maxLength": 200},
+        "boost": {"type": "string", "maxLength": 250},
+    },
+    "required": ["subject", "boost"],
+}
+
+PROMPT_SYSTEM = """You help a gaming creator turn a screenshot from their video into a YouTube
+thumbnail. They will give the screenshot and your words to an image AI (Gemini).
+Look at the screenshot and answer two things, in plain English:
+- subject: what in this picture should be the star of the thumbnail (a champion mid-fight, an
+  explosion, a boss, a vehicle...), in one sentence. Only what is really in the picture.
+- boost: how to make it striking while keeping it the same moment of the same game: a closer
+  crop on the subject, brighter and richer colours, dramatic light, a glow or motion around
+  the action. One or two sentences.
+Never add people, faces or text: the creator has no facecam, and text is handled separately."""
+
+
+def prompt_question(plan: EditPlan, *, title: str, chapters: list[str], spoilers: bool) -> str:
+    kind = "a Let's Play part" if plan.recipe == "letsplay" else "a highlight video"
+    lines = [f"The screenshot is from {kind} of {plan.game or 'a game'}, titled: {title}."]
+    if chapters:
+        lines.append("What happens in the video: " + "; ".join(chapters[:12]) + ".")
+    if spoilers:
+        lines.append("It's a story game: the thumbnail must not give away twists, deaths or "
+                     "how the story ends.")
+    return "\n".join(lines)
+
+
+def thumbnail_text(settings: Settings, plan: EditPlan, *, part: int | None,
+                   episode: int | None) -> str:
+    """The words on a Let's Play part's thumbnail ("EP 6 PART 2"). Highlights: none."""
+    if plan.recipe != "letsplay" or not settings.publish.thumbnail_text:
+        return ""
+    return settings.publish.thumbnail_text.format(
+        game=plan.game or "", episode=episode or "?", part=part or 1).strip()
+
+
+def gemini_prompt(settings: Settings, plan: EditPlan, answer: dict, *, part: int | None,
+                  episode: int | None) -> str:
+    """The prompt to paste into the Gemini app, with the frame attached."""
+    text = thumbnail_text(settings, plan, part=part, episode=episode)
+    lines = [f"Turn the attached screenshot from {plan.game or 'my game'} into a YouTube "
+             "thumbnail, 16:9 (1280x720).",
+             f"Keep it the same moment from the game. The star of it: "
+             f"{str(answer.get('subject', '')).strip()}",
+             f"Make it stand out: {str(answer.get('boost', '')).strip()}"]
+    if text:
+        lines.append(f'Add the text "{text}" in big, bold letters, easy to read when the '
+                     "thumbnail is small.")
+    else:
+        lines.append("Don't add any text.")
+    if settings.publish.thumbnail_style.strip():
+        lines.append(f"Style: {settings.publish.thumbnail_style.strip()}")
+    lines.append("Don't add people, faces, logos or watermarks, and keep the game's own look.")
+    return "\n".join(lines)
+
+
+def thumbnail_prompts(settings: Settings, plan: EditPlan, thumbs: list[Thumbnail], *,
+                      part: int | None, episode: int | None, title: str, chapters: list[str],
+                      on_progress: Callable[[float], None] | None = None) -> list[Thumbnail]:
+    """A prompt for each of the best frames (highlights and Let's Play parts only).
+    The local AI looks at the frame; the rest of the prompt is fixed, so it says
+    exactly what the creator chose. Frames it can't read keep no prompt."""
+    if plan.recipe not in ("highlights", "letsplay"):
+        return thumbs
+    question_text = prompt_question(plan, title=title, chapters=chapters,
+                                    spoilers=plan.game in settings.shorts.spoiler_check_games)
+    best = [t for t in thumbs if t.path.is_file()][:PROMPTS]
+    for n, thumb in enumerate(best):
+        if on_progress:
+            on_progress(n / max(1, len(best)))
+        try:
+            answer = llm.ask(settings, PROMPT_SYSTEM, question_text, schema=PROMPT_SCHEMA,
+                             images=[thumb.path.read_bytes()])
+        except llm.AiAnswerUnreadable as exc:
+            log.warning("AI couldn't write a prompt for %s: %s", thumb.path.name, exc)
+            continue
+        if str(answer.get("subject", "")).strip():
+            thumb.prompt = gemini_prompt(settings, plan, answer, part=part, episode=episode)
+    if on_progress:
+        on_progress(1.0)
+    return thumbs
+
+
 # --- All of it --------------------------------------------------------------------------
 
 
@@ -524,11 +622,16 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
         thumbs = [] if plan.recipe == "shorts" else thumbnails(
             conn, settings, video, thumbnail_folder(settings, plan, part),
             step("Picking thumbnail frames"))
+        titles = full_titles(settings, plan, list(answer.get("titles", [])), part=part,
+                             episode=episode)
+        thumbs = thumbnail_prompts(settings, plan, thumbs, part=part, episode=episode,
+                                   title=titles[0] if titles else plan.title,
+                                   chapters=[name for _, name in chapters],
+                                   on_progress=step("Writing thumbnail prompts"))
     tags = list(dict.fromkeys(str(t).strip() for t in answer.get("tags", []) if str(t).strip()))
     if plan.game and plan.game not in tags:
         tags.insert(0, plan.game)
-    return Publish(full_titles(settings, plan, list(answer.get("titles", [])), part=part,
-                               episode=episode),
+    return Publish(titles,
                    str(answer.get("description", "")).strip(), tags[:15], chapters, thumbs,
                    fingerprint(video),
                    datetime.now(timezone.utc).isoformat(timespec="seconds"),

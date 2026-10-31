@@ -676,6 +676,21 @@ class Publish(BaseModel):
     thumbnails: int = Field(6, ge=1, le=12)
     # A Let's Play part gets a chapter about this often.
     chapter_every_min: float = Field(5.0, ge=1.0, le=30.0)
+    # Thumbnail prompts for the Gemini app (3D). The words on a Let's Play part's
+    # thumbnail; highlights stay clean (the creator, 31 Oct). Empty: no text.
+    thumbnail_text: str = "EP {episode} PART {part}"
+    # Added to every thumbnail prompt, so they look like a set.
+    thumbnail_style: str = ""
+
+    @field_validator("thumbnail_text")
+    @classmethod
+    def _thumbnail_fields(cls, v: str) -> str:
+        try:
+            v.format(game="g", episode=1, part=1)
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ValueError("thumbnail_text can use {game}, {episode} and {part} only: "
+                             f"{exc}") from exc
+        return v
 
     @field_validator("lets_play_title")
     @classmethod

@@ -60,8 +60,8 @@ a hard rule, not a preference.
 | **3A-3a** | Effect nudges: "suggested 24 times, you used 2. Change that?" (only on the biggest moments / stop suggesting / keep), answers in Settings | **Complete** |
 | **3A-3b** | The local AI sees your recent 👍 and 👎 as examples when it rates clips (63% agreement, from 54%); its rating joins Your taste where it helps | **Complete** |
 | **3B** | Overnight work: imports, analyses and drafts highlight, Shorts and Let's Play plans at the time you set, giving way to OBS and a busy graphics card (never renders or deletes); add new Let's Play games in Settings | **Complete** |
-| 3C | Wardogs and Tarkov results read from the screen, then kill feeds | |
-| 3D | Thumbnail prompts written for Gemini, sent only when you tick them (up to 3) | |
+| 3C | Wardogs and Tarkov results read from the screen, then kill feeds (waiting for a Wardogs, then a Tarkov, recording) | |
+| **3D** | Thumbnail prompts: the local AI writes one per best frame, to paste into the Gemini app with the frame (nothing sent online); highlights clean, Let's Play parts say EP and part | **Complete** |
 
 ---
 

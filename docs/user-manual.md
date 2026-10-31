@@ -1649,7 +1649,7 @@ Not built yet. Resolve's timeline format (19.3) was enough as a backup. Ask for 
 
 Everything to paste into YouTube when you upload: title ideas, a description with chapters, tags, and thumbnail frames. It's at the bottom of **Review**, under **Publish**. The local AI writes it (chapter 5.2), from what it said about each clip (12.3) and what you said. Nothing is uploaded for you.
 
-1. Open the video's plan in **Review**. For a Let's Play, fill in the **Episode number** (it goes in the titles), and under **Parts** choose one part, or leave **All parts** to do every part.
+1. Open the video's plan in **Review**. For a Let's Play, fill in the **Episode number** (it goes in the titles and on the thumbnail prompts), and under **Parts** choose one part, or leave **All parts** to do every part.
 2. Click **Write titles, description and chapters**. It shows under Jobs: about 20 seconds per video, thumbnails included. Not while you're gaming (5.2).
 3. The text appears below. Pick a title idea and it goes in the **Title** box. Each box has a copy button (top right).
 4. Change anything you like, then click **Keep my changes**.
@@ -1682,6 +1682,24 @@ YouTube's rules are followed automatically: the first chapter starts at `0:00`, 
 ### 20.4 Thumbnails
 
 AI-Editor takes 12 full-size frames from the video's strongest moments (at least 20 seconds apart), the AI looks at each one, and the best 6 are kept, best first (`publish.thumbnails`). Blurry frames, menus, maps, loading screens and dark frames are marked down. They show in Review, and the PNG files are in `output\thumbnails\<the plan's name>`. Open one in a free tool such as GIMP, Photopea, or Canva's free plan to add text and your face.
+
+### 20.4a Thumbnail prompts for Gemini
+
+For a **highlight video** or a **Let's Play part**, the local AI also writes a prompt for each of the 5 best frames, for you to paste into the **Gemini app** with that frame. Gemini turns your real game moment into a finished thumbnail, under your own subscription. **AI-Editor sends nothing online**: no key, no account, no charge.
+
+They show under the thumbnail frames in Review, written along with the titles (about half a minute more). For videos written before, or to have them written again, click **Write thumbnail prompts**.
+
+1. Click the **copy** button on a prompt (top right of its box).
+2. Click **Open the frame** beside it: Explorer opens with that frame picked.
+3. In the Gemini app, attach the frame (drag it into the chat) and paste the prompt.
+
+Each prompt asks for a 16:9 YouTube thumbnail of the same moment, says what in the frame should be the star and how to make it stand out, and asks for no added people or faces (you have no facecam), logos or watermarks.
+
+- **Highlights stay clean:** no text on the picture.
+- **Let's Play parts** get their episode and part on them, e.g. **EP 6 PART 2**. Change the words in **Settings → Publish → Text on a Let's Play thumbnail** (`{episode}`, `{part}` and `{game}` are filled in; empty for no text). For Dawnwalker and other story games, it's told not to give anything away.
+- **Your thumbnail look** (Settings → Publish), e.g. *bold yellow text, purple glow*, is added to every prompt, so your thumbnails look like a set.
+
+Shorts have none: YouTube uses a frame from the Short itself.
 
 ### 20.5 Linking Shorts to full videos
 

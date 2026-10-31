@@ -3,6 +3,30 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.36.0 — Phase 3D: Thumbnail prompts for Gemini — 31 October 2026
+
+**New**
+
+- **Thumbnail prompts**: for a highlight video or a Let's Play part, the local
+  AI looks at each of the 5 best thumbnail frames and writes a prompt to paste
+  into the Gemini app with that frame attached. Gemini makes the thumbnail
+  under your own subscription. They're in Review under the thumbnail frames,
+  each with a copy button and **Open the frame**.
+- They're written along with the titles. **Write thumbnail prompts** writes
+  them for videos prepared before, or again.
+- **Highlights stay clean** (no text on the picture). **Let's Play parts** say
+  their episode and part ("EP 6 PART 2"): change the words in Settings →
+  Publish. Story games are told not to give anything away.
+- **Your thumbnail look** (Settings → Publish) is added to every prompt, so
+  your thumbnails look like a set.
+
+**Good to know**
+
+- **AI-Editor sends nothing online.** The Gemini API can't use your
+  subscription (it bills separately, and Gemini 4 Argon there makes no
+  pictures), so there's no key and no charge: you paste the prompt yourself.
+- Shorts have no prompts: YouTube uses a frame from the Short itself.
+
 ## 0.35.0 — Phase 3B: Overnight work — 31 October 2026
 
 **New**

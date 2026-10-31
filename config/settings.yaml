@@ -356,6 +356,11 @@ publish: # Titles, description, chapters and thumbnails for each video (manual 2
   # Added under every description, e.g. "Live on Twitch: twitch.tv/yourname"
   description_footer: ""
   thumbnails: 6 # Frames kept, best first (output/thumbnails)
+  # Thumbnail prompts (manual 20.4a): the local AI writes them for you to paste into
+  # the Gemini app with the frame. Nothing is sent online. Highlights stay clean;
+  # a Let's Play part's thumbnail says this ({game}, {episode} and {part} are filled in):
+  thumbnail_text: "EP {episode} PART {part}"
+  thumbnail_style: "" # Added to every prompt, e.g. "bold yellow text, purple glow"
   chapter_every_min: 5 # A Let's Play part gets a chapter about this often
 
 learning: # AI-Editor learning your taste from your ratings (manual 12.2b)

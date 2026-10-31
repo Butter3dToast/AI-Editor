@@ -20,6 +20,7 @@ from ..config import Settings
 from ..db import init_db
 from ..errors import AIEditorError
 from ..games import canonical_game
+from ..publish import PROMPTS as PROMPT_SLOTS
 from ..recipes import history, review
 from ..recipes.plan import save_plan
 from ..style.apply import NO_PROFILE
@@ -374,6 +375,19 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         thumbs = gr.Gallery(label="Thumbnail frames, best first (full size, in "
                                   "output/thumbnails)", columns=3, height=420,
                             buttons=["download", "fullscreen"], interactive=False)
+        # Phase 3D: prompts to paste into the Gemini app, each with its frame.
+        with gr.Group(visible=False) as prompt_group:
+            prompt_note = gr.Markdown()
+            prompt_rows, prompt_boxes, frame_btns = [], [], []
+            for n in range(PROMPT_SLOTS):
+                with gr.Row(visible=False) as row:
+                    prompt_rows.append(row)
+                    prompt_boxes.append(gr.Textbox(label=f"Thumbnail prompt {n + 1}", lines=5,
+                                                   buttons=["copy"], scale=5))
+                    frame_btns.append(gr.Button("Open the frame", size="sm", scale=1,
+                                                min_width=130))
+            prompts_btn = gr.Button("Write thumbnail prompts", size="sm")
+        prompt_frames, prompt_seen = gr.State([]), gr.State(0)
 
     # --- Clips: handlers ----------------------------------------------------------------
 
@@ -1598,6 +1612,75 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     keep_btn.click(keep_changes, [plan_pick, part_pick, episode_box, title_box, desc_box,
                                   tags_box], publish_msg)
+
+    # --- Thumbnail prompts (3D) ----------------------------------------------------------
+
+    def show_prompts(plan_id, part):
+        """The prompts for the video or part on show, each with its frame."""
+        from .. import publish
+
+        plan, _ = read(videos.get_plan, plan_id)
+        hidden = ([gr.Group(visible=False), ""] + [gr.Row(visible=False)] * PROMPT_SLOTS
+                  + [""] * PROMPT_SLOTS + [[]])
+        if plan is None or plan.recipe not in ("highlights", "letsplay"):
+            return hidden
+        made = publish.saved(plan, publish_part(plan, part))
+        if made is None:
+            return hidden
+        found = [t for t in made.thumbnails if t.prompt and t.path.is_file()]
+        if found:
+            note = ("**Thumbnail prompts for the Gemini app.** Copy one, open its frame, and "
+                    "give Gemini both: drag the frame into the chat with the prompt. "
+                    "Nothing is sent from here.")
+        else:
+            note = ("**Thumbnail prompts for the Gemini app**: none for these frames yet. "
+                    "**Write thumbnail prompts** asks the local AI (about half a minute).")
+        return ([gr.Group(visible=True), note]
+                + [gr.Row(visible=n < len(found)) for n in range(PROMPT_SLOTS)]
+                + [found[n].prompt if n < len(found) else "" for n in range(PROMPT_SLOTS)]
+                + [[str(t.path) for t in found]])
+
+    prompt_outputs = [prompt_group, prompt_note, *prompt_rows, *prompt_boxes, prompt_frames]
+    for trigger in (plan_pick.change, part_pick.change, review_tab.select, ui.load,
+                    thumbs.change):
+        trigger(show_prompts, [plan_pick, part_pick], prompt_outputs)
+
+    def open_frame(n):
+        def run(frames):
+            if n >= len(frames) or not Path(frames[n]).is_file():
+                return "That frame isn't there any more: write the prompts again."
+            subprocess.Popen(["explorer", "/select,", frames[n]])  # noqa: S603,S607
+            return ""
+        return run
+
+    for n, button in enumerate(frame_btns):
+        button.click(open_frame(n), prompt_frames, prompt_note)
+
+    def write_prompts(plan_id, episode, part):
+        plan, _ = read(videos.get_plan, plan_id)
+        if plan is None:
+            return "Pick a plan first."
+        if not settings.llm.enabled:
+            return "The local AI is switched off in Settings (AI)."
+        if plan.recipe == "letsplay" and not episode:
+            return "Fill in the episode number first: it goes on the thumbnail."
+        return submitted(worker, worker.submit(
+            f"Writing thumbnail prompts for {plan.title}", f"prompts:{plan_id}:{part}",
+            tasks.write_prompts(settings, plan_id, parts=chosen_parts(part),
+                                episode=int(episode) if episode else None)))
+
+    prompts_btn.click(write_prompts, [plan_pick, episode_box, part_pick], prompt_note)
+
+    def prompt_tick(seen_id, plan_id, part):
+        """Fill the prompts in once a job writing them finishes."""
+        newest = max((t.id for t in worker.snapshot() if t.status == DONE
+                      and ("prompts" in t.result or "publish" in t.result)), default=0)
+        if newest <= seen_id:
+            return [gr.skip()] * len(prompt_outputs) + [seen_id]
+        return show_prompts(plan_id, part) + [newest]
+
+    timer.tick(prompt_tick, [prompt_seen, plan_pick, part_pick], [*prompt_outputs, prompt_seen],
+               show_progress="hidden")
 
     # --- keeping up with finished jobs ---------------------------------------------------
 
