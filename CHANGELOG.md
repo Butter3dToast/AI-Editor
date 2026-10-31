@@ -3,6 +3,32 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.34.0 — Phase 3A-3b: The local AI learns from your verdicts — 25 October 2026
+
+**New**
+
+- **The local AI is shown your own verdicts** when it rates a clip: the 4 clips
+  you liked and the 4 you didn't that you rated most recently, from other
+  streams of the same game, with what happens in each, and asked to rate the
+  way you would. It starts once a game has 4 of each.
+- **It agrees with you more**: tried on 25 Oct on 317 of your League clips,
+  each stream rated with examples from the others only, it put a clip you
+  liked above one you didn't 63% of the time, against 54% without. Asking
+  again without examples gave the same as before, so that's not chance.
+- **Your taste uses the AI's rating where it helps**: with the same safety net,
+  tested with and without it. League today: 71% with it, 68% without (on the
+  321 clips the AI has rated with your examples), so it's in use. Your taste
+  overall: 74%, the usual score 69%.
+- Those 317 test ratings are kept in your library, so this works for League
+  straight away.
+
+**Good to know**
+
+- Old clips keep the AI rating they had: they aren't rated again (your choice).
+  New streams are rated with your examples when they're analysed.
+- Those 317 kept their earlier tags; their "why" says they were rated again
+  with your examples.
+
 ## 0.33.0 — Phase 3A-3a: Effect nudges — 25 October 2026
 
 **New**

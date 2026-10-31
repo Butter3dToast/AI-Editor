@@ -41,9 +41,26 @@ MIN_STREAMS = 3       # streams with a 👍 and a 👎 each, to test it fairly
 RELEARN_EVERY = 20    # new ratings
 STRENGTH = 50.0       # how firmly it's held back from trusting few ratings (L2)
 FEATURES = ("usual score", "kill", "multikill", "Shorts mark", "length", "talking")
+# The model's layout: 2 holds a second model with the AI's rating (3A-3b).
+VERSION = 2
 
 
-def features(clip: sqlite3.Row) -> list[float]:
+def ai_ratings(conn: sqlite3.Connection, clips: Sequence[sqlite3.Row]) -> dict[str, float]:
+    """The local AI's rating of each clip, where it was made with the creator's own
+    verdicts as examples (3A-3b). Those made without them added nothing: tried on
+    25 Oct, your taste with them 66.5%, without 66.7%; with examples, 69.6%."""
+    from ..analysis.ai_rating import WITH_EXAMPLES, notes_for
+
+    found: dict[str, float] = {}
+    for rid in sorted({c["recording_id"] for c in clips}):
+        mine = [c for c in clips if c["recording_id"] == rid]
+        found.update({clip_id: n.rating for clip_id, n in notes_for(conn, rid, mine).items()
+                      if n.prompt_version == WITH_EXAMPLES})
+    return found
+
+
+def features(clip: sqlite3.Row, ai: dict[str, float] | None = None) -> list[float]:
+    """``ai``: with the AI's rating too (ai_ratings), for the model that uses it."""
     summary = json.loads(clip["signals_json"] or "{}")
     core = summary.get("core") or [clip["start_sec"], clip["end_sec"]]
     words = len((clip["transcript"] or "").split())
@@ -52,7 +69,8 @@ def features(clip: sqlite3.Row) -> list[float]:
             1.0 if summary.get("lol_multikill") else 0.0,
             1.0 if summary.get("marker_short") else 0.0,
             math.log(max(0.0, float(core[1]) - float(core[0])) + 1.0),
-            words / max(1.0, clip["end_sec"] - clip["start_sec"])]
+            words / max(1.0, clip["end_sec"] - clip["start_sec"])] + (
+        [float(ai[clip["clip_id"]])] if ai is not None else [])
 
 
 def clip_game(clip: sqlite3.Row, recording_game: str | None) -> str:
@@ -92,9 +110,11 @@ def _rated(conn: sqlite3.Connection, game: str) -> list[sqlite3.Row]:
     return [r for r in rows if clip_game(r, r["recording_game"]) == game]
 
 
-def check(rated: Sequence[sqlite3.Row]) -> tuple[float, float] | None:
+def check(rated: Sequence[sqlite3.Row],
+          ai: dict[str, float] | None = None) -> tuple[float, float] | None:
     """(taste, usual): each stream ranked by a model learned from the others,
-    as a new stream would be. None with too few streams to tell."""
+    as a new stream would be. None with too few streams to tell. ``ai``: the
+    model with the AI's rating in it (every clip in ``rated`` must have one)."""
     streams = sorted({r["recording_id"] for r in rated})
     taste = usual = pairs = 0.0
     tested = 0
@@ -105,10 +125,10 @@ def check(rated: Sequence[sqlite3.Row]) -> tuple[float, float] | None:
         disliked = [r for r in test if r["user_rating"] < 0]
         if not liked or not disliked or len({r["user_rating"] > 0 for r in train}) < 2:
             continue
-        model = _fit(np.array([features(r) for r in train]),
+        model = _fit(np.array([features(r, ai) for r in train]),
                      np.array([1.0 if r["user_rating"] > 0 else 0.0 for r in train]))
         mine = dict(zip([r["clip_id"] for r in test],
-                        _predict(model, np.array([features(r) for r in test]))))
+                        _predict(model, np.array([features(r, ai) for r in test]))))
         n = len(liked) * len(disliked)
         taste += n * _above([mine[r["clip_id"]] for r in liked],
                             [mine[r["clip_id"]] for r in disliked])
@@ -126,10 +146,27 @@ class Taste:
     taste: float | None = None  # how often it puts a liked clip above a disliked one
     usual: float | None = None  # the same for the usual score
     learned_at: str = ""
+    # With the AI's rating too (3A-3b): learned from the clips that have one, and
+    # tested against the same model without it, on those same clips.
+    ai_model: dict | None = None
+    with_ai: float | None = None
+    without_ai: float | None = None
+    ai_clips: int = 0
 
     @property
     def better(self) -> bool:
         return self.model is not None and self.taste is not None and self.taste > self.usual
+
+    @property
+    def ai_helps(self) -> bool:
+        return (self.ai_model is not None and self.with_ai is not None
+                and self.with_ai > self.without_ai)
+
+    def kept(self) -> dict | None:
+        if self.model is None:
+            return None
+        return {"version": VERSION, "base": self.model, "ai": self.ai_model,
+                "with_ai": self.with_ai, "without_ai": self.without_ai, "ai_clips": self.ai_clips}
 
 
 def learn(conn: sqlite3.Connection, game: str) -> Taste:
@@ -143,9 +180,20 @@ def learn(conn: sqlite3.Connection, game: str) -> Taste:
         tested = check(rated)
         if tested:
             found.taste, found.usual = tested
+        ai = ai_ratings(conn, rated)
+        rated_ai = [r for r in rated if r["clip_id"] in ai]
+        found.ai_clips = len(rated_ai)
+        if len(rated_ai) >= MIN_RATINGS and len({r["user_rating"] > 0 for r in rated_ai}) == 2:
+            with_ai, without = check(rated_ai, ai), check(rated_ai)
+            if with_ai and without:
+                found.with_ai, found.without_ai = with_ai[0], without[0]
+                found.ai_model = _fit(np.array([features(r, ai) for r in rated_ai]),
+                                      np.array([1.0 if r["user_rating"] > 0 else 0.0
+                                                for r in rated_ai]))
+    kept = found.kept()
     conn.execute("INSERT OR REPLACE INTO taste_models (game, model_json, ratings, taste_check, "
                  "usual_check, learned_at) VALUES (?, ?, ?, ?, ?, ?)",
-                 (game, json.dumps(found.model) if found.model else None, found.ratings,
+                 (game, json.dumps(kept) if kept else None, found.ratings,
                   found.taste, found.usual, found.learned_at))
     conn.commit()
     return found
@@ -168,33 +216,45 @@ def tastes(conn: sqlite3.Connection) -> dict[str, Taste]:
     found = {}
     for game, count in sorted(_games(conn).items()):
         row = kept.get(game)
+        model = json.loads(row["model_json"]) if row and row["model_json"] else None
         if row is None or abs(count - row["ratings"]) >= RELEARN_EVERY or \
-                (row["model_json"] is None and count >= MIN_RATINGS):
+                (model is None and count >= MIN_RATINGS) or \
+                (model is not None and model.get("version") != VERSION):
             found[game] = learn(conn, game)
         else:
-            found[game] = Taste(game, row["ratings"],
-                                json.loads(row["model_json"]) if row["model_json"] else None,
-                                row["taste_check"], row["usual_check"], row["learned_at"])
+            found[game] = Taste(game, row["ratings"], model["base"] if model else None,
+                                row["taste_check"], row["usual_check"], row["learned_at"],
+                                (model or {}).get("ai"), (model or {}).get("with_ai"),
+                                (model or {}).get("without_ai"), (model or {}).get("ai_clips", 0))
     return found
 
 
-def in_use(conn: sqlite3.Connection, settings: Settings) -> dict[str, dict]:
-    """{game: model} for the games where your taste is used to pick clips."""
+def in_use(conn: sqlite3.Connection, settings: Settings) -> dict[str, Taste]:
+    """{game: its taste} for the games where your taste is used to pick clips."""
     if not settings.learning.taste:
         return {}
-    return {g: t.model for g, t in tastes(conn).items() if t.better}
+    return {g: t for g, t in tastes(conn).items() if t.better}
 
 
 def likes(conn: sqlite3.Connection, settings: Settings, clips: Sequence[sqlite3.Row],
-          recording_game: str | None, models: dict[str, dict] | None = None) -> dict[str, float]:
-    """How likely you are to like each clip (0-1), where your taste is in use."""
+          recording_game: str | None, models: dict[str, Taste] | None = None) -> dict[str, float]:
+    """How likely you are to like each clip (0-1), where your taste is in use:
+    with the AI's rating where the AI rated it with your examples and that helps."""
     models = in_use(conn, settings) if models is None else models
     found = {}
-    for game, model in models.items():
+    for game, t in models.items():
         mine = [c for c in clips if clip_game(c, recording_game) == game]
-        if mine:
-            found.update(zip([c["clip_id"] for c in mine],
-                             _predict(model, np.array([features(c) for c in mine])).tolist()))
+        if not mine:
+            continue
+        ai = ai_ratings(conn, mine) if t.ai_helps else {}
+        rated = [c for c in mine if c["clip_id"] in ai]
+        plain = [c for c in mine if c["clip_id"] not in ai]
+        if rated:
+            found.update(zip([c["clip_id"] for c in rated], _predict(
+                t.ai_model, np.array([features(c, ai) for c in rated])).tolist()))
+        if plain:
+            found.update(zip([c["clip_id"] for c in plain], _predict(
+                t.model, np.array([features(c) for c in plain])).tolist()))
     return found
 
 
@@ -240,9 +300,18 @@ def status_text(conn: sqlite3.Connection, settings: Settings) -> str:
         else:
             used = ("**in use**" if settings.learning.taste else "switched off below") \
                 if t.better else "not used: the usual score does as well or better"
-            lines.append(f"- **{game}**: your taste puts a clip you liked above one you didn't "
-                         f"**{t.taste:.0%}** of the time, the usual score {t.usual:.0%} "
-                         f"(from {t.ratings} ratings), {used}.")
+            line = (f"- **{game}**: your taste puts a clip you liked above one you didn't "
+                    f"**{t.taste:.0%}** of the time, the usual score {t.usual:.0%} "
+                    f"(from {t.ratings} ratings), {used}.")
+            if t.with_ai is not None:
+                line += (f" With the local AI's rating (made with your examples, on "
+                         f"{t.ai_clips} of them): {t.with_ai:.0%} against {t.without_ai:.0%} "
+                         "without, so " + ("it's used where the AI has rated a clip that way."
+                                           if t.ai_helps else "it's left out."))
+            elif t.ai_clips:
+                line += (f" The local AI has rated {t.ai_clips} of them with your examples; "
+                         f"at {MIN_RATINGS} its rating is tried in your taste too.")
+            lines.append(line)
     if not lines:
         return "Nothing learned yet: rate some clips 👍, 🔖 or 👎 in the Clips tab."
     return "\n".join(lines) + (f"\n\nIt learns again after every {RELEARN_EVERY} new ratings, "

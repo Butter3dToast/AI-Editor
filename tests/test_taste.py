@@ -151,3 +151,58 @@ def test_ties_at_the_top_score_go_by_your_taste():
     order = taste.reordered(scores, {"a": 0.2, "b": 0.9, "c": 0.5, "d": 0.1})
     assert sorted(order, key=order.get, reverse=True) == ["b", "c", "a", "d"]
     assert order["b"] == 1.0 and order["d"] == pytest.approx(0.4, abs=1e-5)
+
+
+# --- the AI's rating as an ingredient (3A-3b) -----------------------------------------------
+
+
+def ai_rated(conn, rating_of, version=2):
+    from ai_editor.analysis import ai_rating
+
+    for clip in conn.execute("SELECT * FROM clips").fetchall():
+        ai_rating.save(conn, ai_rating.Note(
+            clip["clip_id"], clip["recording_id"], clip["start_sec"], clip["end_sec"],
+            rating_of(clip), "", "", [], False, "gemma4:12b", version))
+
+
+def scrambled(conn):
+    """Talking no longer tells: the liked ones are every third clip."""
+    for clip in conn.execute("SELECT clip_id FROM clips").fetchall():
+        n = int(clip["clip_id"].split("c")[1])
+        conn.execute("UPDATE clips SET user_rating = ? WHERE clip_id = ?",
+                     (1 if n % 3 == 0 else -1, clip["clip_id"]))
+    conn.commit()
+
+
+def test_the_ais_rating_is_used_where_it_helps(conn, settings):
+    scrambled(conn)
+    # The AI, with your examples, saw it: high for the ones you like.
+    ai_rated(conn, lambda c: 9 if int(c["clip_id"].split("c")[1]) % 3 == 0 else 3)
+    found = taste.learn(conn, "League of Legends")
+    assert found.ai_clips == 48 and found.ai_helps and found.with_ai > found.without_ai
+    liking = taste.likes(conn, settings, conn.execute("SELECT * FROM clips WHERE recording_id = 1")
+                         .fetchall(), "League of Legends", {"League of Legends": found})
+    assert liking["r1c0"] > liking["r1c1"] and liking["r1c3"] > liking["r1c2"]
+    assert "With the local AI's rating (made with your examples, on 48 of them)" in \
+        taste.status_text(conn, settings)
+
+
+def test_the_ais_rating_is_left_out_where_it_doesnt(conn, settings):
+    ai_rated(conn, lambda c: 5)   # the same for every clip: it can't help
+    found = taste.learn(conn, "League of Legends")
+    assert found.with_ai is not None and not found.ai_helps
+    assert "so it's left out" in taste.status_text(conn, settings)
+
+
+def test_ratings_made_without_your_examples_dont_count(conn, settings):
+    ai_rated(conn, lambda c: 9 if int(c["clip_id"].split("c")[1]) % 2 else 3, version=1)
+    found = taste.learn(conn, "League of Legends")
+    assert found.ai_clips == 0 and found.ai_model is None
+
+
+def test_a_taste_learned_before_this_version_is_learned_again(conn, settings):
+    taste.tastes(conn)
+    conn.execute("UPDATE taste_models SET model_json = ?, learned_at = 'old'",
+                 (json.dumps({"mu": [0] * 6, "sd": [1] * 6, "w": [0] * 7}),))
+    conn.commit()
+    assert taste.tastes(conn)["League of Legends"].learned_at != "old"

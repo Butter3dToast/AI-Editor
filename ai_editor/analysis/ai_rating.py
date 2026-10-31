@@ -42,8 +42,17 @@ from .captions import YOURS, clock
 
 log = get_logger(__name__)
 
-# Bump when the question changes enough that old verdicts should be redone.
-PROMPT_VERSION = 1
+# The question's version, kept with each verdict. 2: with the creator's own
+# verdicts as examples (3A-3b); 1 when a game doesn't have enough of them yet.
+PROMPT_VERSION = 2
+WITH_EXAMPLES = 2
+# Verdicts older than this are asked again. Not 2: the creator chose not to
+# re-rate old clips with examples (25 Oct), only new ones.
+REDO_BEFORE = 1
+# Examples shown with each question (3A-3b): this many clips the creator liked,
+# and as many they didn't, from other streams of the same game. Fewer of either
+# and the question goes without (version 1).
+EXAMPLES_EACH = 4
 # A re-cut clip keeps a verdict covering at least this share of it.
 SAME_MOMENT_OVERLAP = 0.6
 # Chat lags the stream by a few seconds; reactions to the end land after it.
@@ -242,8 +251,50 @@ def chat_lines(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row) 
                      for r in kept)
 
 
+def examples(conn: sqlite3.Connection, game: str | None, recording_id: int) -> str | None:
+    """The creator's own verdicts, for the AI to rate like them (3A-3b): the clips
+    they rated most recently in other streams of this game, with what the AI
+    said happens in each. Not their marked clips: those go in anyway.
+
+    Tried on 25 Oct, each League stream rated with examples from the others only:
+    the AI put a liked clip above a disliked one 63% of the time, 54% without;
+    the same question asked again without them, 54% (69% and 69% on a sample).
+    """
+    if not game:
+        return None
+    recent = {r[0]: r[1] for r in conn.execute("SELECT clip_id, MAX(id) FROM feedback "
+                                                "GROUP BY clip_id")}
+    found = []
+    for rec in conn.execute("SELECT id, game FROM recordings WHERE id != ?", (recording_id,)):
+        clips = conn.execute("SELECT * FROM clips WHERE recording_id = ? AND user_rating IS NOT "
+                             "NULL AND user_rating != 0", (rec["id"],)).fetchall()
+        notes = notes_for(conn, rec["id"], clips)
+        for c in clips:
+            summary = json.loads(c["signals_json"] or "{}")
+            if c["clip_id"] not in notes or (summary.get("game") or rec["game"]) != game or \
+                    "marker" in summary or "marker_short" in summary:
+                continue
+            found.append((recent.get(c["clip_id"]) or 0, c["user_rating"] > 0,
+                          notes[c["clip_id"]]))
+    found.sort(key=lambda f: -f[0])
+    liked = [n for _, good, n in found if good][:EXAMPLES_EACH]
+    disliked = [n for _, good, n in found if not good][:EXAMPLES_EACH]
+    if len(liked) < EXAMPLES_EACH or len(disliked) < EXAMPLES_EACH:
+        return None
+
+    def line(note: Note) -> str:
+        return f'- "{note.summary}"' + (f" ({', '.join(note.tags)})" if note.tags else "")
+
+    return ("This streamer's own verdicts on earlier clips of this game (from other streams):\n"
+            "They liked:\n" + "\n".join(map(line, liked)) +
+            "\nThey didn't like:\n" + "\n".join(map(line, disliked)) +
+            "\nRate this clip the way they would: higher the more it's like the ones they "
+            "liked, lower the more it's like the ones they didn't.")
+
+
 def question(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row,
-             game: str | None) -> str:
+             game: str | None, shown: str | None = None) -> str:
+    """``shown``: the creator's verdicts as examples (``examples``), put first."""
     summary = json.loads(clip["signals_json"] or "{}")
     heard = [READABLE.get(name, name) for name in summary.get("reasons", [])]
     if "marker" in summary or "marker_short" in summary:
@@ -263,11 +314,12 @@ def question(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row,
     chat = chat_lines(conn, settings, clip)
     if chat:
         parts.append(f"Twitch chat:\n{chat}")
-    return "\n\n".join(parts)
+    text = "\n\n".join(parts)
+    return f"{shown}\n\n---\n\n{text}" if shown else text
 
 
 def ask_about(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row,
-              game: str | None, proxy: Path | None) -> Note:
+              game: str | None, proxy: Path | None, shown: str | None = None) -> Note:
     summary = json.loads(clip["signals_json"] or "{}")
     images = []
     if proxy is not None and proxy.exists():
@@ -277,14 +329,15 @@ def ask_about(conn: sqlite3.Connection, settings: Settings, clip: sqlite3.Row,
             frame = grab_frame(proxy, t)
             if frame:
                 images.append(frame)
-    answer = llm.ask(settings, SYSTEM, question(conn, settings, clip, game), schema=SCHEMA,
-                     images=images)
+    answer = llm.ask(settings, SYSTEM, question(conn, settings, clip, game, shown),
+                     schema=SCHEMA, images=images)
     rating = min(10, max(1, int(answer.get("rating") or 1)))
     return Note(clip["clip_id"], clip["recording_id"], clip["start_sec"], clip["end_sec"],
                 rating, str(answer.get("summary", "")).strip()[:200],
                 str(answer.get("reason", "")).strip()[:400],
                 list(dict.fromkeys(t for t in answer.get("tags", []) if t in TAGS))[:3],
-                bool(answer.get("stands_alone")), settings.llm.model or "", PROMPT_VERSION)
+                bool(answer.get("stands_alone")), settings.llm.model or "",
+                WITH_EXAMPLES if shown else 1)
 
 
 def save(conn: sqlite3.Connection, note: Note) -> None:
@@ -305,7 +358,7 @@ def unrated(conn: sqlite3.Connection, settings: Settings, recording_id: int) -> 
     notes = notes_for(conn, recording_id, clips)
     return [c for c in clips
             if (n := notes.get(c["clip_id"])) is None or n.model != settings.llm.model
-            or n.prompt_version != PROMPT_VERSION]
+            or n.prompt_version < REDO_BEFORE]
 
 
 @dataclass
@@ -328,6 +381,7 @@ def rate_recording(conn: sqlite3.Connection, settings: Settings, recording_id: i
             on_progress(1.0)
         return RatingResult(0, total, 0)
     proxy = Path(row["proxy_path"]) if row["proxy_path"] else None
+    shown: dict[str | None, str | None] = {}   # per game: the creator's examples
     rated = failed = 0
     with llm.session(settings):
         for i, clip in enumerate(todo):
@@ -335,8 +389,10 @@ def rate_recording(conn: sqlite3.Connection, settings: Settings, recording_id: i
                 on_progress(i / len(todo))
             game = json.loads(clip["signals_json"] or "{}").get("game") or row["game"]
             asked = time.monotonic()
+            if game not in shown:
+                shown[game] = examples(conn, game, recording_id)
             try:
-                save(conn, ask_about(conn, settings, clip, game, proxy))
+                save(conn, ask_about(conn, settings, clip, game, proxy, shown[game]))
                 rated += 1
             except llm.AiAnswerUnreadable as exc:
                 failed += 1

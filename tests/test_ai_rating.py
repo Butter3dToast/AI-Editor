@@ -82,9 +82,14 @@ def test_only_clips_without_a_current_verdict_are_asked_about(conn, settings):
     add_clip(conn, "c", 200, 230)
     ai_rating.save(conn, note("a", 0, 30))
     stale = note("b", 100, 130)
-    stale.prompt_version = ai_rating.PROMPT_VERSION - 1  # the question has changed since
+    stale.prompt_version = ai_rating.REDO_BEFORE - 1  # the question has changed since
     ai_rating.save(conn, stale)
     assert {c["clip_id"] for c in ai_rating.unrated(conn, settings, 1)} == {"b", "c"}
+    # Rated before the examples (3A-3b): kept, not asked again (the creator, 25 Oct).
+    before = note("b", 100, 130)
+    before.prompt_version = 1
+    ai_rating.save(conn, before)
+    assert {c["clip_id"] for c in ai_rating.unrated(conn, settings, 1)} == {"c"}
 
 
 def test_rating_saves_each_answer_and_carries_on_where_it_stopped(conn, settings, monkeypatch):
@@ -235,3 +240,56 @@ def test_model_names_match_ollamas_latest_tag(settings, monkeypatch):
     monkeypatch.setattr(llm, "installed_models", lambda s: ["gemma4:latest", "qwen3:8b"])
     assert llm.has_model(settings, "gemma4") and llm.has_model(settings, "qwen3:8b")
     assert not llm.has_model(settings, "gemma4:12b")
+
+
+# --- your verdicts as examples (3A-3b) ----------------------------------------------------
+
+
+def older_stream(conn, rid: int = 2, liked: int = 4, disliked: int = 4, game="League of Legends"):
+    """Another stream, its clips rated by you and described by the AI."""
+    conn.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, game, "
+                 "duration_sec, imported_at, analysis_status) VALUES (?, ?, 'local_obs', 'y.mkv', "
+                 "?, 7200, 'now', 'complete')", (rid, f"h{rid}", game))
+    for n, verdict in enumerate([1] * liked + [-1] * disliked):
+        clip_id = f"r{rid}c{n}"
+        conn.execute("INSERT INTO clips (clip_id, recording_id, start_sec, end_sec, score, "
+                     "signals_json, user_rating, created_at) VALUES (?, ?, ?, ?, 0.5, '{}', ?, "
+                     "'now')", (clip_id, rid, n * 100, n * 100 + 30, verdict))
+        conn.execute("INSERT INTO feedback (ts, action, clip_id) VALUES ('now', 'thumbs_up', ?)",
+                     (clip_id,))
+        summary = f"Double kill {n}" if verdict > 0 else f"Chatting about lane {n}"
+        ai_rating.save(conn, ai_rating.Note(clip_id, rid, n * 100, n * 100 + 30, 5, summary, "",
+                                            ["kill"] if verdict > 0 else ["chill"], False,
+                                            "gemma4:12b", 1))
+    conn.commit()
+
+
+def test_the_ai_is_shown_your_verdicts_from_other_streams(conn):
+    older_stream(conn)
+    text = ai_rating.examples(conn, "League of Legends", 1)
+    liked, disliked = text.split("They didn't like:")
+    assert '"Double kill 0" (kill)' in liked and '"Chatting about lane 4" (chill)' in disliked
+    assert "Rate this clip the way they would" in text
+    assert ai_rating.examples(conn, "League of Legends", 2) is None   # never its own stream
+    assert ai_rating.examples(conn, "Wardogs", 1) is None              # only the same game
+
+
+def test_no_examples_until_there_are_four_of_each(conn):
+    older_stream(conn, liked=4, disliked=3)
+    assert ai_rating.examples(conn, "League of Legends", 1) is None
+
+
+def test_ratings_made_with_your_examples_are_marked_so(conn, settings, monkeypatch):
+    older_stream(conn)
+    add_clip(conn, "new", 0, 40)
+    asked = []
+    monkeypatch.setattr(llm, "start", lambda s: "0.35.1")
+    monkeypatch.setattr(llm, "has_model", lambda s, name=None: True)
+    monkeypatch.setattr(llm, "unload", lambda s: None)
+    monkeypatch.setattr(llm, "ask", lambda s, system, prompt, **_: asked.append(prompt) or {
+        "summary": "Pentakill", "reason": "Huge.", "tags": ["kill"], "stands_alone": True,
+        "rating": 9})
+    ai_rating.rate_recording(conn, settings, 1)
+    assert asked[0].startswith("This streamer's own verdicts") and "Game: League" in asked[0]
+    saved = ai_rating.notes_for(conn, 1, clips(conn))["new"]
+    assert saved.prompt_version == ai_rating.WITH_EXAMPLES

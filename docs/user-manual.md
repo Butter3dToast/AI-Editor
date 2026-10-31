@@ -844,6 +844,7 @@ From your 👍, 🔖 and 👎, AI-Editor learns **your taste**, separately for e
 What it looks at: the usual score, a kill or multikill (League game info), your Shorts marks, how long the moment is, and **how much talking there is**. On your League ratings it learned that **talking without action counts against a clip** (clips the local AI called *chill* were liked 12% of the time, *banter* 26%, a multikill 96%), and kills, multikills, your Shorts marks and longer fights count for it.
 
 - **It starts at 30 ratings in a game** (some 👍 and some 👎), from at least 3 streams.
+- **The local AI's rating joins in** where the AI rated a clip with your examples (12.3), once 30 of your rated clips have such a rating, and only if your taste does better with it than without, tested the same fair way.
 - **The safety net:** each time it learns, it tests itself the fair way: each stream ranked by what it learned from your *other* streams, as a new stream would be. **It's only used in a game where it beats the usual score**, and Settings → **Learning your taste** says how it did: *"League of Legends: your taste puts a clip you liked above one you didn't 74% of the time, the usual score 70% (from 424 ratings), in use."*
 - **It learns again after every 20 new ratings**, so it can switch itself off again (and back on).
 - **It changes the order, never the bar:** in a stream, the clip it thinks you'd like most gets the best score there, and so on. As many clips pass the quality bar as before. Your 👍, 🔖 and 👎, your marks and your rules work exactly as before.
@@ -862,7 +863,11 @@ For every clip, the local AI (5.2) reads what was said and what chat wrote, look
 
 Clips are rated at the end of each analysis. For recordings analysed earlier, pick the recording and click **Rate with AI**. Only clips it hasn't seen are asked about, and the column fills in when the job finishes. (From the command line: `ai-editor rate 10`.)
 
-**The rating doesn't choose your clips yet.** On your League stream of 2 October, the AI put a clip you liked above one you rejected only about half the time. The usual score did that about 80% of the time. Three still frames can't show a teamfight the way the sounds and your markers do. So the AI's rating is shown but not used to pick. **Settings → AI** shows, for each game, how often it agrees with your 👍 and 👎. If it starts beating the usual score for a game, turn up **How much the AI's rating counts**.
+**It learns from your verdicts (from 0.34.0).** When the AI rates a clip, it's shown your own verdicts on earlier clips of the same game: the 4 you liked and the 4 you didn't that you rated most recently, from **other** streams, with what happens in each (*You liked: "Double kill in bot lane after a long chase". You didn't: "Chatting about the lane matchup while farming"*), and asked to rate the way you would. It starts once a game has 4 of each (not counting the clips you marked, which go in anyway). Tried on 25 Oct on your League ratings, each stream rated with examples from the others only: the AI put a clip you liked above one you didn't **63%** of the time, against 54% without.
+
+Old clips keep the rating they had (your choice: they aren't rated again); new streams are rated with your examples when they're analysed. **Your taste** (12.2b) tries the AI's rating as one more measurement, using only ratings made with your examples, and keeps it only in a game where it helps: Settings → **Learning your taste** says so (*"With the local AI's rating … 71% against 68% without, so it's used"*).
+
+**The rating on its own doesn't choose your clips.** On your League stream of 2 October, the AI put a clip you liked above one you rejected only about half the time. The usual score did that about 80% of the time. Three still frames can't show a teamfight the way the sounds and your markers do. So the AI's rating is shown but not used to pick. **Settings → AI** shows, for each game, how often it agrees with your 👍 and 👎. If it starts beating the usual score for a game, turn up **How much the AI's rating counts**.
 
 ---
 
