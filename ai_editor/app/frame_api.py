@@ -126,12 +126,9 @@ class Frame:
         return found
 
     def _count(self, conn) -> dict:
-        from . import library
-
         rows = conn.execute("SELECT id, source_file, analysis_status FROM recordings").fetchall()
         kept = [r for r in rows if Path(r["source_file"]).exists()]
         with_video = {r["id"] for r in kept}
-        unanalysed = sum(r["analysis_status"] != "complete" for r in kept)
         unrated = 0
         if with_video:
             unrated = conn.execute(
@@ -141,17 +138,18 @@ class Frame:
         open_issues = conn.execute("SELECT COUNT(*) FROM issues WHERE status = 'open'").fetchone()[0]
         profiles = conn.execute("SELECT COUNT(*) FROM style_profiles").fetchone()[0]
         rules = conn.execute("SELECT COUNT(*) FROM rules").fetchone()[0]
-        new = len([f for f in library.new_recordings(conn, self.settings) if not f.still_recording])
         free = _free_gb(self.settings.folders.raw)
         plural = lambda n, one, many=None: f"{n} {one if n == 1 else (many or one + 's')}"  # noqa: E731
         return {
             "tallies": {"library": len(kept), "clips": unrated, "review": drafts,
                         "issues": open_issues},
             "lines": {
+                # The designer's line (4C-1): how many, and room left where they are.
                 "library": plural(len(kept), "recording") + (
-                    f" · {unanalysed} not analysed" if unanalysed else ""),
-                "import": (plural(new, "new recording") + " in your raw folder") if new
-                else "Nothing new in your raw folder",
+                    f" · {free:.0f} GB free on {self.settings.folders.raw.drive or 'disk'}"
+                    if free is not None else ""),
+                # The designer's line (4C-2); how many are new is on the screen itself.
+                "import": "Your file is read where it is: never copied, moved or changed",
                 "clips": f"{unrated} not rated yet" if unrated else "Every clip rated",
                 "create": "Highlights, Let's Plays and Shorts",
                 "review": plural(drafts, "draft") + " waiting" if drafts else "No drafts waiting",
@@ -294,6 +292,10 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
             conn.close()
         return {}
 
+    from . import import_screen, library_screen
+
+    library_screen.add_routes(app, frame, guarded)   # 4C-1: the Library, rebuilt
+    import_screen.add_routes(app, frame, guarded)    # 4C-2: Import, rebuilt
     app.mount("/frame", StaticFiles(directory=FRAME), name="frame")
     return gr.mount_gradio_app(app, ui, path=CLASSIC, **mount_kwargs)
 

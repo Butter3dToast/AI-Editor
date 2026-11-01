@@ -32,6 +32,7 @@ FAILED = "failed"
 UNFINISHED = (WAITING, RUNNING, PAUSED, FAILED)
 # Steps that are waiting, not working: never timed (overnight work's).
 UNTIMED = ("Waiting", "Checking the graphics card")
+SKIPPED = -1.0     # a step's "time" when it was done before and not run again
 
 
 def paused_note(steps: dict[str, float]) -> str:
@@ -100,6 +101,15 @@ class Reporter:
             task.step_started.setdefault(label, now)
             if task.steps[label] >= 1.0 and (before is None or before < 1.0)                     and not label.startswith(UNTIMED):
                 task.timings.append((label, now - task.step_started[label]))
+
+    def skipped(self, label: str) -> None:
+        """A step done before, not run again: shown done, and kept as SKIPPED, not timed
+        (4C-1: a re-run guessed every step still to come, "Analysing · 0%")."""
+        self._check()
+        with self._worker._lock:
+            if label not in self._task.steps:
+                self._task.steps[label] = 1.0
+                self._task.timings.append((label, SKIPPED))
 
     def keep(self, **result) -> None:
         """Hand something back to the window: a plan made, a video saved."""

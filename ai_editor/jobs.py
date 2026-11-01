@@ -272,11 +272,14 @@ class JobQueue:
         self,
         job_id: int,
         steps: list[tuple[str, str, Callable[[], str]]],
+        on_skip: Callable[[str], None] | None = None,
     ) -> None:
         """Run a job's steps in order, skipping any already finished.
 
         ``steps`` is a list of (step_name, cache_key, callable). The callable
         returns an output path, or "" when its result went to the database.
+        ``on_skip`` hears each step skipped (4C-1: so Jobs shows it done, and
+        "time left" doesn't count it as still to come).
 
         A failure records the step and stops; the job can be resumed and picks
         up from that step. Errors are never re-raised as tracebacks to the UI.
@@ -294,6 +297,8 @@ class JobQueue:
                 if cached is not None:
                     log.info("Job #%d: step '%s' already done, skipping", job_id, name)
                     self.set_progress(job_id, (position + 1) / total, name)
+                    if on_skip:
+                        on_skip(name)
                     continue
 
                 log.info("Job #%d: running step '%s'", job_id, name)

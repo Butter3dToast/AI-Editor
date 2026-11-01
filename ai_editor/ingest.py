@@ -458,6 +458,7 @@ def ingest_recording(
     source_type: str | None = None,
     twitch_vod_id: str | None = None,
     recorded_at: str | None = None,
+    on_skipped: Callable[[str], None] | None = None,
 ) -> IngestResult:
     """Import one local recording: register, check space, proxy, audio.
 
@@ -542,6 +543,7 @@ def ingest_recording(
             ),
             ("audio", make_cache_key(digest, "audio", AUDIO_VERSION), audio_step),
         ],
+        on_skip=on_skipped,
     )
 
     for name, output in (("proxy", str(proxy_path)), ("audio", str(audio_dir))):

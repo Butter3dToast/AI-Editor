@@ -31,12 +31,13 @@
       <div class="row tight" id="actions"></div>
     </header>
 
+    <div class="morning" id="morning" hidden>
+      <div class="text" id="morning-text"></div>
+      <button class="btn" id="morning-ok" type="button">OK</button>
+    </div>
     <div class="wrap">
+      <main class="body" id="native" hidden></main>
       <main class="body classic" id="body">
-        <div class="morning" id="morning" hidden>
-          <div class="text" id="morning-text"></div>
-          <button class="btn" id="morning-ok" type="button">OK</button>
-        </div>
         <iframe id="screen" title="AI-Editor"></iframe>
       </main>
       <aside class="rail slim" id="rail" aria-label="Jobs"></aside>
@@ -45,5 +46,7 @@
 </div>
 <div class="toast" id="toast" role="status"></div>
 <script src="/frame/frame.js"></script>
+<script src="/frame/library.js"></script>
+<script src="/frame/import.js"></script>
 </body>
 </html>

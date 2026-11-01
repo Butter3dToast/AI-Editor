@@ -3,6 +3,46 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.40.0 — Phase 4C: Library and Import in the new design — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **The Library, rebuilt in the new design**: every recording in one list
+  (Recording, Game, Length, Recorded, Clips, Status), with a coloured dot for
+  its status and how far along an analysis is. **All · Streams · Let's
+  Plays** and a search box filter it. Click a recording and its details open
+  underneath: sound, Companion marks, Twitch chat, preview copy, video, where
+  it came from, League events and **Who's talking**, with **Watch the preview
+  copy** and **Show in Explorer**. **Analyse #N** is at the top, and the top
+  line says the space left on the drive. It remembers your pick.
+- **Import, rebuilt in the new design**, with **From this PC** and **From
+  Twitch** at the top:
+  - The raw folder's new recordings show their length, when they were
+    recorded, their sound tracks and their game (from the file name or the
+    Stream Companion).
+  - **Tick several and import them in one go**: each is a job of its own, run
+    one after another, never side by side.
+  - A file OBS is still writing can't be ticked.
+  - The game, sound tracks and Twitch link options are for one recording at a
+    time.
+  - Twitch's **Check** shows when Twitch deletes the VOD, in amber when soon.
+
+**Fixed**
+
+- **Time left for a job that carries on** (or a recording analysed again):
+  the steps it didn't need to redo were counted as still to come, so
+  re-analysing #33 said *Analysing · 0%* while only AI rating ran (under a
+  minute). Those steps now show in Jobs as done, at 100%, and the guess counts
+  only what's left (your test, 1 Nov).
+
+**Good to know**
+
+- Every other screen is still today's, inside the frame, until its own phase
+  (4D Clips is next: the designer's layout puts the player beside the clip's
+  details so everything for one clip fits on one screen).
+- Screenshots for the designer, from a demo library with made-up streams, are
+  in `docs/screenshots/phase4c/`.
+
 ## 0.39.0 — Phase 4B: the new frame — 31 October 2026
 
 **New**

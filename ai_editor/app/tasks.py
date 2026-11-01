@@ -133,7 +133,8 @@ def _ingest(conn, settings: Settings, path: Path, report: Reporter, *, game, tra
         conn, settings, path, game=game or None, track_roles=tracks or None,
         on_progress=lambda step, f: report.progress(STEP_LABELS.get(step, step), f),
         on_registered=on_registered, source_type=source_type, twitch_vod_id=vod_id,
-        recorded_at=recorded_at)
+        recorded_at=recorded_at,
+        on_skipped=lambda step: report.skipped(STEP_LABELS.get(step, step)))
     if result.status != "complete":
         raise TaskFailed(f"{result.error_message} Press Resume to try again; finished "
                          "steps won't be repeated.")
@@ -179,7 +180,8 @@ def _analyse(conn, settings: Settings, recording_id: int, report: Reporter) -> N
     result = analyze_recording(
         conn, settings, str(recording_id),
         on_progress=lambda step, f: report.progress(ANALYSIS_LABELS.get(step, step), f),
-        on_started=on_started)
+        on_started=on_started,
+        on_skipped=lambda step: report.skipped(ANALYSIS_LABELS.get(step, step)))
     if result.status != "complete":
         raise TaskFailed(f"{result.error_message} Press Resume to try again; finished "
                          "steps won't be repeated.")

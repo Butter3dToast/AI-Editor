@@ -164,7 +164,7 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 - **If the window can't open** (Windows without WebView2, the Edge engine every Windows 11 PC has), AI-Editor opens in your browser instead, with a small message: keep it open while you work, and click **OK** to close AI-Editor.
 - **If something goes wrong** and AI-Editor has to close, a message says so and where the details are; the Issues tab can copy them for you (25.1).
 
-**The new look (from 0.39.0).** The window shows AI-Editor in its new design (Phase 4): the screens are listed down the left, in three groups (**Make**, **Teach it**, **App**), and the screen you're on is at the top with a line about it, such as *"4 recordings · 1 not analysed"*.
+**The new look (from 0.39.0).** The window shows AI-Editor in its new design (Phase 4): the screens are listed down the left, in three groups (**Make**, **Teach it**, **App**), and the screen you're on is at the top with a line about it, such as *"32 recordings · 412 GB free on F:"*.
 
 - **The numbers beside the screens:** Library, the recordings whose video you still have; Clips, the clips you haven't rated yet in those; Review, the draft plans waiting for you; Issues, the open ones.
 - **Jobs** is the panel on the right. With nothing running it's a thin strip; it opens by itself when a job starts. Each job shows its steps, each with its bar and how far along it is (62%), and, once AI-Editor has seen that kind of job on your PC before, about how long it has left: *"12 min in · about 15 min left"*. That guess comes from how long the same steps took on your own past jobs, per hour of recording, so it gets better the more you use it; with nothing to go on, there's no guess rather than a wrong one. A stopped job says why and has its own **Resume**; one that ran out of space has **Free up space**, which opens Storage. **Pause all** and **Clear finished** are at the bottom. Finished jobs stay until you clear them or close the panel (**›**).
@@ -172,7 +172,8 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 - **Overnight work's morning note** is along the top until you press **OK**.
 - **Light or dark:** the switch at the bottom of the left-hand list, above the Companion. **Auto** follows Windows (even when you change it while AI-Editor is open); **Light** or **Dark** stays as you chose, whatever Windows is set to. It's kept in your settings, so AI-Editor opens that way next time, starting screen included.
 - **The window opens where you left it**, at the same size.
-- **The screens themselves are today's**, inside the new frame, until each is rebuilt in the new design (Phase 4C-4H). Everything on them works as before. Inside the window they use its full width, and **Clips** shows the player on top with the list below it; with the Jobs panel open, the list scrolls sideways rather than squeezing its columns.
+- **Library and Import are rebuilt in the new design** (from 0.40.0; 10.1, 10.2, 10.5).
+- **The other screens are today's**, inside the new frame, until each is rebuilt in the new design (Phase 4D-4H). Everything on them works as before. Inside the window they use its full width, and **Clips** shows the player on top with the list below it; with the Jobs panel open, the list scrolls sideways rather than squeezing its columns.
 
 **The browser way still works.** In a terminal in the AI-Editor folder, `.\.venv\Scripts\ai-editor app` opens AI-Editor in your browser with the black window, exactly as before 0.38.0. If AI-Editor is already open that way, the desktop icon shows the same page in a window (closing that window then leaves the browser one running).
 
@@ -570,6 +571,14 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 - **A file OBS is still recording isn't imported.** If the file changed in the last minute, AI-Editor asks you to stop recording first.
 - **Not built yet:** choosing the layout (facecam position).
 
+**In the window (from 0.40.0), Import is in the new design**, with **From this PC** and **From Twitch** at the top right:
+
+- **New in your raw folder** lists each video not imported yet with its **length**, when it was **recorded** (from OBS's file name), its **sound** tracks and its **game**, worked out from the file name or from what the Stream Companion saw while you recorded (*"Worked out on import"* when neither says). The list keeps itself up to date.
+- **Tick several at once:** click a row to tick it, or **All** at the top of the list; the button then says **Import 3**. Each becomes its own job, and they run **one after another**, never side by side, each after the usual check that the PC can do it (5.1).
+- A file OBS is still writing says **Recording** and can't be ticked; one already queued says **In Jobs**.
+- **Or a file anywhere on this PC:** type its location or click **Browse…**.
+- **Sound tracks, Twitch link…** (next to **Import**) opens the game, sound tracks and Twitch link. They're for **one recording at a time**: with several ticked they're greyed out, and each one's game and tracks are worked out by themselves.
+
 ### 10.1a Importing from the command line
 
 > **[Engineer: the command-line version of 10.1. The app window is now the main way to import; this stays for testing.]**
@@ -577,7 +586,7 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 1. Open a terminal in the AI-Editor folder and turn on its Python environment:
 
    ```powershell
-   cd C:\Users\trent\Desktop\Projects\AI-Editor
+   cd "C:\path\to\AI-Editor"      # wherever your AI-Editor folder is
    .\.venv\Scripts\Activate.ps1
    ```
 
@@ -617,6 +626,8 @@ A **session** runs from the moment OBS starts recording or streaming until both 
 6. Click **Download and import**. The video goes into your Raw footage folder. Progress shows under **Jobs**.
 
 The VOD must be public. For a private one, download it from your Twitch dashboard, then import the file (10.1) with its link under **More options**.
+
+**In the window (from 0.40.0):** click **From Twitch** at the top right of Import. **Check** shows the title, length, when it was streamed, and when Twitch deletes it (in amber when that's within 3 days), with the channel and game underneath. For a private VOD's file, its link goes under **Sound tracks, Twitch link…** on the **From this PC** side.
 
 **Important:** Twitch deletes VODs after a limited time depending on your account type. AI-Editor shows a warning for VODs close to expiring. Download VODs soon after streaming.
 
@@ -684,6 +695,13 @@ Use the search box above the table to filter it. Click a row, or pick it under *
 - **Analyse (or resume):** analyses it, or carries on where it stopped. It finishes an unfinished import first.
 - **Watch the preview copy:** opens the small preview copy in your video player. After analysis, VLC shows its subtitles by itself.
 - **Show the file in Explorer:** opens the folder with the original recording selected.
+
+**In the window (from 0.40.0), the Library is in the new design.** The top says how many recordings you have and the space left on that drive (*"32 recordings · 412 GB free on F:"*), with **Import** and **Analyse #N** (for the recording picked) beside it.
+
+- **All · Streams · Let's Plays** filters the list (Let's Plays are the games in Settings → Let's Play games); **Search recordings** finds a name or game.
+- The list shows **Recording · Game · Length · Recorded · Clips · Status**. The status has a coloured dot: green **Analysed**, violet **Analysing** (with how far along it is, once it has really started), amber **Paused** or **Waiting in Jobs**, red **Stopped**, and an empty dot for **Not analysed** or **Video deleted**.
+- **Click a recording** and its details open underneath: sound tracks, the Stream Companion's marks, Twitch chat, the preview copy, length, video size, where it came from and when it was imported, then the file's location (and, for a deleted video, what's kept). **League events** and **Who's talking** are folded away at the bottom; click to open them. **Watch the preview copy** and **Show in Explorer** are there too.
+- It remembers the recording you picked while you look at other screens.
 
 ## 11. Analysis
 

@@ -109,8 +109,9 @@ def history(conn: sqlite3.Connection) -> dict[str, list[dict]]:
 
 def _rate(runs: list[dict], label: str) -> float | None:
     """Seconds per second of recording or video for this step; None if never run."""
+    # A step skipped (done before, SKIPPED) still counts as part of the job, not as a time.
     found = [seconds / run["size"] for run in runs if run["size"] and run["size"] >= MIN_SIZE_SEC
-             for step, seconds in run["steps"] if step == label]
+             for step, seconds in run["steps"] if step == label and seconds >= 0]
     return statistics.median(found) if found else None
 
 
@@ -156,7 +157,7 @@ def left(task: Task, past: dict[str, list[dict]], size: float | None) -> float |
 
 def _render_left(task: Task, runs: list[dict], size: float) -> float | None:
     """A render's steps are its parts: the whole render's pace, per second of video."""
-    rates = [sum(s for _, s in run["steps"]) / run["size"] for run in runs
+    rates = [sum(s for _, s in run["steps"] if s >= 0) / run["size"] for run in runs
              if run["size"] and run["size"] >= MIN_SIZE_SEC]
     if not rates or not task.steps:
         return None

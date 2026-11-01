@@ -1,9 +1,9 @@
 /* The frame (Phase 4B): the sidebar, the header, the Jobs panel, the
    Companion and the morning note, kept up to date from AI-Editor's small JSON
-   answers (frame_api.py). Until a screen is rebuilt (4C-4H), the body shows
-   today's screen for it, from /classic. Text from AI-Editor is always put in
-   as text, never as markup, except the morning note, which the server makes
-   safe first. */
+   answers (frame_api.py). A rebuilt screen (4C on: library.js...) is drawn
+   here; until a screen is rebuilt, the body shows today's screen for it, from
+   /classic. Text from AI-Editor is always put in as text, never as markup,
+   except the morning note, which the server makes safe first. */
 "use strict";
 
 const SCREENS = [
@@ -44,10 +44,16 @@ function toast(text) {
   toast.timer = setTimeout(() => box.classList.remove("on"), 4500);
 }
 
-async function post(path) {
-  const reply = await fetch(path, { method: "POST", headers: GUARD });
+async function post(path, body) {
+  const headers = body === undefined ? GUARD : { ...GUARD, "Content-Type": "application/json" };
+  const reply = await fetch(path, { method: "POST", headers,
+                                    body: body === undefined ? undefined : JSON.stringify(body) });
   return reply.ok ? reply.json() : {};
 }
+
+/* The rebuilt screens add themselves here: { open(body, actions), close() }. */
+const NATIVE = {};
+window.aie = { el, toast, post, show: (id) => show(id), NATIVE };
 
 /* --- light or dark: auto (as Windows is set, live), or the one you chose ---------- */
 
@@ -92,12 +98,23 @@ function buildNav() {
 }
 
 function show(id) {
+  if (current !== id && NATIVE[current] && NATIVE[current].close) NATIVE[current].close();
   current = id;
   document.querySelectorAll(".nav a").forEach((a) =>
     a.classList.toggle("on", a.dataset.screen === id));
   $("title").textContent = NAMES[id];
   $("subtitle").textContent = about.lines[id] || "";
+  $("actions").replaceChildren();
   const frame = $("screen");
+  const native = NATIVE[id];
+  $("native").hidden = !native;
+  $("body").hidden = !!native;
+  if (native) {
+    native.open($("native"), $("actions"));
+    // Today's screens load meanwhile, so the others open quickly.
+    if (!frame.src) frame.src = `/classic/?embed=1&__theme=${looks()}&view=Clips`;
+    return;
+  }
   if (!frame.src) {
     frame.src = `/classic/?embed=1&__theme=${looks()}&view=${encodeURIComponent(NAMES[id])}`;
     return;
@@ -226,11 +243,13 @@ async function jobs() {
   }
 }
 
-/* --- start ------------------------------------------------------------------------ */
+/* --- start: once the rebuilt screens' own scripts have added themselves ------------- */
 
-buildNav();
-show(current);
-refresh();
-jobs();
-setInterval(jobs, 1000);
-setInterval(refresh, 5000);
+document.addEventListener("DOMContentLoaded", () => {
+  buildNav();
+  show(current);
+  refresh();
+  jobs();
+  setInterval(jobs, 1000);
+  setInterval(refresh, 5000);
+});

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from ai_editor.app import estimate
-from ai_editor.app.worker import DONE, PAUSED, RUNNING, Task, Worker
+from ai_editor.app.worker import DONE, PAUSED, RUNNING, Reporter, Task, Worker
 from ai_editor.db import init_db
 
 
@@ -115,6 +115,49 @@ def test_steps_only_some_recordings_have_are_not_expected(conn):
     assert left == pytest.approx(40, abs=1)           # transcribing only: 1 min per 3 h
 
 
+def test_steps_done_before_are_not_still_to_come(conn):
+    """4C-1, the creator's test: analysing #33 again only ran AI rating (under a minute),
+    but the guess counted every step of a whole analysis: "Analysing · 0%"."""
+    full = Task(1, "Analysing #1", "analyse:1", lambda r: None, status=DONE,
+                timings=[("Transcribing speech", 60.0), ("Finding scene changes (menus, loading)",
+                                                          360.0), ("AI rating the clips", 30.0)])
+    estimate.keep(conn, full, 3 * 3600)
+    worker = Worker()
+    task = Task(2, "Analysing #2", "analyse:2", lambda r: None, status=RUNNING)
+    report = Reporter(worker, task)
+    report.skipped("Transcribing speech")
+    report.skipped("Finding scene changes (menus, loading)")
+    report.skipped("Transcribing speech")                      # said twice: once
+    report.progress("AI rating the clips", 0.5)
+    assert task.steps == {"Transcribing speech": 1.0,
+                          "Finding scene changes (menus, loading)": 1.0, "AI rating the clips": 0.5}
+    # Only AI rating is left: half of its 20 s on a 2-hour stream.
+    assert estimate.left(task, estimate.history(conn), 2 * 3600) == pytest.approx(10)
+    # Kept as skipped, not as times: the next guess still expects them, at their real pace.
+    report.progress("AI rating the clips", 1.0)
+    task.status = DONE
+    estimate.keep(conn, task, 2 * 3600)
+    fresh = Task(3, "Analysing #3", "analyse:3", lambda r: None, status=RUNNING,
+                 steps={"Transcribing speech": 0.0})
+    # 60 s + 360 s still expected, plus AI rating (whose second run here took ~0 s).
+    assert 420 <= estimate.left(fresh, estimate.history(conn), 3 * 3600) <= 451
+
+
+def test_the_runner_says_which_steps_it_skipped(conn):
+    from ai_editor.jobs import JobQueue
+
+    queue = JobQueue(conn)
+    job = queue.enqueue("analyze", {"recording_id": 1}, recording_id=1)
+    ran, skipped = [], []
+    steps = [("a", "key-a", lambda: ran.append("a") or ""),
+             ("b", "key-b", lambda: ran.append("b") or "")]
+    queue.run(job, steps, on_skip=skipped.append)
+    assert ran == ["a", "b"] and skipped == []
+    job = queue.enqueue("analyze", {"recording_id": 1}, recording_id=1)
+    queue.run(job, steps, on_skip=skipped.append)              # both done before
+    assert ran == ["a", "b"] and skipped == ["a", "b"]
+
+
 def test_finished_jobs_are_kept_and_learned_from(conn):
     done = Task(3, "Rendering", "render:p", lambda r: None, status=DONE,
                 timings=[("Rendering", 300.0)], result={"size_sec": 600.0})
@@ -169,7 +212,9 @@ def test_the_sidebar_numbers_and_lines(client, settings):
     conn.close()
     about = client.get("/api/frame").json()
     assert about["tallies"] == {"library": 1, "clips": 1, "review": 0, "issues": 1}
-    assert about["lines"]["library"] == "1 recording" and about["lines"]["issues"] == "1 open"
+    # 4C-1: the designer's line, how many and the room left where they are.
+    assert about["lines"]["library"].startswith("1 recording · ")
+    assert " GB free on " in about["lines"]["library"] and about["lines"]["issues"] == "1 open"
     assert about["companion"]["running"] is False and about["note"] is None
 
 

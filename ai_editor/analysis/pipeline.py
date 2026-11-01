@@ -285,8 +285,12 @@ def analyze_recording(
     *,
     on_progress: ProgressCallback | None = None,
     on_started: Callable[[sqlite3.Row, TrackChoice], None] | None = None,
+    on_skipped: Callable[[str], None] | None = None,
 ) -> AnalysisResult:
-    """Run (or resume) the analysis of one imported recording."""
+    """Run (or resume) the analysis of one imported recording.
+
+    ``on_skipped`` hears each step already done before, so not run again.
+    """
     row = resolve_recording(conn, target)
     recording_id = row["id"]
     tracks = choose_tracks(conn, recording_id)
@@ -437,7 +441,7 @@ def analyze_recording(
         ),
     ]
     try:
-        queue.run(job_id, steps)
+        queue.run(job_id, steps, on_skip=on_skipped)
     except KeyboardInterrupt:
         conn.execute("UPDATE recordings SET analysis_status = 'paused' WHERE id = ?", (recording_id,))
         conn.commit()

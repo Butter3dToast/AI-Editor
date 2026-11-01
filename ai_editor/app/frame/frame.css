@@ -15,6 +15,57 @@ html, body { margin: 0; height: 100%; background: #111113; }
 /* Today's screen, until it's rebuilt: it fills the body and scrolls itself. */
 .body.classic { padding: 0; gap: 0; overflow: hidden; }
 .body.classic iframe { flex: 1; width: 100%; border: 0; background: var(--bg); }
+.body[hidden] { display: none; }
+
+/* Library (4C-1): the designer's list and details, plus what the mockup doesn't
+   show (search, league events, Who's talking) in the same hand. */
+.lib-tools { align-items: center; }
+.lib-tools .spacer { margin-left: auto; }
+.lib-search { max-width: 260px; }
+#lib-list tbody tr { cursor: pointer; }
+#lib-list td:first-child b { white-space: nowrap; }
+.facts { margin: 0; row-gap: 24px; }
+.facts dd { overflow-wrap: anywhere; }
+.lib-file { margin: 24px 0 0; overflow-wrap: anywhere; }
+.lib-gone { margin: 20px 0 0; color: var(--warn); line-height: 1.6; }
+.lib-buttons { margin-top: 28px; }
+.lib-more { margin-top: 24px; border-top: 1px solid var(--line); }
+.lib-more > summary { padding: 14px 0 0; color: var(--mid); font-size: 13px; cursor: pointer; }
+.lib-more[open] > summary { padding-bottom: 8px; }
+.lib-events { margin: 4px 0 0; padding: 0; list-style: none; max-height: 260px; overflow: auto;
+  font-size: 12.5px; color: var(--mid); line-height: 1.9; }
+.lib-events span { display: inline-block; min-width: 64px; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.lib-voice-list { display: flex; flex-direction: column; gap: 14px; }
+.lib-voice-list .note { margin: 0; line-height: 1.6; }
+.lib-voice { display: flex; flex-direction: column; gap: 10px; padding: 14px 0;
+  border-bottom: 1px solid var(--line); }
+.lib-voice-said { font-size: 13.5px; color: var(--ink); }
+.lib-voice audio { height: 34px; max-width: 360px; }
+.lib-voice .input { max-width: 260px; }
+
+/* Import (4C-2): the designer's raw-folder list with a tick box each, the file
+   field, More options and the Twitch half. */
+button.check { padding: 0; border: 0; background: transparent; font: inherit; font-size: 13.5px;
+  cursor: pointer; }
+#imp-list tbody tr { cursor: pointer; }
+#imp-list tbody tr.imp-busy { cursor: default; }
+#imp-list tbody tr.imp-busy td { color: var(--dim); }
+#imp-list .imp-tick { width: 64px; padding-right: 0; }
+.imp-all { padding: 0; border: 0; background: transparent; color: var(--dim); font: inherit;
+  font-size: 11px; letter-spacing: .6px; text-transform: uppercase; font-weight: 600; cursor: pointer; }
+.imp-all:hover { color: var(--ink); }
+.imp-go { margin-top: 20px; align-items: center; }
+.imp-go .spacer { margin-left: auto; }
+.imp-more { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 20px; }
+.imp-more[hidden] { display: none; }
+.imp-more .note { margin: 0; }
+.imp-file + .imp-file, #imp-vod + .imp-file { margin-top: 24px; }
+.imp-facts { margin-top: 24px; }
+.imp-who { margin: 14px 0 0; }
+.imp-problem { margin: 20px 0 0; color: var(--warn); line-height: 1.6; }
+.input:disabled { opacity: .5; }
 
 /* Overnight work's note, along the top of the screen until OK. */
 .morning { display: flex; gap: 16px; align-items: center; padding: 14px 36px;
