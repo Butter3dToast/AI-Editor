@@ -70,7 +70,7 @@ function line(text) {
 }
 const lineOf = (id) => (ownLines[id] !== undefined ? ownLines[id] : about.lines[id] || "");
 window.aie = { el, toast, post, show: (id, extra) => show(id, extra), current: () => current,
-               line, NATIVE };
+               classic: (name) => classic(name), line, NATIVE };
 
 /* --- light or dark: auto (as Windows is set, live), or the one you chose ---------- */
 
@@ -133,15 +133,29 @@ function show(id, extra) {
     if (!frame.src) frame.src = `/classic/?embed=1&__theme=${looks()}&view=Clips`;
     return;
   }
+  classic(NAMES[id], id);
+}
+
+/* Today's screen ``name`` in the body. A rebuilt screen not finished yet opens its
+   old one this way (4F-1: "Today's Review"), with a button back to the new one. */
+function classic(name, id = current) {
+  if (NATIVE[id]) {
+    if (NATIVE[id].close) NATIVE[id].close();
+    $("actions").replaceChildren(el("button", { class: "btn quiet", type: "button",
+      onclick: () => show(id) }, `Back to the new ${name}`));
+  }
+  $("native").hidden = true;
+  $("body").hidden = false;
+  const frame = $("screen");
   if (!frame.src) {
-    frame.src = `/classic/?embed=1&__theme=${looks()}&view=${encodeURIComponent(NAMES[id])}`;
+    frame.src = `/classic/?embed=1&__theme=${looks()}&view=${encodeURIComponent(name)}`;
     return;
   }
   // Today's screens may still be drawing: try again for a few seconds.
   let tries = 0;
   const pick = () => {
     const there = frame.contentWindow && frame.contentWindow.aieShow;
-    if ((there && frame.contentWindow.aieShow(NAMES[id])) || ++tries > 40 || current !== id) return;
+    if ((there && frame.contentWindow.aieShow(name)) || ++tries > 40 || current !== id) return;
     setTimeout(pick, 150);
   };
   pick();

@@ -72,6 +72,9 @@ a hard rule, not a preference.
 | **4C** | Library and Import rebuilt in the new design: filter, search and details panel; tick several new recordings and import them one after another; Twitch check | **Complete** |
 | **4D** | Clips rebuilt in the new design: player and details pinned at the top, rate and move on to the next clip, keyboard rating | **Complete** |
 | **4E** | Create video rebuilt in the new design: tick the streams to use, click a recording for Let's Play and Shorts, the plan opens in Review when it's ready | **Complete** |
+| **4F-1** | Review rebuilt in the new design for changing the cut: player pinned at the top, trim to here (saved only when you say), drag to reorder, Undo, quick preview; today's Review on the same plan for the rest | **Complete** |
+| 4F-2 | Review: captions, effects and music, Render, Open, Export | |
+| 4F-3 | Review: a Let's Play's parts and Part Planner, titles and thumbnails | |
 
 ---
 

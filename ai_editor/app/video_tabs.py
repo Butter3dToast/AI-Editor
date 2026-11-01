@@ -1688,7 +1688,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
 
     def tick(seen_version, done, recording, plan_id, show, part, deleted=False):
         version = worker.version
-        if version == seen_version:
+        wanted = videos.WANTED.take()   # 4F-1: the new window's "Today's Review" button
+        if version == seen_version and wanted is None:
             return (gr.skip(),) * 19 + (done, seen_version)
         done = dict(done)
         new_plan = preview_file = None
@@ -1710,8 +1711,8 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         clip_recs = read(videos.analysed_choices, settings, deleted=bool(deleted))
         plans = read(videos.plan_choices)
         ids = [p[1] for p in plans]
-        chosen = new_plan if new_plan in ids else plan_id if plan_id in ids else \
-            (ids[0] if ids else None)
+        chosen = wanted if wanted in ids else new_plan if new_plan in ids else \
+            plan_id if plan_id in ids else (ids[0] if ids else None)
         plan, status = read(videos.get_plan, chosen)
         # The AI's verdicts just arrived for the recording on show: fill them in.
         clip_view = clips_view(recording, show) if rated else (gr.skip(),) * 3

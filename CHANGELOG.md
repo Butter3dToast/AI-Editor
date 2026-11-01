@@ -3,6 +3,38 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.43.0 — Phase 4F-1: Review in the new design (changing the cut) — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **Review, rebuilt in the designer's layout** for changing the cut:
+  - **The player and the clip's details stay at the top** while the length
+    bar and the list scroll under them, as in Clips.
+  - **◀ 1 s · 1 s ▶ · Trim start to here · Trim end to here** under the
+    player. A trim waits as "not saved yet" with Play the new cut, Put it
+    back and Save the new cut; saving is today's Adjust the cut.
+  - **More…** beside the details: Use as teaser, Move to #, Watch 30 s either
+    side, typed start and end times.
+  - **The length bar** against your target; click a block to go to its clip.
+  - **Tabs under it:** Clips (drag to reorder, Sort by time, a teaser from an
+    exact moment, Add a clip), then Captions, Effects & music and Publish,
+    which come in 4F-2 and 4F-3.
+  - **Undo, Redo, Quick preview** at the top. The quick preview plays in the
+    player when it's ready.
+  - **Today's Review** opens the old screen inside the window on the same
+    plan, for rendering, captions, effects, titles and the Part Planner until
+    they're rebuilt; **Back to the new Review** returns.
+  - Deleting a plan, or several, asks once more, as before.
+- **Create video opens its new plan straight in the new Review.**
+- Every change is the same as in today's Review, with the same Undo, so what
+  AI-Editor learns from it is the same.
+
+**Fixed while building**
+
+- The trim buttons wait until the video has loaded: on a stream with no
+  playable video the player sat at 0:00, and a trim from there made a
+  10-minute clip.
+
 ## 0.42.0 — Phase 4E: Create video in the new design — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)

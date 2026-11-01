@@ -1424,6 +1424,19 @@ Where the crop sits left to right is set per game in `settings.yaml` (`shorts.cr
 
 Every video goes through Review before rendering. Nothing is final until you render it.
 
+**In the window (from 0.43.0), Review is in the new design for changing the cut.** Rendering, captions, effects, titles and a Let's Play's Part Planner follow in the next two updates; until then **Today's Review** (top right) opens the old screen inside the window, on the same plan, with **Back to the new Review** to return.
+
+- **At the top:** the plan's name, *Draft · 22 clips · 10:48*, **↶ Undo** and **↷ Redo** (point at them to see what they'd undo or redo), **Quick preview** (it plays in the player when it's ready, wherever you are; elsewhere a note offers to watch it) and **Today's Review**. Under them, the plan to show, **Delete this plan** and **Delete several plans**: both ask once more, and only ever happen when you press them.
+- **The player and the clip's details stay at the top** while the rest scrolls, as in Clips. Click a clip in the list, or its block in the length bar: it plays from its start and stops at its end. Beside it: From, Starts, Ends, Length, where it is in the video, why it's in, captions and effects, with **Remove** and **More…**.
+- **Under the player:** **◀ 1 s** and **1 s ▶** move the picture a second; **Trim start to here** and **Trim end to here** set the clip's start or end where the picture is (anywhere in the recording, so you can win back what was cut off: scrub back past the start first). **Watch the whole video** plays your quick preview.
+- **A trim isn't saved until you say so.** It shows as *New cut: 0:10:02 – 0:10:31 · not saved yet*, with **Play the new cut**, **Put it back** and **Save the new cut**. Saving is the same as Adjust the cut (18.3): each edge lands between two words, the clip in your library takes the new cut too, and Undo takes it back. The trim buttons wait until the video has loaded.
+- **More…:** **Use as teaser**, **Move to #**, **Watch 30 s either side**, and the start and end typed (*1:04:18*) with **Use these times**.
+- **The length bar** shows the teaser, clips and slow-motion replays against your target (green line).
+- **Tabs under it:** **Clips**: drag a clip by its row to move it (the teaser always opens the video), **Sort by time**, **The teaser from an exact moment**, and **Add a clip that isn't in the video** (pick one to watch it first). **Captions**, **Effects & music** and **Publish** come in the next updates. A Let's Play shows **Parts** here: click one to watch how it starts.
+- **Create video** opens its new plan straight here.
+
+The rest of this chapter describes the browser version, which works as before; every change made in the window is the same change, with the same Undo.
+
 ### 18.1 Layout
 
 - **Video plan:** every plan you've made, newest first, with the stream it's from ("League of Legends highlights · 8 Oct stream · Highlights, 15.8 min, draft"). It opens on the newest one. Making a plan again from the **same** stream(s) replaces its old draft (never a rendered one); a plan from another stream is kept.

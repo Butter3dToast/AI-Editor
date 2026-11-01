@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import json
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -286,6 +287,27 @@ def rate(conn, clip_id: str, rating: int | None, settings: Settings | None = Non
 
 
 # --- Plans ------------------------------------------------------------------------
+
+
+class Wanted:
+    """The plan the new window's "Today's Review" button asks today's Review to show
+    (4F-1): today's Review takes it on its next tick. Only the window ever asks."""
+
+    def __init__(self) -> None:
+        self._plan: str | None = None
+        self._lock = threading.Lock()
+
+    def ask(self, plan_id: str | None) -> None:
+        with self._lock:
+            self._plan = plan_id
+
+    def take(self) -> str | None:
+        with self._lock:
+            plan, self._plan = self._plan, None
+            return plan
+
+
+WANTED = Wanted()
 
 
 # --- Quick previews, kept: one per plan, per Let's Play part, per Short layout ---------

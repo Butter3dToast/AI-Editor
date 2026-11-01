@@ -349,19 +349,19 @@
       }
       if (found.state === "waiting") continue;
       waiting.delete(job);
-      if (found.state === "ready") ready();
+      if (found.state === "ready") ready(found.plan);
       else if (found.state === "failed") toast(found.error);
     }
     if (!waiting.size) { clearInterval(watcher); watcher = null; }
   }
 
-  function ready() {
+  function ready(plan) {
     if (window.aie.current() === "create") {
       toast("Your plan is ready. Here it is in Review.");
-      window.aie.show("review");
+      window.aie.show("review", { plan });
     } else {
       toast("Your plan is ready.", { label: "Open in Review",
-                                     onclick: () => window.aie.show("review") });
+                                     onclick: () => window.aie.show("review", { plan }) });
     }
     const note = body && $("#cv-said");
     if (note) note.textContent = "Under a minute. It opens in Review.";

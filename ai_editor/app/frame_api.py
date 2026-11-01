@@ -293,12 +293,13 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
             conn.close()
         return {}
 
-    from . import clips_screen, create_screen, import_screen, library_screen
+    from . import clips_screen, create_screen, import_screen, library_screen, review_screen
 
     library_screen.add_routes(app, frame, guarded)   # 4C-1: the Library, rebuilt
     import_screen.add_routes(app, frame, guarded)    # 4C-2: Import, rebuilt
     clips_screen.add_routes(app, frame, guarded)     # 4D: Clips, rebuilt
     create_screen.add_routes(app, frame, guarded)    # 4E: Create video, rebuilt
+    review_screen.add_routes(app, frame, guarded)    # 4F-1: Review, rebuilt (editing the cut)
     app.mount("/frame", StaticFiles(directory=FRAME), name="frame")
     return gr.mount_gradio_app(app, ui, path=CLASSIC, **mount_kwargs)
 
