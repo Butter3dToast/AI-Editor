@@ -39,6 +39,38 @@ def episode_of(conn, plan: EditPlan) -> int | None:
                           *(Path(r["source_file"]).stem for r in rows))
 
 
+def _known_episode(conn, plan: EditPlan) -> int | None:
+    """The episode a plan was given or named with, or the one its upload text says."""
+    if (plan.source or {}).get("episode"):
+        return int(plan.source["episode"])
+    named = episode_of(conn, plan) if plan.segments else None
+    if named:
+        return named
+    titles = [t for made in (plan.publish or {}).values()
+              for t in [*(made.get("titles") or []), (made.get("edited") or {}).get("title")]]
+    return episode_number(*titles)
+
+
+def episode_for(conn, plan: EditPlan) -> tuple[int | None, int | None]:
+    """The episode to show for a Let's Play: the one given to this plan (kept with it,
+    4F-3a), else the one in its name. With neither, a guess: the next after the last
+    episode of the game's earlier Let's Plays (1 Nov: #35 was named by date, and its
+    upload text went out as EP 1 while its videos were EP 6). Returns (episode, the
+    episode it follows when guessed, else None)."""
+    if (plan.source or {}).get("episode"):
+        return int(plan.source["episode"]), None
+    named = episode_of(conn, plan) if plan.segments else None
+    if named:
+        return named, None
+    rows = conn.execute(
+        "SELECT plan_json FROM edit_plans WHERE recipe = 'letsplay' AND plan_id != ? AND "
+        "created_at < COALESCE((SELECT created_at FROM edit_plans WHERE plan_id = ?), '9')",
+        (plan.plan_id, plan.plan_id)).fetchall()
+    earlier = [EditPlan.from_json(r["plan_json"]) for r in rows]
+    found = [n for n in (_known_episode(conn, p) for p in earlier if p.game == plan.game) if n]
+    return (max(found) + 1, max(found)) if found else (None, None)
+
+
 def part_numbers(plan: EditPlan) -> list[int]:
     return sorted({s.part for s in plan.segments if s.part is not None})
 

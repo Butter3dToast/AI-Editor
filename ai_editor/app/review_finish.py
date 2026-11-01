@@ -297,7 +297,7 @@ def remember_fix(settings: Settings, heard: str, meant: str) -> str:
 def render_check(conn, settings: Settings, plan_id: str) -> dict | None:
     """The panel before rendering: what the video will have, and what's already made."""
     from ..effects import LABELS, switches
-    from ..render.parts import episode_of, part_numbers
+    from ..render.parts import episode_for, part_numbers
     from ..render.final import vertical_of
     from ..render.slide import between
 
@@ -324,10 +324,30 @@ def render_check(conn, settings: Settings, plan_id: str) -> dict | None:
     else:
         rows.append(["Length", f"{videos.short_clock(line.total)} (target "
                                f"{videos.short_clock(plan.target_sec)})"])
+    episode, after = episode_for(conn, plan) if lets_play else (None, None)
     return {"title": plan.title, "rows": rows, "lets_play": lets_play,
-            "episode": episode_of(conn, plan) if lets_play else None,
+            "episode": episode, "episode_after": after,
             "parts": part_numbers(plan) if lets_play else [],
             "shorts": plan.recipe == "shorts", "rendered": status == "approved"}
+
+
+def remember_episode(settings: Settings, plan_id: str, episode) -> None:
+    """A Let's Play keeps the episode typed for it, so Render and Publish always show
+    the same one (1 Nov: the videos went out as EP 6, their upload text as EP 1)."""
+    try:
+        episode = int(episode) if episode not in (None, "") else None
+    except (TypeError, ValueError):
+        return
+    if not episode or episode < 1:
+        return
+    conn = init_db(settings.db_path)
+    try:
+        plan, status = videos.get_plan(conn, plan_id)
+        if plan is not None and plan.recipe == "letsplay"                 and (plan.source or {}).get("episode") != episode:
+            plan.source = {**(plan.source or {}), "episode": episode}
+            save_plan(conn, plan, status)
+    finally:
+        conn.close()
 
 
 def _parts(part) -> list[int] | None:
@@ -352,14 +372,16 @@ def render(settings: Settings, worker: Worker, plan_id: str, episode=None, part=
         return {"said": "The episode is a number, like 6."}
     if plan.recipe == "letsplay" and not episode:
         return {"said": "Fill in the episode number first."}
+    remember_episode(settings, plan_id, episode)
     task = worker.submit(f"Rendering {plan.title}", f"render:{plan_id}",
                          tasks.render(settings, plan_id, captions=captions_on(settings, plan),
                                       episode=episode, parts=_parts(part)))
     if task is None:
         return {"said": "That video is already rendering, in Jobs."}
     ahead = sum(t.status in (WAITING, RUNNING) for t in worker.snapshot()) - 1
-    return {"said": "Rendering: about 3 minutes per 10 minutes of video, in Jobs. It marks the "
-                    "clips as used, so the next highlight video carries on with fresh ones."
+    return {"said": "Rendering: about 3 minutes per 10 minutes of video, in Jobs."
+                    + ("" if plan.recipe == "letsplay" else " It marks the clips as used, so "
+                       "the next video carries on with fresh ones.")
                     + (f" It starts after the {ahead} job{'s' if ahead != 1 else ''} ahead "
                        "of it." if ahead > 0 else ""), "job": task.id}
 
@@ -409,6 +431,7 @@ def export(settings: Settings, plan_id: str, episode=None, part=None) -> str:
                     "to Resolve, so there's nothing to export (manual 19.2b). Render it instead.")
         if plan.recipe == "letsplay" and not episode:
             return "Fill in the episode number first."
+        remember_episode(settings, plan_id, episode)
         result = export_plan(conn, settings, plan, episode=int(episode) if episode else None,
                              parts=_parts(part), note=clip_note)
     except AIEditorError as exc:
@@ -484,6 +507,12 @@ def add_routes(app, frame, guarded) -> None:
     @app.get("/api/review/{plan_id}/render")
     def check(plan_id: str):
         return JSONResponse(read(render_check, settings, plan_id) or {}, headers=no_cache)
+
+    @app.post("/api/review/{plan_id}/episode")
+    def episode_typed(plan_id: str, request: Request, episode=Body(None, embed=True)):
+        guarded(request)
+        remember_episode(settings, plan_id, episode)
+        return {}
 
     @app.post("/api/review/{plan_id}/render")
     def start(plan_id: str, request: Request, episode=Body(None), part=Body(None)):

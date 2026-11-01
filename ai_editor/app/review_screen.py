@@ -109,8 +109,8 @@ def _games(conn) -> dict[int, str]:
 def rows(conn, plan: EditPlan, settings: Settings) -> list[dict]:
     """The list: # · From · At · Length · Why it's in (review_list.clip_rows' facts)."""
     if plan.recipe == "letsplay":
-        return [{"n": i, "label": f"Part {r[0]}", "length": r[1], "at": r[2], "why": r[3],
-                 "from": "", "day": "", "teaser": False}
+        return [{"n": i, "label": f"Part {r[0]}", "part": r[0], "length": r[1], "at": r[2],
+                 "why": r[3], "from": "", "day": "", "teaser": False}
                 for i, r in enumerate(videos.part_table(plan))]
     days, games = videos.recorded_days(conn), _games(conn)
     own = styled(settings, plan)   # its rules may switch the fight check off (2H-1)

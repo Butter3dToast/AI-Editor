@@ -309,7 +309,7 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
         return {}
 
     from . import (clips_screen, create_screen, import_screen, library_screen, review_finish,
-                   review_screen)
+                   review_publish, review_screen)
 
     library_screen.add_routes(app, frame, guarded)   # 4C-1: the Library, rebuilt
     import_screen.add_routes(app, frame, guarded)    # 4C-2: Import, rebuilt
@@ -317,6 +317,7 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
     create_screen.add_routes(app, frame, guarded)    # 4E: Create video, rebuilt
     review_screen.add_routes(app, frame, guarded)    # 4F-1: Review, rebuilt (editing the cut)
     review_finish.add_routes(app, frame, guarded)    # 4F-2: and finishing it
+    review_publish.add_routes(app, frame, guarded)   # 4F-3a: and its Publish tab
     app.mount("/frame", StaticFiles(directory=FRAME), name="frame")
     return gr.mount_gradio_app(app, ui, path=CLASSIC, **mount_kwargs)
 

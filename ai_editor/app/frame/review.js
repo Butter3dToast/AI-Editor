@@ -6,18 +6,17 @@
    beside it with Remove and More…. Under it the length bar against the target,
    then tabs: the clips (drag to reorder, sort, a teaser from a moment, add a
    clip); Captions (burned in or not, fixing lines) and Effects & music (4F-2);
-   Publish comes in 4F-3, and until then "Today's Review" opens today's screen
-   on the same plan. Render opens a panel to check the video first, with Open
-   and Export. Every change is one Undo step, as in today's Review. Answers come
-   from review_screen.py and review_finish.py. */
+   Publish (4F-3a: the upload text, and a card per thumbnail frame with its
+   Gemini prompt). Until the Part Planner is rebuilt (4F-3b) "Today's Review"
+   opens today's screen on the same plan. Render opens a panel to check the
+   video first, with Open and Export. Every change is one Undo step, as in
+   today's Review. Answers come from review_screen.py, review_finish.py and
+   review_publish.py. */
 "use strict";
 
 (() => {
   const { el, toast, post, line, NATIVE } = window.aie;
   const EVERY_MS = 5000;
-  const LATER = {
-    publish: "Titles, description, chapters, your YouTube link and thumbnail prompts",
-  };
 
   let body = null;
   let actions = null;
@@ -306,7 +305,7 @@
     whole = false;
     lineKey = null;
     markRow();
-    if (tab === "captions") tabs();
+    if (tab === "captions" || tab === "publish") tabs();
     await details(true);
   }
 
@@ -482,17 +481,12 @@
     }, label)));
     const into = $("#rv-tab");
     if (tab === "clips" || tab === "parts") { shownTab = ""; return list(into); }
-    if (tab === "captions" || tab === "effects") {
-      // Not again on every refresh: what's being typed in a caption line would go.
-      const key = JSON.stringify([tab, planId, tab === "captions" ? selected : null]);
-      if (key !== shownTab) { shownTab = key; (tab === "captions" ? captionsTab : effectsTab)(into); }
-      return;
-    }
-    shownTab = "";
-    into.replaceChildren(el("div", { class: "panel rv-later" },
-      el("p", {}, `${LATER[tab]} ${tab === "publish" ? "come" : "comes"} here in the next part `
-        + "of the rebuild. For now they're in today's Review, which opens on this plan."),
-      el("button", { class: "btn", type: "button", onclick: today }, "Open today's Review")));
+    // Not again on every refresh: what's being typed in a caption line or a title would go.
+    const key = JSON.stringify([tab, planId, tab === "captions" ? selected
+      : tab === "publish" ? partShown() : null]);
+    if (key === shownTab) return;
+    shownTab = key;
+    ({ captions: captionsTab, effects: effectsTab, publish: publishTab })[tab](into);
   }
 
   function markRow() {
@@ -791,6 +785,226 @@
     fill(into, el("div", { class: "panel rv-finish" }, ...parts));
   }
 
+  /* --- Publish (4F-3a): the upload text, then a card per thumbnail frame -------------- */
+
+  // A Let's Play's Publish follows the part clicked (the creator, 1 Nov).
+  const partShown = () => (lets() && selected !== null && data.rows[selected]
+    ? data.rows[selected].part : null);
+
+  async function publishTab(into) {
+    const plan = planId;
+    const part = partShown();
+    let pub;
+    try {
+      pub = await (await fetch(`/api/review/${encodeURIComponent(plan)}/publish`
+        + (part ? `?part=${part}` : ""))).json();
+    } catch (e) {
+      return;
+    }
+    if (plan !== planId || !pub.kind) return;
+    const lp = pub.kind === "letsplay";
+    const [episode, guessed] = episodeBox(plan, pub);
+    const ask = async (what, which) => {
+      const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/write`,
+                              { what, episode: lp ? episode.value : null, part: which });
+      if (said.said) toast(said.said);
+      if (said.job !== undefined && said.job !== null) watchWriting(said.job, plan);
+    };
+    const button = (label, primary, onclick) => {
+      const b = el("button", { class: primary ? "btn primary" : "btn", type: "button", onclick },
+                   label);
+      b.disabled = !pub.ai;
+      return b;
+    };
+    const head = el("div", { class: "row tight rv-pub-head" },
+      lp ? el("div", { class: "seg", role: "group", "aria-label": "Part" },
+        ...pub.parts.map((n) => el("button", {
+          type: "button", class: n === pub.part ? "on" : "",
+          onclick: () => pick(data.rows.findIndex((r) => r.part === n)),
+        }, `Part ${n}`))) : null,
+      lp ? el("label", { class: "rv-pub-ep" }, "Episode", episode) : null,
+      el("div", { class: "spacer" }),
+      button(pub.written ? `Write ${lp ? `Part ${pub.part}` : "it"} again`
+        : `Write titles, description and chapters${lp ? ` for Part ${pub.part}` : ""}`,
+        true, () => ask("publish", pub.part)),
+      lp && pub.parts.length > 1
+        ? button(`Write all ${pub.parts.length} parts`, false, () => ask("publish", "all")) : null);
+    const notes = el("div", { class: "rv-pub-notes" },
+      el("p", { class: "note" }, pub.note),
+      lp ? guessed : null,
+      pub.stale ? el("p", { class: "note rv-warn" }, "The video has changed since, so the "
+        + "chapter times may be off: write it again.") : null,
+      pub.source ? el("p", { class: "note" }, pub.source) : null,
+      pub.ai ? null : el("p", { class: "note rv-warn" }, "The local AI is switched off in "
+        + "Settings (AI), so nothing can be written."));
+    if (!pub.written) return fill(into, el("div", { class: "panel rv-finish" }, head, notes));
+
+    const title = el("input", { class: "input", type: "text", "aria-label": "Title" });
+    title.value = pub.title;
+    const description = el("textarea", { class: "input rv-pub-desc", rows: "10",
+                                         "aria-label": "Description, with chapters" });
+    description.value = pub.description;
+    const tags = el("input", { class: "input", type: "text", "aria-label": "Tags" });
+    tags.value = pub.tags;
+    const ideas = el("div", { class: "rv-pub-ideas" }, ...pub.titles.map((t) => el("button", {
+      type: "button", class: `rv-pub-idea${t === pub.title ? " on" : ""}`,
+      onclick: (e) => {
+        title.value = t;
+        ideas.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
+      },
+    }, t)));
+    const field = (label, box, help) => el("div", { class: "rv-group" },
+      el("div", { class: "row tight rv-pub-label" }, el("h4", {}, label),
+        el("div", { class: "spacer" }),
+        el("button", { class: "btn quiet", type: "button",
+                       onclick: () => copyText(box.value, `${label} copied.`) }, "Copy")),
+      box, help ? el("p", { class: "note" }, help) : null);
+    const keep = async () => {
+      const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/keep`, {
+        part: pub.part, episode: lp ? episode.value : null, title: title.value,
+        description: description.value, tags: tags.value });
+      if (said.said) toast(said.said);
+    };
+    const parts = [head, notes,
+      pub.titles.length ? el("section", { class: "rv-group" }, el("h4", {}, "Title ideas"),
+        ideas, el("p", { class: "note" }, "Click one: it goes in the Title box.")) : null,
+      field("Title", title),
+      field("Description, with chapters", description,
+            "Paste it into YouTube as it is: the chapter times make YouTube's chapters."),
+      field("Tags", tags, "YouTube Studio: Show more > Tags."),
+      el("div", { class: "row tight" },
+        el("button", { class: "btn primary", type: "button", onclick: keep }, "Keep my changes"),
+        el("span", { class: "note" }, "Kept over what the AI wrote, and saved beside the "
+          + "finished video."))];
+    if (pub.link !== null) {
+      const link = el("input", { class: "input", type: "url", placeholder: "https://youtu.be/...",
+                                 "aria-label": "This video's YouTube link" });
+      link.value = pub.link;
+      parts.push(el("section", { class: "rv-group" },
+        el("h4", {}, `${lp ? `Part ${pub.part}'s` : "This video's"} YouTube link, once uploaded`),
+        el("div", { class: "row tight rv-pub-link" }, link,
+          el("button", { class: "btn", type: "button", onclick: async () => {
+            const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/link`,
+                                    { part: pub.part, link: link.value });
+            if (said.said) toast(said.said);
+          } }, "Save the link")),
+        el("p", { class: "note" }, "Shorts made from it then say \"Full video:\" with this link.")));
+    }
+    if (pub.kind !== "shorts") parts.push(thumbnails(pub, plan, ask));
+    fill(into, el("div", { class: "panel rv-finish" }, ...parts));
+  }
+
+  /* A Let's Play's episode: kept with the plan once typed, so Render and Publish always
+     show the same one; with no number in the name, the next after the game's last
+     episode, marked as a guess (1 Nov: videos EP 6, upload text EP 1). */
+  function episodeBox(plan, found) {
+    const box = el("input", { class: "input rv-episode", type: "number", min: "1",
+                              "aria-label": "Episode number" });
+    box.value = found.episode ? String(found.episode) : "";
+    const note = el("span", { class: "note rv-warn rv-guess" }, found.episode_after
+      ? `Guessed: the next after EP ${found.episode_after}. Check it.`
+      : found.episode ? "" : "Not in the recording's name: type it.");
+    note.hidden = !note.textContent;
+    box.addEventListener("change", async () => {
+      note.hidden = true;
+      await post(`/api/review/${encodeURIComponent(plan)}/episode`, { episode: box.value });
+    });
+    return [box, note];
+  }
+
+  /* Each frame with its prompt: what's pasted into the Gemini app together sits together. */
+  function thumbnails(pub, plan, ask) {
+    const prompted = pub.thumbnails.filter((t) => t.prompt);
+    const cards = pub.thumbnails.map((t, i) => el("figure", { class: "rv-thumb" },
+      el("img", { src: t.url, alt: `Thumbnail frame ${i + 1}`, loading: "lazy" }),
+      el("figcaption", {},
+        el("div", { class: "rv-thumb-why" }, el("b", {}, `${i + 1} · ${t.rating}/10`), ` ${t.reason}`),
+        t.prompt ? el("p", { class: "rv-thumb-prompt" }, t.prompt) : null,
+        el("div", { class: "row tight rv-thumb-buttons" },
+          el("button", { class: "btn", type: "button", onclick: () => copyPicture(t.url) },
+             "Copy the picture"),
+          t.prompt ? el("button", { class: "btn", type: "button",
+            onclick: () => copyText(t.prompt, "Prompt copied: paste it in Gemini with the picture.") },
+            "Copy the prompt") : null,
+          el("button", { class: "btn quiet", type: "button", onclick: async () => {
+            const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/frame`,
+                                    { n: t.n, part: pub.part });
+            if (said.said) toast(said.said);
+          } }, "Open the frame")))));
+    const again = el("button", { class: "btn quiet", type: "button",
+                                 onclick: () => ask("prompts", pub.part) },
+                     prompted.length ? "Write the prompts again" : "Write thumbnail prompts");
+    again.disabled = !pub.ai || !pub.thumbnails.length;
+    return el("section", { class: "rv-group" },
+      el("div", { class: "row tight rv-pub-label" }, el("h4", {}, "Thumbnails for the Gemini app"),
+        el("div", { class: "spacer" }), again),
+      el("p", { class: "note" }, pub.thumbnails.length
+        ? (prompted.length
+          ? "Copy the picture and paste it into the Gemini app (Ctrl+V), then copy its prompt "
+            + "and paste that too. Nothing is sent from here."
+          : "No prompts for these frames yet: Write thumbnail prompts asks the local AI (about "
+            + "half a minute).")
+        : "No thumbnail frames: write it again to pick them."),
+      cards.length ? el("div", { class: "rv-thumbs" }, ...cards) : null);
+  }
+
+  async function copyText(text, said) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(said);
+    } catch (e) {
+      toast("Couldn't copy: select the text and press Ctrl+C.");
+    }
+  }
+
+  async function copyPicture(url) {
+    try {
+      const picture = await (await fetch(url)).blob();
+      const png = picture.type === "image/png" ? picture
+        : await new Promise((done) => {    // the clipboard takes PNG only
+          const img = new Image();
+          img.onload = () => {
+            const c = Object.assign(document.createElement("canvas"),
+                                    { width: img.naturalWidth, height: img.naturalHeight });
+            c.getContext("2d").drawImage(img, 0, 0);
+            c.toBlob(done, "image/png");
+          };
+          img.src = URL.createObjectURL(picture);
+        });
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      toast("Picture copied: paste it in Gemini (Ctrl+V).");
+    } catch (e) {
+      toast("Couldn't copy the picture: use Open the frame and drag it in instead.");
+    }
+  }
+
+  /* When the writing's done, the tab shows it (wherever you are, a note says so). */
+  function watchWriting(job, plan) {
+    const check = setInterval(async () => {
+      let found;
+      try {
+        found = await (await fetch(`/api/review/publish-job/${job}`)).json();
+      } catch (e) {
+        return;
+      }
+      if (found.state === "waiting") return;
+      clearInterval(check);
+      if (found.state === "failed") return toast(found.error);
+      if (found.state !== "ready") return;
+      if (planId === plan && tab === "publish" && window.aie.current() === "review") {
+        shownTab = "";
+        tabs();
+        toast("Written. It's here in Publish.");
+      } else {
+        toast("The upload text is written.", { label: "Show it", onclick: () => {
+          tab = "publish";
+          shownTab = "";
+          window.aie.show("review", { plan });
+        } });
+      }
+    }, 2000);
+  }
+
   function seg(choices, value, change) {
     const box = el("div", { class: "seg", role: "group" }, ...choices.map(([id, label]) =>
       el("button", { type: "button", class: id === value ? "on" : "", "data-id": id,
@@ -812,9 +1026,7 @@
       return;
     }
     const plan = planId;
-    const episode = el("input", { class: "input rv-episode", type: "number", min: "1",
-                                  "aria-label": "Episode number" });
-    if (found.episode) episode.value = found.episode;
+    const [episode, guessed] = episodeBox(plan, found);
     const part = el("select", { class: "input", "aria-label": "Parts" },
       el("option", { value: "all" }, "All parts"),
       ...found.parts.map((n) => el("option", { value: String(n) }, `Part ${n}`)));
@@ -832,7 +1044,7 @@
       el("div", { class: "rv-check" }, ...found.rows.map(([k, v]) =>
         el("div", { class: "kv" }, el("span", {}, k), el("b", {}, v)))),
       found.lets_play ? el("div", { class: "row tight rv-lp" },
-        el("label", {}, "Episode", episode), el("label", {}, "Parts", part)) : null,
+        el("label", {}, "Episode", episode), el("label", {}, "Parts", part), guessed) : null,
       el("p", { class: "note" }, "About 3 minutes per 10 minutes of video, in Jobs. "
         + (found.lets_play
           ? "Each part is a video of its own, named with the episode and part number. "

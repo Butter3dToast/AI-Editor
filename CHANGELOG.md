@@ -3,6 +3,34 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.45.0 — Phase 4F-3a: Review in the new design (Publish) — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **Publish tab** in Review:
+  - **Write titles, description and chapters**, the same job as before, in
+    Jobs. When it's done the tab fills in by itself; elsewhere a note says so
+    with **Show it**.
+  - **Title ideas:** click one and it goes in the Title box.
+  - **Title, Description and Tags**, each with **Copy**, then **Keep my
+    changes** and the video's **YouTube link**.
+  - **Thumbnails for the Gemini app:** each frame on a card with its prompt
+    under it, and **Copy the picture**, **Copy the prompt** and **Open the
+    frame**. Copy the picture puts the frame on the clipboard, so it pastes
+    straight into Gemini (Ctrl+V) instead of being dragged in from Explorer.
+  - **A Let's Play** shows the part you click in Parts, with Part 1 · 2 · 3
+    buttons, the episode number, and **Write all N parts**.
+- **A Let's Play's episode number is kept with the plan** once typed, in the
+  Render panel or in Publish, so both always show the same one. A recording
+  named by its date (no number in it) gets a guess: the next after your last
+  episode of that game, marked "Guessed … Check it."
+- Buttons that can't be pressed now look it (faded).
+
+**Fixed while building**
+
+- The Let's Play render message said rendering marks the clips as used, so the
+  next highlight video carries on: that's for highlights and Shorts only.
+
 ## 0.44.0 — Phase 4F-2: Review in the new design (captions, effects, rendering) — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)

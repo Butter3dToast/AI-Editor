@@ -71,6 +71,7 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .imp-who { margin: 14px 0 0; }
 .imp-problem { margin: 20px 0 0; color: var(--warn); line-height: 1.6; }
 .input:disabled { opacity: .5; }
+.btn:disabled { opacity: .45; cursor: default; pointer-events: none; }
 
 /* Clips (4D): the designer's stage, pinned at the top while the list scrolls under it
    (the creator: no scrolling up and down), the player about half the window's height
@@ -169,8 +170,6 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .legend i.blk { display: inline-block; }
 .rv-target-key { background: var(--ok) !important; width: 3px !important; }
 .rv-tabs { margin-bottom: 16px; }
-.rv-later { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
-.rv-later p { margin: 0; color: var(--mid); line-height: 1.6; }
 #rv-list tbody tr { cursor: pointer; }
 #rv-list .rv-handle { width: 28px; color: var(--dim); cursor: grab; padding-right: 0; }
 #rv-list .rv-day { margin-left: 8px; }
@@ -220,7 +219,9 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .rv-dialog h3 { margin: 0 0 12px; font-size: 16px; }
 .rv-check .kv { padding: 10px 0; }
 .rv-dialog .note { margin: 14px 0 0; line-height: 1.6; }
-.rv-lp { margin-top: 14px; }
+.rv-lp { margin-top: 14px; flex-wrap: wrap; }
+.rv-guess { font-size: 12.5px; }
+.rv-lp .rv-guess { flex-basis: 100%; margin: 0; }
 .rv-lp label { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12.5px; }
 .rv-episode { width: 80px; }
 .rv-dialog-buttons { margin-top: 18px; align-items: center; }
@@ -266,3 +267,36 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .toast.act { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
 .toast .btn { height: 30px; padding: 0 12px; }
 .app.light ~ .toast { background: #f1f1f3; color: #18181b; border-color: rgba(0,0,0,.16); }
+
+/* Review's Publish tab (4F-3a): the upload text, then a card per thumbnail frame with
+   its prompt for the Gemini app (no mockup: drawn in the designer's style). */
+.rv-pub-head { align-items: center; }
+.rv-pub-head .spacer, .rv-pub-label .spacer { margin-left: auto; }
+.rv-pub-ep { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11px;
+  letter-spacing: .6px; text-transform: uppercase; font-weight: 600; }
+.rv-episode { width: 80px; }
+.rv-pub-notes { display: flex; flex-direction: column; gap: 6px; margin-top: -8px; }
+.rv-pub-notes .note { margin: 0; }
+.rv-warn { color: var(--warn); }
+.rv-pub-label { align-items: center; }
+.rv-pub-ideas { display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; }
+.rv-pub-idea { text-align: left; padding: 10px 14px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; }
+.rv-pub-idea:last-child { border-bottom: 0; }
+.rv-pub-idea:hover { background: var(--surf2); }
+.rv-pub-idea.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.rv-pub-desc { min-height: 220px; line-height: 1.55; }
+.rv-pub-link .input { max-width: 420px; }
+.rv-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.rv-thumb { margin: 0; display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden; background: var(--surf2); }
+.rv-thumb img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+  background: var(--media); }
+.rv-thumb figcaption { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px;
+  flex: 1; }
+.rv-thumb-why { color: var(--mid); font-size: 12.5px; line-height: 1.5; }
+.rv-thumb-why b { color: var(--ink); }
+.rv-thumb-prompt { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink);
+  max-height: 9.5em; overflow: auto; white-space: pre-wrap; }
+.rv-thumb-buttons { margin-top: auto; flex-wrap: wrap; }

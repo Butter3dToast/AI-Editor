@@ -1427,7 +1427,7 @@ Where the crop sits left to right is set per game in `settings.yaml` (`shorts.cr
 
 Every video goes through Review before rendering. Nothing is final until you render it.
 
-**In the window (from 0.43.0), Review is in the new design**: changing the cut from 0.43.0; captions, effects and music, and rendering from 0.44.0. Titles, thumbnails and a Let's Play's Part Planner follow in the next update; until then **Today's Review** (top right) opens the old screen inside the window, on the same plan, with **Back to the new Review** to return.
+**In the window (from 0.43.0), Review is in the new design**: changing the cut from 0.43.0; captions, effects and music, and rendering from 0.44.0; titles, thumbnails and the rest of Publish from 0.45.0. A Let's Play's Part Planner follows in the next update; until then **Today's Review** (top right) opens the old screen inside the window, on the same plan, with **Back to the new Review** to return.
 
 - **At the top:** the plan's name, *Draft · 22 clips · 10:48*, **↶ Undo** and **↷ Redo** (point at them to see what they'd undo or redo), **Quick preview** (it plays in the player when it's ready, wherever you are; elsewhere a note offers to watch it), **Today's Review** and **Render** (below). Under them, the plan to show, **Delete this plan** and **Delete several plans**: both ask once more, and only ever happen when you press them.
 - **The player and the clip's details stay at the top** while the rest scrolls, as in Clips. Click a clip in the list, or its block in the length bar: it plays from its start and stops at its end. Beside it: From, Starts, Ends, Length, where it is in the video, why it's in, captions and effects, with **Remove** and **More…**.
@@ -1435,10 +1435,12 @@ Every video goes through Review before rendering. Nothing is final until you ren
 - **A trim isn't saved until you say so.** It shows as *New cut: 0:10:02 – 0:10:31 · not saved yet*, with **Play the new cut**, **Put it back** and **Save the new cut**. Saving is the same as Adjust the cut (18.3): each edge lands between two words, the clip in your library takes the new cut too, and Undo takes it back. The trim buttons wait until the video has loaded.
 - **More…:** **Use as teaser**, **Move to #**, **Watch 30 s either side**, and the start and end typed (*1:04:18*) with **Use these times**.
 - **The length bar** shows the teaser, clips and slow-motion replays against your target (green line).
-- **Tabs under it:** **Clips**: drag a clip by its row to move it (the teaser always opens the video), **Sort by time**, **The teaser from an exact moment**, and **Add a clip that isn't in the video** (pick one to watch it first). A Let's Play shows **Parts** here: click one to watch how it starts. **Publish** comes in the next update.
+- **Tabs under it:** **Clips**: drag a clip by its row to move it (the teaser always opens the video), **Sort by time**, **The teaser from an exact moment**, and **Add a clip that isn't in the video** (pick one to watch it first). A Let's Play shows **Parts** here: click one to watch how it starts.
 - **Captions** (from 0.44.0): **Burn in captions (your words)**, off unless you tick it, and **kept with this plan**: ticking it for one video doesn't tick it for the next. Under it, **Caption lines in clip N** for the clip you clicked: click a line to hear it, change its words and **Save line**, **Hide this line** or **Show this line**, **Put back the original**, and the offer to remember a fix, all as in 18.5. A Let's Play has the tick only: its captions are burned in as they were heard; fixing lines one by one is for highlights and Shorts.
 - **Effects & music** (from 0.44.0): **Effects on the big moments** (Flash, Screen shake, Sound effects, Punch-in zoom, Slow-motion replay), all off unless you tick them; **Suggested effects on the big moments**, one row per moment with what suits it (*"Clip 15 at 7:33: Double kill: shake + replay + boom"*), nothing used until you tick it; **Between clips**, **Hard cut** or **Slide** (highlights); a Short's **How the game fills the tall frame**; and **Music from your stream**, kept under the talking. When you've left most of one effect unticked lately, the tab asks about it at the top (*"In your last 5 videos AI-Editor suggested flashes 24 times, and you used 2"*), with the same answers as in the browser. A Let's Play has Music only: no effects (your choice), and its cuts are always hard cuts so they aren't noticed. Every tick is one Undo step, and the same as ticking it in the browser.
 - **Render** (top right): a panel says what the video will have (*Captions Off · Music From your stream, under the talking · Effects Screen shake · Between clips Hard cuts · Length 10:48 (target 10:00)*); a Let's Play adds its **Episode** number and **Parts** (**All parts** or one). **Render it** starts the same job as today's render (19.2); **Open the finished video** and **Export to DaVinci Resolve** are there too. When the render finishes, a note says so with **Open it**, wherever you are in the window.
+- **Publish** (from 0.45.0): everything in chapter 20, in the new design. **Write titles, description and chapters** (a Let's Play: **for Part N**, or **Write all N parts**) is the same job as before, in Jobs; when it's done the tab fills in by itself. **Title ideas**: click one and it goes in **Title**. **Title**, **Description, with chapters** and **Tags** each have **Copy**, then **Keep my changes** and the video's **YouTube link**. **Thumbnails for the Gemini app** shows each frame on a card with its score, why it was picked and its prompt, and **Copy the picture**, **Copy the prompt** and **Open the frame** (20.4a). A Let's Play's Publish follows the part you click in **Parts**, with **Part 1 · 2 · 3** buttons to switch.
+- **A Let's Play's episode number** (from 0.45.0) is kept with the plan once you type it, in the Render panel or in Publish, so both always show the same one. When the recording's name has no number (one named by its date) and none is typed yet, it guesses the next after your last episode of that game, in amber: *"Guessed: the next after EP 5. Check it."*
 - **Create video** opens its new plan straight here.
 
 The rest of this chapter describes the browser version, which works as before; every change made in the window is the same change, with the same Undo.
@@ -1775,9 +1777,13 @@ For a **highlight video** or a **Let's Play part**, the local AI also writes a p
 
 They show under the thumbnail frames in Review, written along with the titles (about half a minute more). For videos written before, or to have them written again, click **Write thumbnail prompts**.
 
-1. Click the **copy** button on a prompt (top right of its box).
-2. Click **Open the frame** beside it: Explorer opens with that frame picked.
-3. In the Gemini app, attach the frame (drag it into the chat) and paste the prompt.
+In the window (from 0.45.0), each frame is on a card with its prompt under it:
+
+1. Click **Copy the picture**, and paste it into the Gemini app's chat (Ctrl+V).
+2. Click **Copy the prompt**, and paste that too. Send it.
+3. **Open the frame** still opens Explorer with the frame picked, if you'd rather drag it in.
+
+In the browser: click the **copy** button on a prompt (top right of its box), then **Open the frame** beside it, and in the Gemini app drag the frame into the chat and paste the prompt.
 
 Each prompt asks for a 16:9 YouTube thumbnail of the same moment, says what in the frame should be the star and how to make it stand out, and asks for no added people or faces (you have no facecam), logos or watermarks.
 
