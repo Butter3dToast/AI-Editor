@@ -105,6 +105,22 @@ def test_a_burst_of_shooting_is_not_a_firefight(settings, conn):
     assert result.score[320] > 3 * result.score[100]
 
 
+def test_a_recording_shorter_than_the_gunfire_window_still_scores(settings, conn):
+    """1 Nov: the creator's 10-second test recording stopped at "shapes (10,) (15,)":
+    gunfire is judged over 15 s, and that came back 15 s long."""
+    from ai_editor.analysis.hype import sustained
+
+    assert len(sustained(np.ones(10, dtype=np.float32), 15)) == 10
+    assert len(sustained(np.ones(3, dtype=np.float32), 10)) == 3
+    # Long ones: exactly as before (numpy's centred sum).
+    values = np.random.default_rng(1).random(600).astype(np.float32)
+    kernel = np.ones(15, dtype=np.float32) / 15
+    assert np.allclose(sustained(values, 15), np.convolve(values, kernel, mode="same"))
+    put(conn, "gunfire", {2: 1.0, 3: 1.0, 4: 1.0})
+    put(conn, "explosion", {5: 1.0})
+    assert len(build(conn, settings, 1, 10).score) == 10
+
+
 def test_a_fight_with_a_reaction_beats_a_fight_alone(settings, conn):
     put(conn, "gunfire", {t: 1.0 for t in range(100, 140)})
     put(conn, "gunfire", {t: 1.0 for t in range(300, 340)})

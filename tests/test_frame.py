@@ -22,27 +22,32 @@ def wait_idle(worker, seconds=5):
 # --- the worker times each step ---------------------------------------------------------
 
 
-def test_each_finished_step_is_timed_and_kept_when_the_job_is_done():
+def test_each_finished_step_is_timed_and_kept_when_the_job_is_done(monkeypatch):
+    from types import SimpleNamespace
+
+    from ai_editor.app import worker as worker_module
+
+    # The worker's own clock, moved on by the job itself: exact, however busy the PC
+    # is (real sleeps failed now and then while a real import was running, 1 Nov).
+    clock = [1000.0]
+    monkeypatch.setattr(worker_module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     worker, kept = Worker(), []
     worker.on_done = kept.append
 
     def job(report):
         report.progress("Making preview copy (proxy)", 0.0)
-        time.sleep(0.05)
+        clock[0] += 50
         report.progress("Making preview copy (proxy)", 1.0)
         report.progress("Transcribing speech", 0.5)
-        time.sleep(0.15)
+        clock[0] += 150
         report.progress("Transcribing speech", 1.0)
         report.progress("Transcribing speech", 1.0)          # said twice: timed once
         report.progress("Waiting: OBS is recording", 1.0)     # waiting is never timed
 
     worker.submit("Importing x", "import:x", job)
-    wait_idle(worker)
-    assert kept and [label for label, _ in kept[0].timings] == [
-        "Making preview copy (proxy)", "Transcribing speech"]
-    proxy, speech = (seconds for _, seconds in kept[0].timings)
-    # Lower bounds exact; upper ones loose, for a PC busy with the other tests.
-    assert 0.04 <= proxy < 0.6 and 0.14 <= speech < 1.5
+    wait_idle(worker, seconds=30)
+    assert kept and kept[0].timings == [("Making preview copy (proxy)", 50.0),
+                                        ("Transcribing speech", 150.0)]
 
 
 def test_a_cards_own_resume_resumes_only_that_job():

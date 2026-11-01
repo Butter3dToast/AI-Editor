@@ -139,8 +139,13 @@ def sustained(values: np.ndarray, window_sec: float) -> np.ndarray:
     if window == 1 or values.size == 0:
         return values
     kernel = np.ones(window, dtype=np.float32) / window
-    # Centred, so a fight is loudest in its middle rather than at its end.
-    return np.convolve(values, kernel, mode="same").astype(np.float32)
+    # Centred, so a fight is loudest in its middle rather than at its end. Cut
+    # from the full sum, not mode="same": that returns the longer of the two, so
+    # a recording shorter than the window came back the window's length (1 Nov,
+    # a 10 s test recording: "shapes (10,) (15,)"). Same values otherwise.
+    full = np.convolve(values, kernel, mode="full")
+    start = (window - 1) // 2
+    return full[start:start + values.size].astype(np.float32)
 
 
 def combination_bonus(

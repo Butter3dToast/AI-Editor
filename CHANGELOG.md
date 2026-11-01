@@ -3,6 +3,19 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.40.1 — Fix: very short recordings — 1 November 2026
+
+**Fixed**
+
+- **A recording shorter than 15 seconds stopped at the very end of its
+  analysis** with *"Something went wrong (ValueError: operands could not be
+  broadcast together…)"* (your 10-second test recording, #34). Gunfire is
+  judged over 15 seconds so a real fight stands out from a stray shot, and for
+  a recording shorter than that, the measurement came back 15 seconds long.
+  It now always matches the recording's length; streams score exactly as
+  before. Press **Resume** on the stopped job: the finished steps aren't
+  repeated.
+
 ## 0.40.0 — Phase 4C: Library and Import in the new design — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)
