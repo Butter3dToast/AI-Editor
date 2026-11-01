@@ -130,6 +130,8 @@ def test_prepare_names_only_the_real_chapters_and_keeps_it_with_the_plan(setting
     asked = {}
 
     def fake_ask(settings_, system, prompt, *, schema, images=None, **_):
+        if "ideas" in schema["properties"]:              # the thumbnail ideas, asked after
+            return {"ideas": ["One.", "Two.", "Three."]}
         asked["prompt"], asked["schema"] = prompt, schema
         return {"titles": ["Wardogs Highlights - Holding the Zone", "Wardogs Highlights - Chaos"],
                 "description": "We held the zone.", "tags": ["highlights", "Wardogs Highlights"],

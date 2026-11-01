@@ -143,6 +143,12 @@ class Match:
         wanted = _names(name)
         return next((p for p in self.players if p.names & wanted), None) if wanted else None
 
+    @property
+    def my_champion(self) -> str | None:
+        """The champion you're playing, as League names it ("Gwen")."""
+        return next((p.champion for p in self.players if p.names & self.me
+                     and p.champion != "?"), None)
+
     def is_me(self, name: Any) -> bool:
         return bool(_names(name) & self.me)
 
@@ -192,6 +198,9 @@ def describe(event: dict, match: Match) -> dict | None:
         return None
     out: dict[str, Any] = {"event": name, "id": event.get("EventID"),
                            "game_time": round(float(event["EventTime"]), 2), "match": match.key}
+    # Who you played, so a highlight's thumbnail can feature them (1 Nov).
+    if match.my_champion:
+        out["played"] = match.my_champion
     mine = match.my_team
 
     if name == "ChampionKill":

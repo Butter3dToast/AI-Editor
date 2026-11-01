@@ -8,7 +8,7 @@ in 4F-3b. The sidebar says 0.44.0: the pictures were taken just before the versi
 |---|---|
 | `publish-dark.png` | A highlight video's Publish: Write it again, when it was written, the title ideas (one picked), the Title box |
 | `publish-light.png` | The same, light |
-| `publish-thumbs-dark.png` | Further down: the YouTube link, then a card per thumbnail frame with its prompt, Copy the picture, Copy the prompt, Open the frame (and the note after Copy the picture) |
+| `publish-thumbs-dark.png` | A highlight video's thumbnail ideas (0.45.1): three idea cards with Copy the prompt, then the frames as optional extras with Copy the picture and Open the frame |
 | `publish-letsplay-dark.png` | A Let's Play part's card: its prompt asks for the episode and part on the picture |
 | `publish-part2-dark.png` | A Let's Play's Part 1 · 2 · 3 buttons and Episode box, on a part with nothing written yet |
 
@@ -27,3 +27,6 @@ What differs from today's Publish, and why:
   creator's choice), with Part buttons in the tab that pick the same part.
 - **The episode number is kept with the plan**, so the Render panel and Publish show the
   same one; a guessed one says so in amber.
+- **A highlight video's thumbnails are three ideas about the whole video** (0.45.1, the
+  creator's choice after testing): prompts from single frames had Gemini redraw the
+  champions. A Let's Play part keeps a prompt per frame.

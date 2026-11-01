@@ -20,11 +20,12 @@ after the colon.
 **Thumbnails**: up to 12 full-size frames from the strongest moments, each
 shown to the AI, best 6 kept as PNGs to finish in a free editor (spec 7.6).
 
-**Thumbnail prompts** (3D): for the best frames of a highlight video or a Let's
-Play part, the local AI writes a prompt for the creator to paste into the
-Gemini app, with the frame attached, under their own subscription. AI-Editor
-sends nothing online. Highlights stay clean; a Let's Play part's says its
-episode and part (publish.thumbnail_text), the creator's choice (31 Oct).
+**Thumbnail prompts** (3D): for the best frames of a Let's Play part, the local
+AI writes a prompt for the creator to paste into the Gemini app, with the frame
+attached, under their own subscription; each says the part's episode and part
+(publish.thumbnail_text), the creator's choice (31 Oct). A highlight video gets
+three ideas about the whole video instead, featuring the champion played (1 Nov),
+with no text on the picture. AI-Editor sends nothing online.
 
 Everything is kept with the plan and in a .txt file beside the video.
 """
@@ -37,7 +38,7 @@ import os
 import sqlite3
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -263,6 +264,7 @@ class Thumbnail:
     rating: int
     reason: str
     prompt: str = ""   # for the Gemini app, with this frame attached (3D)
+    game: str = ""     # the game it's from: a stream highlight video can have several
 
 
 @dataclass
@@ -278,6 +280,8 @@ class Publish:
     # What the creator changed in Review: "title", "description" (as pasted,
     # chapters included) and "tags". Kept over the AI's.
     edited: dict | None = None
+    # A highlight video's thumbnail ideas for the Gemini app, about the whole video (1 Nov).
+    prompts: list[str] = field(default_factory=list)
 
     @property
     def title(self) -> str | None:
@@ -287,9 +291,10 @@ class Publish:
         return {"titles": self.titles, "description": self.description, "tags": self.tags,
                 "chapters": [list(c) for c in self.chapters],
                 "thumbnails": [{"path": str(t.path), "rating": t.rating, "reason": t.reason,
-                                "prompt": t.prompt} for t in self.thumbnails],
+                                "prompt": t.prompt, "game": t.game} for t in self.thumbnails],
                 "fingerprint": self.fingerprint, "made_at": self.made_at,
-                "prompt_version": PROMPT_VERSION, "edited": self.edited, "short": self.short}
+                "prompt_version": PROMPT_VERSION, "edited": self.edited, "short": self.short,
+                "prompts": self.prompts}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Publish":
@@ -297,9 +302,11 @@ class Publish:
                    list(data.get("tags", [])),
                    [(float(t), str(name)) for t, name in data.get("chapters", [])],
                    [Thumbnail(Path(t["path"]), int(t.get("rating", 0)), t.get("reason", ""),
-                              t.get("prompt", "")) for t in data.get("thumbnails", [])],
+                              t.get("prompt", ""), t.get("game", ""))
+                    for t in data.get("thumbnails", [])],
                    data.get("fingerprint", ""), data.get("made_at", ""),
-                   bool(data.get("short")), data.get("edited"))
+                   bool(data.get("short")), data.get("edited"),
+                   [str(p) for p in data.get("prompts") or []])
 
 
 def full_titles(settings: Settings, plan: EditPlan, ideas: list[str], *, part: int | None,
@@ -443,6 +450,7 @@ def thumbnails(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, fol
         raw = Path(row["source_file"])
         sources[row["id"]] = raw if raw.is_file() else Path(row["proxy_path"] or "")
     moments = thumbnail_moments(conn, plan)
+    games = {s.recording_id: s.game for s in plan.segments if s.game}
     found: list[Thumbnail] = []
     for i, (recording_id, t) in enumerate(moments):
         if on_progress:
@@ -470,7 +478,7 @@ def thumbnails(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, fol
                 small.unlink(missing_ok=True)
             if i > 0 and time.monotonic() - asked > SLOW_ANSWER_SEC:
                 raise AiTooSlow("The thumbnail frames found so far were kept.")
-        found.append(Thumbnail(full, rating, reason))
+        found.append(Thumbnail(full, rating, reason, game=games.get(recording_id) or ""))
     found.sort(key=lambda th: -th.rating)
     kept, dropped = found[:settings.publish.thumbnails], found[settings.publish.thumbnails:]
     for thumb in dropped:
@@ -479,7 +487,7 @@ def thumbnails(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, fol
     for n, thumb in enumerate(kept, 1):
         target = folder / f"thumbnail {n}.png"
         thumb.path.replace(target)
-        final.append(Thumbnail(target, thumb.rating, thumb.reason))
+        final.append(Thumbnail(target, thumb.rating, thumb.reason, game=thumb.game))
     if on_progress:
         on_progress(1.0)
     return final
@@ -507,6 +515,18 @@ Look at the screenshot and answer two things, in plain English:
   crop on the subject, brighter and richer colours, dramatic light, a glow or motion around
   the action. One or two sentences.
 Never add people, faces or text: the creator has no facecam, and text is handled separately."""
+
+
+def game_of(plan: EditPlan, thumb: Thumbnail | None = None) -> str | None:
+    """The game a frame or video is from: the frame's own, the plan's, or the one most of
+    its clips are from (a stream highlight video has no single game, and its prompts said
+    "my game")."""
+    if thumb is not None and thumb.game:
+        return thumb.game
+    if plan.game:
+        return plan.game
+    games = [s.game for s in plan.segments if s.game]
+    return max(set(games), key=games.count) if games else None
 
 
 def prompt_question(plan: EditPlan, *, title: str, chapters: list[str], spoilers: bool) -> str:
@@ -552,10 +572,10 @@ def gemini_prompt(settings: Settings, plan: EditPlan, answer: dict, *, part: int
 def thumbnail_prompts(settings: Settings, plan: EditPlan, thumbs: list[Thumbnail], *,
                       part: int | None, episode: int | None, title: str, chapters: list[str],
                       on_progress: Callable[[float], None] | None = None) -> list[Thumbnail]:
-    """A prompt for each of the best frames (highlights and Let's Play parts only).
+    """A prompt for each of a Let's Play part's best frames, keeping the moment as it is.
     The local AI looks at the frame; the rest of the prompt is fixed, so it says
     exactly what the creator chose. Frames it can't read keep no prompt."""
-    if plan.recipe not in ("highlights", "letsplay"):
+    if plan.recipe != "letsplay":
         return thumbs
     question_text = prompt_question(plan, title=title, chapters=chapters,
                                     spoilers=plan.game in settings.shorts.spoiler_check_games)
@@ -574,6 +594,100 @@ def thumbnail_prompts(settings: Settings, plan: EditPlan, thumbs: list[Thumbnail
     if on_progress:
         on_progress(1.0)
     return thumbs
+
+
+# --- A highlight video's thumbnail ideas -------------------------------------------------
+#
+# 1 Nov: prompts made from one frame each had Gemini redraw the creator's League champions as
+# others, or add things that weren't there. A highlight video's prompts are now about the
+# whole video and the champion played: three ideas, each a scene in the game's own art style.
+# A frame is optional, only to show the champion's skin. Let's Play parts keep the moment.
+
+IDEAS = 3
+
+IDEA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ideas": {"type": "array", "minItems": IDEAS, "maxItems": IDEAS,
+                  "items": {"type": "string", "maxLength": 260}},
+    },
+    "required": ["ideas"],
+}
+
+IDEA_SYSTEM = """You help a gaming creator plan a YouTube thumbnail for a highlight video. An
+image AI (Gemini) will draw it from your words, in the game's own official art style.
+Write three different scene ideas, each one or two sentences, that fit what the video is
+about. Each puts the creator's own champion or character big and in front, in a dramatic
+moment of the kind the video shows (a teamfight, a fight for an objective, a narrow escape...).
+Make the three ideas different from each other: a different moment, place or mood.
+Only use what the video is about: don't invent story, enemies by name or events it doesn't
+show. Never add people, faces or text: the creator has no facecam, and text is handled
+separately."""
+
+
+def thumbnail_who(conn: sqlite3.Connection, plan: EditPlan) -> tuple[str, str]:
+    """Who's on a highlight's thumbnail, and where that came from: "typed" in Publish,
+    "league" (the champions League says you played, most first), or "" when unknown."""
+    from .companion.link import champions_played
+
+    typed = str((plan.source or {}).get("thumbnail_who") or "").strip()
+    if typed:
+        return typed, "typed"
+    played = champions_played(conn, plan.recording_ids)[:2]
+    return (" and ".join(played), "league") if played else ("", "")
+
+
+def idea_question(plan: EditPlan, *, game: str | None, title: str, chapters: list[str],
+                  who: str) -> str:
+    lines = [f"A {game or 'game'} highlight video, titled: {title}."]
+    if chapters:
+        lines.append("What happens in it: " + "; ".join(chapters[:12]) + ".")
+    lines.append(f"The creator played {who}." if who else
+                 "Which champion or character the creator played isn't known: say "
+                 "\"my champion\" for them.")
+    return "\n".join(lines)
+
+
+def idea_prompt(settings: Settings, *, game: str | None, title: str, who: str,
+                idea: str) -> str:
+    """One idea as the prompt to paste into the Gemini app."""
+    name = game or "my game"
+    hero = "champion" if game == "League of Legends" else "character"
+    lines = [f"Make a YouTube thumbnail, 16:9 (1280x720), for my {name} highlights video"
+             + (f': "{title}".' if title else "."),
+             (f"Feature {who}, the {hero} I played, big and in front" if who
+              else f"Feature my {hero}, big and in front")
+             + f", in the official {name} splash-art style.",
+             f"The scene: {idea.strip()}",
+             "Bright, dramatic light and rich colour; easy to read when the thumbnail is small.",
+             f"If a screenshot is attached, use it only for my {hero}'s skin and colours.",
+             "Don't add any text."]
+    if settings.publish.thumbnail_style.strip():
+        lines.append(f"Style: {settings.publish.thumbnail_style.strip()}")
+    lines.append("Don't add real people, faces, logos or watermarks.")
+    return "\n".join(lines)
+
+
+def video_prompts(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *, title: str,
+                  chapters: list[str],
+                  on_progress: Callable[[float], None] | None = None) -> list[str]:
+    """Three thumbnail ideas for a highlight video, as prompts for the Gemini app."""
+    if plan.recipe != "highlights":
+        return []
+    if on_progress:
+        on_progress(0.0)
+    game = game_of(plan)
+    who, _ = thumbnail_who(conn, plan)
+    try:
+        answer = llm.ask(settings, IDEA_SYSTEM, idea_question(
+            plan, game=game, title=title, chapters=chapters, who=who), schema=IDEA_SCHEMA)
+    except llm.AiAnswerUnreadable as exc:
+        log.warning("AI couldn't write thumbnail ideas: %s", exc)
+        return []
+    ideas = [str(i).strip() for i in answer.get("ideas", []) if str(i).strip()][:IDEAS]
+    if on_progress:
+        on_progress(1.0)
+    return [idea_prompt(settings, game=game, title=title, who=who, idea=i) for i in ideas]
 
 
 # --- All of it --------------------------------------------------------------------------
@@ -628,6 +742,9 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
                                    title=titles[0] if titles else plan.title,
                                    chapters=[name for _, name in chapters],
                                    on_progress=step("Writing thumbnail prompts"))
+        ideas = video_prompts(conn, settings, plan, title=titles[0] if titles else plan.title,
+                              chapters=[name for _, name in chapters],
+                              on_progress=step("Writing thumbnail ideas"))
     tags = list(dict.fromkeys(str(t).strip() for t in answer.get("tags", []) if str(t).strip()))
     if plan.game and plan.game not in tags:
         tags.insert(0, plan.game)
@@ -635,7 +752,7 @@ def prepare(conn: sqlite3.Connection, settings: Settings, plan: EditPlan, *,
                    str(answer.get("description", "")).strip(), tags[:15], chapters, thumbs,
                    fingerprint(video),
                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                   short=plan.recipe == "shorts")
+                   short=plan.recipe == "shorts", prompts=ideas)
 
 
 def chapter_name(text: object) -> str:

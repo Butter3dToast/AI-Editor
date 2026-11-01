@@ -172,6 +172,10 @@ def test_the_tab_is_drawn_by_the_window():
     assert '"Copy the prompt"' in script and '"Open the frame"' in script
     # A Let's Play's Publish follows the part clicked.
     assert "data.rows[selected].part" in script
+    # A highlight's ideas: drawn by their own function (1 Nov: a list named "ideas" in the
+    # tab hid a function of the same name, and the tab didn't open).
+    assert "parts.push(thumbnailIdeas(pub, plan, ask))" in script
+    assert "function ideas(" not in script
 
 
 def test_the_episode_is_kept_and_else_guessed(client, library, settings):
@@ -209,3 +213,23 @@ def test_the_episode_is_kept_and_else_guessed(client, library, settings):
     # A plan named with its episode shows that, and a highlight video has none.
     assert client.get(f"/api/review/{LP}/publish").json()["episode_after"] is None
     assert client.get(f"/api/review/{PLAN}/publish").json()["episode"] is None
+
+
+def test_a_highlights_ideas_and_who_is_on_them(client, library, settings):
+    """1 Nov: a highlight's thumbnail prompts are three ideas about the whole video,
+    featuring the champion played, typed in Publish (or from League's game data)."""
+    data = written(settings)
+    data["prompts"] = ["Idea one", "Idea two", "Idea three"]
+    put(settings, PLAN, "video", data)
+    found = client.get(f"/api/review/{PLAN}/publish").json()
+    assert found["ideas"] == ["Idea one", "Idea two", "Idea three"]
+    assert (found["who"], found["who_from"]) == ("", "")
+    url = f"/api/review/{PLAN}/publish/who"
+    assert client.post(url, json={"who": "Gwen"}).status_code == 403
+    said = client.post(url, headers=GUARD, json={"who": "  Gwen   and Jinx "}).json()["said"]
+    assert said == "Kept: Gwen and Jinx. Write the ideas again to use it."
+    found = client.get(f"/api/review/{PLAN}/publish").json()
+    assert (found["who"], found["who_from"]) == ("Gwen and Jinx", "typed")
+    assert "Only a highlight" in client.post(f"/api/review/{LP}/publish/who", headers=GUARD,
+                                             json={"who": "x"}).json()["said"]
+    assert client.get(f"/api/review/{LP}/publish").json()["ideas"] == []

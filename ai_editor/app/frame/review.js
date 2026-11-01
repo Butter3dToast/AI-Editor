@@ -890,7 +890,8 @@
           } }, "Save the link")),
         el("p", { class: "note" }, "Shorts made from it then say \"Full video:\" with this link.")));
     }
-    if (pub.kind !== "shorts") parts.push(thumbnails(pub, plan, ask));
+    if (pub.kind === "highlights") parts.push(thumbnailIdeas(pub, plan, ask));
+    else if (pub.kind !== "shorts") parts.push(thumbnails(pub, plan, ask));
     fill(into, el("div", { class: "panel rv-finish" }, ...parts));
   }
 
@@ -946,6 +947,61 @@
             + "half a minute).")
         : "No thumbnail frames: write it again to pick them."),
       cards.length ? el("div", { class: "rv-thumbs" }, ...cards) : null);
+  }
+
+  /* A highlight video's thumbnail ideas, about the whole video and who you played (1 Nov:
+     prompts from single frames had Gemini redraw the champions). Frames are optional. */
+  function thumbnailIdeas(pub, plan, ask) {
+    const who = el("input", { class: "input", type: "text", placeholder: "e.g. Gwen",
+                              "aria-label": "Who's on the thumbnail" });
+    who.value = pub.who;
+    const saveWho = async () => {
+      const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/who`,
+                              { who: who.value });
+      if (said.said) toast(said.said);
+    };
+    who.addEventListener("keydown", (e) => { if (e.key === "Enter") saveWho(); });
+    const again = el("button", { class: "btn quiet", type: "button",
+                                 onclick: () => ask("prompts", null) },
+                     pub.ideas.length ? "Write the ideas again" : "Write thumbnail ideas");
+    again.disabled = !pub.ai;
+    const cards = pub.ideas.map((text, i) => el("div", { class: "rv-idea" },
+      el("div", { class: "rv-thumb-why" }, el("b", {}, `Idea ${i + 1}`)),
+      el("p", { class: "rv-thumb-prompt" }, text),
+      el("div", { class: "row tight rv-thumb-buttons" },
+        el("button", { class: "btn", type: "button",
+          onclick: () => copyText(text, "Prompt copied: paste it in Gemini.") }, "Copy the prompt"))));
+    const frames = pub.thumbnails.map((t, i) => el("figure", { class: "rv-thumb" },
+      el("img", { src: t.url, alt: `Frame ${i + 1}`, loading: "lazy" }),
+      el("figcaption", {},
+        el("div", { class: "rv-thumb-why" }, el("b", {}, `${i + 1} · ${t.rating}/10`), ` ${t.reason}`),
+        el("div", { class: "row tight rv-thumb-buttons" },
+          el("button", { class: "btn", type: "button", onclick: () => copyPicture(t.url) },
+             "Copy the picture"),
+          el("button", { class: "btn quiet", type: "button", onclick: async () => {
+            const said = await post(`/api/review/${encodeURIComponent(plan)}/publish/frame`,
+                                    { n: t.n, part: null });
+            if (said.said) toast(said.said);
+          } }, "Open the frame")))));
+    return el("section", { class: "rv-group" },
+      el("div", { class: "row tight rv-pub-label" }, el("h4", {}, "Thumbnail ideas for the Gemini app"),
+        el("div", { class: "spacer" }), again),
+      el("div", { class: "row tight rv-pub-link" },
+        el("label", { class: "rv-pub-ep" }, "Who's on it", who),
+        el("button", { class: "btn", type: "button", onclick: saveWho }, "Save")),
+      el("p", { class: "note" }, pub.who_from === "league"
+        ? "From League's own game data: the champion you played most. Change it if you like."
+        : pub.who ? "Kept with this video. Write the ideas again after changing it."
+          : "Type the champion you played: League's game data only knows it for recordings "
+            + "made with the Companion on, from this update."),
+      el("p", { class: "note" }, pub.ideas.length
+        ? "Copy one and paste it in the Gemini app. Each is about the whole video. To get your "
+          + "champion's skin right, paste a frame where they're clear (below) with it."
+        : "No ideas yet: Write thumbnail ideas asks the local AI (a few seconds)."),
+      cards.length ? el("div", { class: "rv-ideas" }, ...cards) : null,
+      frames.length ? el("h4", { class: "rv-frames-head" }, "Frames from the video (optional, "
+        + "for your champion's skin)") : null,
+      frames.length ? el("div", { class: "rv-thumbs" }, ...frames) : null);
   }
 
   async function copyText(text, said) {

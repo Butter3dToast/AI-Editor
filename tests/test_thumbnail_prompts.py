@@ -4,6 +4,7 @@ online. Highlights stay clean; Let's Play parts say their episode and part."""
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -45,17 +46,88 @@ def asked(monkeypatch):
     return seen
 
 
-def test_a_highlight_prompt_has_no_text_on_the_picture(settings, tmp_path, asked):
-    thumbs = publish.thumbnail_prompts(settings, plan_of("highlights"), frames(tmp_path, 2),
-                                       part=None, episode=None, title="League Highlights",
-                                       chapters=["Baron steal"])
-    prompt = thumbs[0].prompt
-    assert prompt.startswith("Turn the attached screenshot from League of Legends into a "
-                             "YouTube thumbnail, 16:9 (1280x720).")
-    assert ANSWER["subject"] in prompt and ANSWER["boost"] in prompt
-    assert "Don't add any text." in prompt and "Add the text" not in prompt
-    assert "Don't add people, faces" in prompt          # no facecam
-    assert asked[0]["images"] == [b"png"]                # the AI looked at the frame itself
+IDEAS = {"ideas": ["Gwen leaping into a teamfight in the jungle at night.",
+                   "Gwen holding the Baron pit alone, snips flying.",
+                   "Gwen turning a fight under her own tower."]}
+
+
+@pytest.fixture
+def ideas_asked(monkeypatch):
+    seen = []
+
+    def fake_ask(settings_, system, prompt, *, schema, images=None, **_):
+        seen.append({"system": system, "prompt": prompt, "images": images, "schema": schema})
+        return dict(IDEAS)
+
+    monkeypatch.setattr(llm, "ask", fake_ask)
+    return seen
+
+
+def test_a_highlight_gets_three_ideas_about_the_whole_video(settings, ideas_asked):
+    """1 Nov: prompts made from single frames had Gemini redraw the creator's League
+    champions, or add what wasn't there. A highlight video now gets three ideas about the
+    whole video, featuring the champion played, and no frame is needed."""
+    conn = init_db(settings.db_path)
+    plan = EditPlan("highlights_streams_1", "highlights", "Stream highlights", None, 600,
+                    [Segment(1, 0, 60, game="League of Legends"),
+                     Segment(2, 0, 30, game="League of Legends"), Segment(3, 0, 30, game="Wardogs")],
+                    source={"thumbnail_who": "Gwen"})
+    found = publish.video_prompts(conn, settings, plan, title="Teamfights and Rank Grind",
+                                  chapters=["Baron steal", "Turret dive"])
+    assert len(found) == 3 and ideas_asked[0]["images"] is None        # no frame to redraw
+    first = found[0]
+    assert first.startswith('Make a YouTube thumbnail, 16:9 (1280x720), for my League of '
+                            'Legends highlights video: "Teamfights and Rank Grind".')
+    assert "Feature Gwen, the champion I played, big and in front, in the official League of " \
+           "Legends splash-art style." in first                    # the game most clips are from
+    assert "The scene: Gwen leaping into a teamfight in the jungle at night." in first
+    assert "If a screenshot is attached, use it only for my champion's skin" in first
+    assert "Don't add any text." in first and "Don't add real people, faces" in first
+    question = ideas_asked[0]["prompt"]
+    assert "The creator played Gwen." in question and "Baron steal; Turret dive" in question
+    # Nobody known: "my champion", and the local AI is told so.
+    plan.source = {}
+    found = publish.video_prompts(conn, settings, plan, title="t", chapters=[])
+    assert "Feature my champion, big and in front" in found[0]
+    assert "isn't known" in ideas_asked[1]["prompt"]
+    # A frame-by-frame prompt is for Let's Play parts only; Shorts get neither.
+    assert publish.thumbnail_prompts(settings, plan, [], part=None, episode=None, title="t",
+                                     chapters=[]) == []
+    assert publish.video_prompts(conn, settings, plan_of("letsplay"), title="t", chapters=[]) == []
+    conn.close()
+
+
+def test_who_you_played_comes_from_leagues_own_data(settings):
+    """League's game data says which champion is yours: the Companion now logs it with each
+    event, and a highlight's thumbnail features the one you played most."""
+    from ai_editor.companion import league
+
+    match = league.match_of({
+        "gameData": {"gameTime": 300.0}, "events": {"Events": []},
+        "activePlayer": {"riotId": "Butter3dToast#EUW"},
+        "allPlayers": [{"riotId": "Butter3dToast#EUW", "championName": "Gwen", "team": "ORDER"},
+                       {"riotId": "Someone#1", "championName": "Aatrox", "team": "CHAOS"}]})
+    assert match.my_champion == "Gwen"
+    said = league.describe({"EventName": "ChampionKill", "EventID": 3, "EventTime": 250.0,
+                            "KillerName": "Butter3dToast", "VictimName": "Someone"}, match)
+    assert said["played"] == "Gwen"
+    conn = init_db(settings.db_path)
+    conn.execute("INSERT INTO recordings (id, content_hash, source_type, source_file, "
+                 "imported_at) VALUES (1, 'h', 'local_obs', 'x.mkv', 'now')")
+    for champion in ["Gwen", "Gwen", "Jinx", None]:
+        payload = {"kind": "kill"} | ({"played": champion} if champion else {})
+        conn.execute("INSERT INTO companion_events (session_id, event_type, wall_clock, "
+                     "payload_json, recording_id) VALUES ('s', 'league', 'now', ?, 1)",
+                     (json.dumps(payload),))
+    plan = EditPlan("highlights_x_1", "highlights", "t", "League of Legends", 600,
+                    [Segment(1, 0, 60)])
+    assert publish.thumbnail_who(conn, plan) == ("Gwen and Jinx", "league")
+    plan.source = {"thumbnail_who": "Gwen"}
+    assert publish.thumbnail_who(conn, plan) == ("Gwen", "typed")      # yours wins
+    plan.segments = [Segment(2, 0, 60)]
+    plan.source = {}
+    assert publish.thumbnail_who(conn, plan) == ("", "")                # before this update
+    conn.close()
 
 
 def test_a_lets_play_prompt_says_its_episode_and_part(settings, tmp_path, asked):
@@ -82,7 +154,7 @@ def test_the_lets_play_text_and_your_look_are_yours(settings, tmp_path, asked):
 def test_only_the_best_frames_get_one_and_shorts_none(settings, tmp_path, asked):
     thumbs = frames(tmp_path, 6)
     thumbs[1].path.unlink()                              # you deleted that one
-    publish.thumbnail_prompts(settings, plan_of("highlights"), thumbs, part=None, episode=None,
+    publish.thumbnail_prompts(settings, plan_of("letsplay"), thumbs, part=2, episode=6,
                               title="t", chapters=[])
     assert [bool(t.prompt) for t in thumbs] == [True, False, True, True, True, True]
     assert len(asked) == publish.PROMPTS
@@ -97,8 +169,8 @@ def test_a_frame_the_ai_cant_read_is_left_without(settings, tmp_path, monkeypatc
         raise llm.AiAnswerUnreadable("nonsense")
 
     monkeypatch.setattr(llm, "ask", unreadable)
-    thumbs = publish.thumbnail_prompts(settings, plan_of("highlights"), frames(tmp_path, 2),
-                                       part=None, episode=None, title="t", chapters=[])
+    thumbs = publish.thumbnail_prompts(settings, plan_of("letsplay"), frames(tmp_path, 2),
+                                       part=2, episode=6, title="t", chapters=[])
     assert not any(t.prompt for t in thumbs)
 
 
@@ -119,8 +191,8 @@ def test_write_prompts_for_frames_already_picked(settings, tmp_path, asked, monk
     monkeypatch.setattr(llm, "has_model", lambda s, name=None: True)
     monkeypatch.setattr(llm, "unload", lambda s: None)
     conn = init_db(settings.db_path)
-    plan = plan_of("highlights")
-    plan.publish[publish.key_of(None)] = publish.Publish(
+    plan = plan_of("letsplay")
+    plan.publish[publish.key_of(2)] = publish.Publish(
         ["League Highlights"], "d", [], [(0.0, "Baron steal")], frames(tmp_path, 2), "f",
         "now").as_dict()
     save_plan(conn, plan)
@@ -139,10 +211,21 @@ def test_write_prompts_for_frames_already_picked(settings, tmp_path, asked, monk
             self.kept.update(k)
 
     report = Report()
-    tasks.write_prompts(settings, plan.plan_id)(report)
-    saved = publish.saved(load_plan(conn, plan.plan_id)[0], None)
+    tasks.write_prompts(settings, plan.plan_id, episode=6)(report)
+    saved = publish.saved(load_plan(conn, plan.plan_id)[0], 2)
     assert all(t.prompt for t in saved.thumbnails) and report.kept == {"prompts": plan.plan_id}
     assert "League Highlights" in asked[0]["prompt"] and "Baron steal" in asked[0]["prompt"]
+    # A highlight video's ideas, written again: no frames needed.
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: {"ideas": ["One.", "Two.", "Three."]})
+    video = plan_of("highlights")
+    video.publish[publish.key_of(None)] = publish.Publish(
+        ["League Highlights"], "d", [], [], [], "f", "now").as_dict()
+    save_plan(conn, video)
+    tasks.write_prompts(settings, video.plan_id)(report)
+    saved = publish.saved(load_plan(conn, video.plan_id)[0], None)
+    assert [p.split("The scene: ")[1].splitlines()[0] for p in saved.prompts] == [
+        "One.", "Two.", "Three."]
+    assert report.lines[-1] == "3 thumbnail ideas. They're in Review, under Publish."
     conn.close()
 
 

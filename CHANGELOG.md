@@ -3,6 +3,24 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.45.1 — Fix: thumbnail ideas for highlight videos — 1 November 2026
+
+**Fixed**
+
+- **Highlight thumbnails from Gemini replaced your champions** with other ones, or
+  added things that weren't there. The prompts were made from single frames,
+  asked for a close-up of one moment, and for a highlight video of several
+  streams didn't even say the game ("from my game").
+- Now a highlight video gets **three ideas about the whole video**, from its
+  title and chapters: each puts **the champion you played** big and in front, in
+  the official League of Legends splash-art style, with no text. No frame is
+  needed; one can be pasted in with an idea just to get your champion's skin.
+- **Who's on it** in Publish: the champion you played, kept with the video.
+  **The Stream Companion now records which champion you play** each League
+  match (League's own game data), so later videos fill it in themselves.
+- Let's Play parts keep their prompts, one per frame, as before: those
+  thumbnails came out well.
+
 ## 0.45.0 — Phase 4F-3a: Review in the new design (Publish) — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)

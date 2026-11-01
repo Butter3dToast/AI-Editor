@@ -64,7 +64,10 @@ def view(conn, settings: Settings, plan_id: str, part=None) -> dict | None:
            "episode": episode, "episode_after": after,
            "which": which, "ai": settings.llm.enabled, "written": False,
            "link": None if shorts else publish.link_of(plan, number), "source": "",
-           "thumbnails": [], "titles": [], "title": "", "description": "", "tags": ""}
+           "thumbnails": [], "titles": [], "title": "", "description": "", "tags": "",
+           "ideas": [], "who": "", "who_from": ""}
+    if plan.recipe == "highlights":
+        out["who"], out["who_from"] = publish.thumbnail_who(conn, plan)
     full = ""
     if shorts:
         full, from_video = publish.full_video_link(conn, plan)
@@ -79,9 +82,11 @@ def view(conn, settings: Settings, plan_id: str, part=None) -> dict | None:
                        "a line or two and hashtags (a few seconds; Shorts have no chapters or "
                        "thumbnail)." if shorts else
                        f"Nothing written for {which} yet. Write asks the local AI for title "
-                       "ideas, a description with chapters, tags, and thumbnail frames with a "
-                       "prompt for each (about a minute). Its summaries of the clips are what "
-                       "it writes from.")
+                       "ideas, a description with chapters, tags, thumbnail frames, and "
+                       + ("three thumbnail ideas for the Gemini app" if plan.recipe == "highlights"
+                          else "a thumbnail prompt for each frame")
+                       + " (about a minute). Its summaries of the clips are what it writes "
+                       "from.")
         return out
     out.update(written=True, titles=made.titles,
                title=made.title or (made.titles[0] if made.titles else ""),
@@ -93,7 +98,26 @@ def view(conn, settings: Settings, plan_id: str, part=None) -> dict | None:
         out["thumbnails"] = [{"n": n, "url": file_url(t.path), "rating": t.rating,
                               "reason": t.reason, "prompt": t.prompt}
                              for n, t in enumerate(made.thumbnails) if t.path.is_file()]
+    out["ideas"] = made.prompts
     return out
+
+
+def save_who(settings: Settings, plan_id: str, who: str) -> str:
+    """Who's on a highlight's thumbnail, typed in Publish: kept with the plan."""
+    conn = init_db(settings.db_path)
+    try:
+        plan, status = videos.get_plan(conn, plan_id)
+        if plan is None:
+            return "Pick a plan first."
+        if plan.recipe != "highlights":
+            return "Only a highlight video's thumbnail ideas feature who you played."
+        who = " ".join((who or "").split())[:80]
+        plan.source = {**(plan.source or {}), "thumbnail_who": who}
+        save_plan(conn, plan, status)
+    finally:
+        conn.close()
+    return (f"Kept: {who}. Write the ideas again to use it." if who
+            else "Cleared: League's game data is used when there is some.")
 
 
 def write(settings: Settings, worker: Worker, plan_id: str, what: str, episode=None,
@@ -240,6 +264,11 @@ def add_routes(app, frame, guarded) -> None:
     def linked(plan_id: str, request: Request, part=Body(None), link: str = Body("")):
         guarded(request)
         return {"said": save_link(settings, plan_id, part, link)}
+
+    @app.post("/api/review/{plan_id}/publish/who")
+    def who_typed(plan_id: str, request: Request, who: str = Body("", embed=True)):
+        guarded(request)
+        return {"said": save_who(settings, plan_id, who)}
 
     @app.post("/api/review/{plan_id}/publish/frame")
     def frame_open(plan_id: str, request: Request, n: int = Body(...), part=Body(None)):

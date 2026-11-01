@@ -332,6 +332,18 @@ def write_prompts(settings: Settings, plan_id: str, *, parts: list[int] | None =
                 for n in numbers:
                     label = f"Part {n}: " if n else ""
                     made = publish.saved(plan, n)
+                    if made is not None and plan.recipe == "highlights":
+                        # Ideas about the whole video: no frame needed (1 Nov).
+                        made.prompts = publish.video_prompts(
+                            conn, settings, plan,
+                            title=made.title or (made.titles[0] if made.titles else plan.title),
+                            chapters=[name for _, name in made.chapters],
+                            on_progress=lambda f: report.progress("Writing thumbnail ideas", f))
+                        plan.publish[publish.key_of(n)] = made.as_dict()
+                        save_plan(conn, plan, status)
+                        report.say(f"{len(made.prompts)} thumbnail ideas. They're in Review, "
+                                   "under Publish.")
+                        continue
                     if made is None or not any(t.path.is_file() for t in made.thumbnails):
                         report.say(f"{label}no thumbnail frames yet. Press Write titles, "
                                    "description and chapters first: it picks them.")

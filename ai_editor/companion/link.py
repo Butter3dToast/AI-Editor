@@ -286,6 +286,24 @@ def league_events(conn: sqlite3.Connection, recording_id: int) -> list[tuple[flo
     return found
 
 
+def champions_played(conn: sqlite3.Connection, recording_ids: list[int]) -> list[str]:
+    """The champions you played in these recordings, most played first (League's own
+    game data, logged by the Companion from 0.45.1; empty for recordings before it)."""
+    if not recording_ids:
+        return []
+    count: dict[str, int] = {}
+    for row in conn.execute(
+            f"SELECT payload_json FROM companion_events WHERE event_type = 'league' AND "
+            f"recording_id IN ({','.join('?' * len(recording_ids))})", recording_ids):
+        try:
+            played = json.loads(row["payload_json"] or "{}").get("played")
+        except ValueError:
+            continue
+        if played:
+            count[played] = count.get(played, 0) + 1
+    return sorted(count, key=lambda name: -count[name])
+
+
 def listed(event: dict) -> bool:
     """Whether the Library lists this League event."""
     if event.get("kind") not in LISTED:
