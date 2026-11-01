@@ -112,7 +112,8 @@
           el("td", {}, f.recorded),
           el("td", {}, f.sound),
           el("td", { title: f.game_from ? `From ${f.game_from}` : "" },
-             f.game || el("span", { class: "note" }, "Worked out on import")));
+             f.game || el("span", { class: "note imp-unknown" },
+               "Not known: set it under Game (or in Library after)")));
       }))));
   }
 
@@ -175,11 +176,12 @@
             el("button", { class: "btn quiet", type: "button", onclick: () => {
               form.more = !form.more;
               more.hidden = !form.more;
-            } }, "Sound tracks, Twitch link…"),
+            } }, "Game, sound tracks, Twitch link…"),
             go),
           more),
         el("div", { class: "disclose" },
-          "The game is worked out from the file name or the Stream Companion unless you set it")));
+          "The game is worked out from the file name or the Stream Companion unless you set it "
+          + "under Game. It can be changed later in Library.")));
     seen = "";
     table();
     count();

@@ -387,3 +387,43 @@ def test_player_keeps_a_video_shape_inside_the_frame():
     rule = CSS[start:CSS.index("}", start)]
     assert "aspect-ratio: 16 / 9 !important" in rule and "max-height: none !important" in rule
     assert ".aie-player { width: 100%; max-height: 440px;" in CSS
+
+
+def test_the_screens_files_are_never_kept_stale(settings):
+    """1 Nov: a browser kept running an old Create video after an update."""
+    import gradio as gr
+    from fastapi.testclient import TestClient
+
+    from ai_editor.app import frame_api
+    from ai_editor.app.worker import Worker
+
+    worker = Worker()
+    worker._start = lambda: None
+    with gr.Blocks() as ui:
+        gr.Markdown("today's screens")
+    ui.queue()
+    with TestClient(frame_api.build_app(settings, ui, worker, mount_kwargs={})) as client:
+        for name in ("frame.js", "create.js", "review.js", "frame.css"):
+            reply = client.get(f"/frame/{name}")
+            assert reply.status_code == 200 and reply.headers["cache-control"] == "no-cache"
+
+
+def test_the_page_names_each_file_with_when_it_changed(settings):
+    import re
+
+    import gradio as gr
+    from fastapi.testclient import TestClient
+
+    from ai_editor.app import frame_api
+    from ai_editor.app.worker import Worker
+
+    worker = Worker()
+    worker._start = lambda: None
+    with gr.Blocks() as ui:
+        gr.Markdown("today's screens")
+    ui.queue()
+    with TestClient(frame_api.build_app(settings, ui, worker, mount_kwargs={})) as client:
+        page = client.get("/").text
+        named = re.findall(r'/frame/[\w.-]+\.(?:js|css)(\?v=\d+)?"', page)
+        assert named and all(named)                   # every one has its ?v=
+        assert client.get(re.search(r'/frame/create\.js\?v=\d+', page).group(0)).status_code == 200

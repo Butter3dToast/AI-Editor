@@ -194,7 +194,10 @@ def make(settings: Settings, worker: Worker, choice: dict) -> dict:
             return {"said": "The length is a number of minutes, like 10."}
         if minutes is not None and not 1 <= minutes <= 60:
             return {"said": "The length is between 1 and 60 minutes."}
-        key = f"make:highlights:{game}"
+        # One job per game and streams: several plans queue from Create video (1 Nov),
+        # but the same game from the same streams would replace the draft before it
+        # (plan.discard_drafts), so that one is watched instead.
+        key = f"make:highlights:{game}:{','.join(map(str, sorted(ids))) if ids else 'all'}"
         title = f"Making a {game or 'stream'} highlights plan"
         job = tasks.make_highlights(settings, game=game, recording_ids=ids, minutes=minutes,
                                     reuse=bool(choice.get("reuse")), profile=profile,

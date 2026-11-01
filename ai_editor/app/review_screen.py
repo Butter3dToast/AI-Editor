@@ -152,9 +152,10 @@ def preview(settings: Settings, plan: EditPlan, part: int | None = None) -> dict
 
 
 def captions_default(settings: Settings, plan: EditPlan) -> bool:
-    return (settings.captions.lets_play if plan.recipe == "letsplay"
-            else settings.shorts.captions if plan.recipe == "shorts"
-            else settings.captions.highlights)
+    """Burned in or not: the plan's own choice (4F-2), else the Settings' (off)."""
+    from .review_finish import captions_on
+
+    return captions_on(settings, plan)
 
 
 def screen(conn, settings: Settings, plan_id: str | None) -> dict:

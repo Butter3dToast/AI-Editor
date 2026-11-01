@@ -5,17 +5,17 @@
    start to here, Trim end to here and Watch the whole video, the clip's details
    beside it with Remove and More…. Under it the length bar against the target,
    then tabs: the clips (drag to reorder, sort, a teaser from a moment, add a
-   clip); Captions, Effects & music and Publish come in 4F-2 and 4F-3, and until
-   then "Today's Review" opens today's screen on the same plan. Every change is
-   one Undo step, as in today's Review. Answers come from review_screen.py. */
+   clip); Captions (burned in or not, fixing lines) and Effects & music (4F-2);
+   Publish comes in 4F-3, and until then "Today's Review" opens today's screen
+   on the same plan. Render opens a panel to check the video first, with Open
+   and Export. Every change is one Undo step, as in today's Review. Answers come
+   from review_screen.py and review_finish.py. */
 "use strict";
 
 (() => {
   const { el, toast, post, line, NATIVE } = window.aie;
   const EVERY_MS = 5000;
   const LATER = {
-    captions: "Fixing caption lines (and whether they're burned in)",
-    effects: "Effects on each moment, music from your stream and what happens between clips",
     publish: "Titles, description, chapters, your YouTube link and thumbnail prompts",
   };
 
@@ -33,6 +33,8 @@
   let tab = "clips";
   let moreOpen = false;
   let dragFrom = null;
+  let shownTab = "";             // what the Captions or Effects tab last drew
+  let lineKey = null;            // the caption line picked
   const ticked = new Set();      // Delete several plans
   const watching = new Set();    // quick previews being made
 
@@ -72,9 +74,9 @@
     fill(actions, undo, redo,
       el("button", { class: "btn", type: "button", onclick: preview }, "Quick preview"),
       el("button", { class: "btn quiet", type: "button", onclick: today,
-                     title: "Rendering, captions, effects, titles and a Let's Play's Part "
-                            + "Planner are still in today's Review until they're rebuilt" },
-         "Today's Review"));
+                     title: "Titles, thumbnails and a Let's Play's Part Planner are still in "
+                            + "today's Review until they're rebuilt" }, "Today's Review"),
+      el("button", { class: "btn primary", type: "button", onclick: renderPanel }, "Render"));
   }
 
   async function today() {
@@ -101,6 +103,7 @@
     data = found;
     if (!data.plan) return empty();
     planId = data.plan.id;
+    shownTab = "";
     if (other) {
       selected = null;
       clip = null;
@@ -301,7 +304,9 @@
     cut = null;
     moreOpen = false;
     whole = false;
+    lineKey = null;
     markRow();
+    if (tab === "captions") tabs();
     await details(true);
   }
 
@@ -473,10 +478,17 @@
                    ["publish", "Publish"]];
     $("#rv-tabs").replaceChildren(...names.map(([id, label]) => el("button", {
       type: "button", class: id === tab ? "on" : "", role: "tab",
-      "aria-selected": String(id === tab), onclick: () => { tab = id; tabs(); },
+      "aria-selected": String(id === tab), onclick: () => { tab = id; shownTab = ""; tabs(); },
     }, label)));
     const into = $("#rv-tab");
-    if (tab === "clips" || tab === "parts") return list(into);
+    if (tab === "clips" || tab === "parts") { shownTab = ""; return list(into); }
+    if (tab === "captions" || tab === "effects") {
+      // Not again on every refresh: what's being typed in a caption line would go.
+      const key = JSON.stringify([tab, planId, tab === "captions" ? selected : null]);
+      if (key !== shownTab) { shownTab = key; (tab === "captions" ? captionsTab : effectsTab)(into); }
+      return;
+    }
+    shownTab = "";
     into.replaceChildren(el("div", { class: "panel rv-later" },
       el("p", {}, `${LATER[tab]} ${tab === "publish" ? "come" : "comes"} here in the next part `
         + "of the rebuild. For now they're in today's Review, which opens on this plan."),
@@ -574,6 +586,296 @@
           el("button", { class: "btn quiet", type: "button",
                          onclick: () => change("add", 0, add.value) }, "Add to video")),
         el("small", {}, "🔖 and 👍 clips first, then the best. Pick one to watch it here.")));
+  }
+
+  /* --- 4F-2: Captions, Effects & music --------------------------------------------- */
+
+  /* A tick box in the designer's style (.check), as a real button (as Import's). */
+  function tick(label, on, change) {
+    const box = el("button", { type: "button", class: "check", role: "checkbox",
+                               "aria-checked": String(on) },
+      el("i", { class: on ? "tick" : "" }), label);
+    box.addEventListener("click", () => {
+      const now = box.getAttribute("aria-checked") !== "true";
+      box.setAttribute("aria-checked", String(now));
+      box.querySelector("i").className = now ? "tick" : "";
+      change(now);
+    });
+    return box;
+  }
+
+  /* One of the plan's own choices: kept, one Undo step, then everything drawn again. */
+  async function setting(what, value) {
+    const said = await post(`/api/review/${encodeURIComponent(planId)}/set`, { what, value });
+    if (said.said) toast(said.said);
+    seen = "";
+    await load();
+    if (selected !== null) details(false);
+  }
+
+  async function finishing() {
+    try {
+      return await (await fetch(`/api/review/${encodeURIComponent(planId)}/finishing`)).json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function captionsTab(into) {
+    const plan = planId;
+    const fin = await finishing();
+    if (!fin || plan !== planId) return;
+    const box = el("div", { class: "panel rv-finish" },
+      tick("Burn in captions (your words)", fin.captions, (on) => setting("captions", on)),
+      el("p", { class: "note" }, "Off unless you tick it, and kept with this plan. Friends "
+        + "on Discord show in their own colour when it's on."));
+    const lines = el("div", { class: "rv-lines", id: "rv-lines" });
+    // As today: a 30-minute part has hundreds of lines, so lines are fixed in highlights
+    // and Shorts (the creator looked for them on a Let's Play, 1 Nov).
+    const why = el("p", { class: "note" }, "Fixing caption lines one by one is for highlights "
+      + "and Shorts. A Let's Play's captions are burned in as they were heard.");
+    fill(into, box, fin.lets_play ? why : lines);
+    if (!fin.lets_play) captionLines(lines);
+  }
+
+  async function captionLines(into) {
+    if (selected === null) {
+      return fill(into, el("p", { class: "note" },
+        "Click a clip (in the list or the bar) to fix its caption lines here."));
+    }
+    const index = selected;
+    let found;
+    try {
+      found = await (await fetch(`/api/review/${encodeURIComponent(planId)}/lines/${index}`)).json();
+    } catch (e) {
+      return;
+    }
+    if (index !== selected || !found.lines) return;
+    const heading = el("h3", { class: "rv-lines-head" }, `Caption lines in ${found.what}`,
+      el("span", { class: "note" }, found.lines.length
+        ? ` · ${found.lines.length} line${found.lines.length === 1 ? "" : "s"} · ✎ fixed · ⊘ hidden`
+        : " · nobody talks in it"));
+    const rows = found.lines.map((ln) => el("button", {
+      type: "button", class: `rv-line${ln.key === lineKey ? " on" : ""}${ln.hidden ? " off" : ""}`,
+      onclick: () => { lineKey = ln.key; captionLines(into); playLine(ln); },
+    }, el("span", { class: "rv-line-at" }, ln.at),
+       ln.hidden ? "⊘ " : ln.edited ? "✎ " : "", ln.friend ? "👥 " : "", ln.text));
+    const picked = found.lines.find((ln) => ln.key === lineKey);
+    fill(into, heading, el("div", { class: "rv-line-list" }, ...rows),
+      picked ? lineEditor(picked, into) : null,
+      el("p", { class: "note" }, "Click a line to hear it. A fix shows in captions, \"You said\" "
+        + "and what the AI writes, everywhere this moment is used."));
+  }
+
+  function playLine(ln) {
+    if (!clip || !clip.video) return;
+    whole = false;
+    play(clip.video, Math.max(0, ln.start - 0.3), ln.end + 0.4);
+  }
+
+  function lineEditor(ln, into) {
+    const text = el("input", { class: "input", type: "text", "aria-label": "This line" });
+    text.value = ln.text;
+    const act = async (action) => {
+      const said = await post(`/api/review/${encodeURIComponent(planId)}/line`,
+                              { index: selected, key: ln.key, action, text: text.value });
+      if (said.said) toast(said.said);
+      // The words may now make a different line: pick the one holding its first word.
+      const first = Number(ln.key.split("-")[0]);
+      seen = "";
+      await load();
+      const again = await (await fetch(`/api/review/${encodeURIComponent(planId)}/lines/${selected}`)).json();
+      const now = (again.lines || []).find((l) => {
+        const [a, b] = l.key.split("-").map(Number);
+        return a <= first && first <= b;
+      });
+      lineKey = now ? now.key : null;
+      await captionLines(into);
+      if (said.offer) offer(into, said);
+    };
+    text.addEventListener("keydown", (e) => { if (e.key === "Enter") act("save"); });
+    return el("div", { class: "rv-line-edit" },
+      el("div", { class: "row tight" }, text,
+        el("button", { class: "btn primary", type: "button", onclick: () => act("save") },
+           "Save line")),
+      el("div", { class: "row tight" },
+        el("button", { class: "btn quiet", type: "button", onclick: () => playLine(ln) },
+           "Play this line"),
+        el("button", { class: "btn quiet", type: "button", onclick: () => act("hide") },
+           ln.hidden ? "Show this line" : "Hide this line"),
+        ln.edited ? el("button", { class: "btn quiet", type: "button", onclick: () => act("back") },
+                       "Put back the original") : null));
+  }
+
+  /* "You wrote 'Baron' for 'barren' -- fix it everywhere?" (2D-2) */
+  function offer(into, said) {
+    const row = el("div", { class: "rv-offer" }, el("span", {}, said.offer_text),
+      el("button", { class: "btn", type: "button", onclick: async () => {
+        const r = await post("/api/review/remember", { heard: said.offer[0], meant: said.offer[1] });
+        if (r.said) toast(r.said);
+        row.remove();
+        captionLines(into);
+      } }, "Yes, everywhere"),
+      el("button", { class: "btn quiet", type: "button", onclick: () => row.remove() },
+         "No, just here"));
+    into.append(row);
+  }
+
+  async function effectsTab(into) {
+    const plan = planId;
+    const fin = await finishing();
+    if (!fin || plan !== planId) return;
+    const parts = [];
+    if (fin.nudge) {
+      const n = fin.nudge;
+      const answer = async (choice) => {
+        const r = await post("/api/review/nudge", { kind: n.kind, choice });
+        if (r.said) toast(r.said);
+        shownTab = "";
+        tabs();
+      };
+      parts.push(el("div", { class: "rv-offer" }, el("span", {}, n.text),
+        n.biggest ? el("button", { class: "btn", type: "button", onclick: () => answer("biggest") },
+                       "Only on the biggest moments") : null,
+        el("button", { class: "btn quiet", type: "button", onclick: () => answer("never") }, n.never),
+        el("button", { class: "btn quiet", type: "button", onclick: () => answer("keep") },
+           "Keep as is")));
+    }
+    if (!fin.lets_play) {
+      const chosen = new Set(fin.effects.filter((e) => e.on).map((e) => e.key));
+      parts.push(el("section", { class: "rv-group" },
+        el("h4", {}, "Effects on the big moments"),
+        el("div", { class: "rv-ticks" }, ...fin.effects.map((e) => tick(e.label, e.on, (on) => {
+          if (on) chosen.add(e.key); else chosen.delete(e.key);
+          setting("effects", [...chosen]);
+        }))),
+        el("p", { class: "note" }, "For this video. All off unless you tick them. Make a quick "
+          + "preview to see and hear them.")));
+      if (fin.each.items.length) {
+        const kept = new Set(fin.each.items.filter((m) => m.on).map((m) => m.key));
+        parts.push(el("section", { class: "rv-group" },
+          el("h4", {}, fin.each.suggested ? "Suggested effects on the big moments" : "Each effect"),
+          el("div", { class: "rv-ticks rv-moments" }, ...fin.each.items.map((m) =>
+            tick(m.label, m.on, (on) => {
+              if (on) kept.add(m.key); else kept.delete(m.key);
+              setting("each", [...kept]);
+            }))),
+          el("p", { class: "note" }, fin.each.suggested
+            ? "The effects that suit each moment. Tick one to use them there: nothing is used "
+              + "until you tick it."
+            : "Untick one to leave just that moment out.")));
+      }
+    }
+    if (fin.between) {
+      parts.push(el("section", { class: "rv-group" }, el("h4", {}, "Between clips"),
+        seg([["cut", "Hard cut"], ["slide", "Slide"]], fin.between, (v) => setting("between", v)),
+        el("p", { class: "note" }, "Slide: the next clip slides in over the last.")));
+    }
+    if (fin.layout) {
+      parts.push(el("section", { class: "rv-group" },
+        el("h4", {}, "How the game fills the tall frame"),
+        seg(fin.layout.choices, fin.layout.value, (v) => setting("layout", v)),
+        el("p", { class: "note" }, "Then make a quick preview to see it.")));
+    }
+    if (fin.lets_play) {
+      // The creator's choice in Phase 2: no effects in Let's Plays, and their cuts are
+      // meant not to be noticed, so music is the only choice here (asked about, 1 Nov).
+      parts.push(el("p", { class: "note" }, "A Let's Play has no effects (your choice), and its "
+        + "cuts are always hard cuts so they aren't noticed. Effects and Between clips are for "
+        + "highlights; effects for Shorts too."));
+    }
+    parts.push(el("section", { class: "rv-group" }, el("h4", {}, "Music"),
+      tick("Music from your stream", fin.music, (on) => setting("music", on)),
+      el("p", { class: "note" }, "Kept under the talking. Quick previews have the stream's "
+        + "sound as it was.")));
+    fill(into, el("div", { class: "panel rv-finish" }, ...parts));
+  }
+
+  function seg(choices, value, change) {
+    const box = el("div", { class: "seg", role: "group" }, ...choices.map(([id, label]) =>
+      el("button", { type: "button", class: id === value ? "on" : "", "data-id": id,
+                     onclick: () => {
+                       box.querySelectorAll("button").forEach((b) =>
+                         b.classList.toggle("on", b.dataset.id === id));
+                       change(id);
+                     } }, label)));
+    return box;
+  }
+
+  /* --- 4F-2: Render, after a last look; Open and Export -------------------------------- */
+
+  async function renderPanel() {
+    let found;
+    try {
+      found = await (await fetch(`/api/review/${encodeURIComponent(planId)}/render`)).json();
+    } catch (e) {
+      return;
+    }
+    const plan = planId;
+    const episode = el("input", { class: "input rv-episode", type: "number", min: "1",
+                                  "aria-label": "Episode number" });
+    if (found.episode) episode.value = found.episode;
+    const part = el("select", { class: "input", "aria-label": "Parts" },
+      el("option", { value: "all" }, "All parts"),
+      ...found.parts.map((n) => el("option", { value: String(n) }, `Part ${n}`)));
+    const choice = () => ({ episode: found.lets_play ? episode.value : null,
+                            part: found.lets_play ? part.value : null });
+    const dialog = el("dialog", { class: "rv-dialog" });
+    const close = () => { dialog.close(); dialog.remove(); };
+    const go = async (what) => {
+      const said = await post(`/api/review/${encodeURIComponent(plan)}/${what}`, choice());
+      if (said.said) toast(said.said);
+      if (what === "render" && said.job !== undefined) { close(); watchRender(said.job, plan, choice()); }
+    };
+    fill(dialog,
+      el("h3", {}, `Ready to render "${found.title}"?`),
+      el("div", { class: "rv-check" }, ...found.rows.map(([k, v]) =>
+        el("div", { class: "kv" }, el("span", {}, k), el("b", {}, v)))),
+      found.lets_play ? el("div", { class: "row tight rv-lp" },
+        el("label", {}, "Episode", episode), el("label", {}, "Parts", part)) : null,
+      el("p", { class: "note" }, "About 3 minutes per 10 minutes of video, in Jobs. "
+        + (found.lets_play
+          ? "Each part is a video of its own, named with the episode and part number. "
+          : found.shorts
+            ? "Rendering marks the clips as used in a Short, so the next Shorts carry on with "
+              + "fresh ones. "
+            : "Rendering marks the clips as used, so the next highlight video carries on with "
+              + "fresh ones. ")
+        + "Change anything above in the Captions and Effects & music tabs."),
+      el("div", { class: "row tight rv-dialog-buttons" },
+        el("button", { class: "btn primary", type: "button", onclick: () => go("render") },
+           "Render it"),
+        el("button", { class: "btn", type: "button", onclick: () => go("open") },
+           "Open the finished video"),
+        found.shorts ? null : el("button", { class: "btn quiet", type: "button",
+                                             onclick: () => go("export") },
+                                 "Export to DaVinci Resolve"),
+        el("div", { class: "spacer" }),
+        el("button", { class: "btn quiet", type: "button", onclick: close }, "Close")));
+    dialog.addEventListener("cancel", close);
+    document.getElementById("app").append(dialog);   // inside the app: its colours
+    dialog.showModal();
+  }
+
+  /* When a render finishes: a note with Open it, wherever you are. */
+  function watchRender(job, plan, choice) {
+    const check = setInterval(async () => {
+      let found;
+      try {
+        found = await (await fetch(`/api/review/render-job/${job}`)).json();
+      } catch (e) {
+        return;
+      }
+      if (found.state === "waiting") return;
+      clearInterval(check);
+      if (found.state === "failed") return toast(found.error);
+      if (found.state === "ready") {
+        toast("Your video is rendered.", { label: "Open it", onclick: async () => {
+          const said = await post(`/api/review/${encodeURIComponent(plan)}/open`, choice);
+          if (said.said) toast(said.said);
+        } });
+      }
+    }, 2000);
   }
 
   /* --- changes, Undo and Redo, the quick preview --------------------------------------- */

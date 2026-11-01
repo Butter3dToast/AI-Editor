@@ -116,6 +116,29 @@ def test_the_picked_recordings_details(client, settings):
     assert client.get("/api/library/99").status_code == 404
 
 
+def test_the_game_can_be_set_after_importing(client, settings):
+    """1 Nov: a Dawnwalker episode named only by its date, with the Companion off, came
+    in with no game, so it counted as a stream and Let's Play didn't list it."""
+    add(settings, 35, game=None)
+    found = client.get("/api/library/35").json()
+    assert found["game"] == "" and "The Blood of Dawnwalker" in found["games"]
+    assert "Crimson Desert" in found["games"] or "Crimson Desert" not in settings.lets_play.games
+    settings.lets_play.games.append("Crimson Desert")
+    assert "Crimson Desert" in client.get("/api/library/35").json()["games"]
+    assert client.post("/api/library/35/game", json={"game": "x"}).status_code == 403
+    said = client.post("/api/library/35/game", headers=GUARD,
+                       json={"game": "  the blood of dawnwalker "}).json()["said"]
+    assert said.startswith("#35 is now The Blood of Dawnwalker: a Let's Play episode")
+    assert client.get("/api/library/35").json()["game"] == "The Blood of Dawnwalker"
+    lets = client.get("/api/create/letsplay").json()["rows"]
+    assert [r["id"] for r in lets] == [35]                         # now in Let's Play
+    assert client.get("/api/create/highlights").json()["rows"] == []   # out of highlights
+    assert client.post("/api/library/35/game", headers=GUARD,
+                       json={"game": " "}).json()["said"] == "Type or pick the game first."
+    assert client.post("/api/library/99/game", headers=GUARD, json={"game": "Wardogs"}).json()[
+        "said"] == "That recording isn't in the library."
+
+
 def test_analyse_is_a_job_queued_like_any_other(client, settings, monkeypatch):
     from ai_editor.app import tasks
 

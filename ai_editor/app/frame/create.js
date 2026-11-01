@@ -91,7 +91,9 @@
       return;
     }
     if (asked !== kind) return;
-    const now = JSON.stringify(found);
+    // What you picked is part of what's on screen: with no style profile to pick, the
+    // answer didn't change, so a clicked recording was never shown picked (1 Nov).
+    const now = JSON.stringify([found, form.recording]);
     if (now === seen && built === kind) return;
     seen = now;
     data = found;
@@ -223,7 +225,7 @@
         el("thead", {}, el("tr", {}, ...heads.map((h) => el("th", {}, h)))),
         el("tbody", {}, ...data.rows.map((r) => el("tr", {
           class: r.id === form.recording ? "on" : "", "data-id": String(r.id),
-          onclick: () => { form.recording = r.id; form.style = null; load(); },
+          onclick: () => { form.recording = r.id; form.style = null; table(); load(); },
         },
           el("td", {}, el("b", {}, r.name)),
           el("td", {}, r.game || "-"),
@@ -322,18 +324,24 @@
       choice.recording = form.recording;
     }
     const said = await post("/api/create/make", choice);
-    if (said.said) {
-      toast(said.said);
-      const note = $("#cv-said");
-      if (note) note.textContent = said.said;
-    }
     if (said.job !== undefined && said.job !== null) watch(said.job);
+    // A second plan while one is still being made: they no longer open by themselves.
+    const text = said.said && queued > 1 && waiting.size > 1 && said.said.startsWith("Making")
+      ? `Making the plan. ${waiting.size} plans being made: each says when it's ready.`
+      : said.said;
+    if (text) {
+      toast(text);
+      const note = $("#cv-said");
+      if (note) note.textContent = text;
+    }
   }
 
   const waiting = new Set();
   let watcher = null;
+  let queued = 0;        // plans made since none were waiting: only one opens by itself
 
   function watch(job) {
+    if (!waiting.has(job)) queued += 1;
     waiting.add(job);
     if (!watcher) watcher = setInterval(check, 1500);
   }
@@ -352,19 +360,24 @@
       if (found.state === "ready") ready(found.plan);
       else if (found.state === "failed") toast(found.error);
     }
-    if (!waiting.size) { clearInterval(watcher); watcher = null; }
+    if (!waiting.size) { clearInterval(watcher); watcher = null; queued = 0; }
   }
 
+  /* One plan opens in Review if you're still here. Several queued (1 Nov): each says
+     so with a button, so setting up the next one isn't taken away. */
   function ready(plan) {
-    if (window.aie.current() === "create") {
+    if (window.aie.current() === "create" && queued === 1) {
       toast("Your plan is ready. Here it is in Review.");
       window.aie.show("review", { plan });
     } else {
-      toast("Your plan is ready.", { label: "Open in Review",
-                                     onclick: () => window.aie.show("review", { plan }) });
+      toast(waiting.size ? `A plan is ready. ${waiting.size} more being made.`
+                         : "Your plan is ready.",
+            { label: "Open in Review", onclick: () => window.aie.show("review", { plan }) });
     }
     const note = body && $("#cv-said");
-    if (note) note.textContent = "Under a minute. It opens in Review.";
+    if (note) note.textContent = waiting.size
+      ? `${waiting.size} plan${waiting.size === 1 ? "" : "s"} still being made. Each says when it's ready.`
+      : "Under a minute. It opens in Review.";
   }
 
   /* --- opened and closed by the frame ------------------------------------------------- */

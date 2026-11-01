@@ -211,6 +211,16 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     no_cache = {"Cache-Control": "no-store"}
 
+    @app.middleware("http")
+    async def always_fresh(request: Request, call_next):
+        """The screens' own files are checked for a newer copy every time (a quick "not
+        changed" when they haven't): without it, a browser kept running an old screen
+        after an update (1 Nov, Create video's list in a test browser)."""
+        response = await call_next(request)
+        if request.url.path.startswith("/frame/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     def guarded(request: Request) -> None:
         if request.headers.get(GUARD) != "1":
             raise HTTPException(status_code=403)
@@ -220,6 +230,11 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
         # Opened in the chosen theme straight away: no flash of the other one.
         text = (FRAME / "index.html").read_text(encoding="utf-8")
         text = text.replace('data-theme="auto"', f'data-theme="{settings.appearance.theme}"')
+        # Each script and stylesheet with when it last changed in its address: a copy a
+        # browser kept from before an update is never used for the new one (1 Nov).
+        text = re.sub(r'(/frame/[\w.-]+\.(?:js|css))"',
+                      lambda m: f'{m.group(1)}?v={(FRAME / m.group(1)[7:]).stat().st_mtime_ns}"'
+                      if (FRAME / m.group(1)[7:]).is_file() else m.group(0), text)
         return HTMLResponse(text, headers=no_cache)
 
     favicon = mount_kwargs.pop("favicon_path", None)
@@ -293,13 +308,15 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
             conn.close()
         return {}
 
-    from . import clips_screen, create_screen, import_screen, library_screen, review_screen
+    from . import (clips_screen, create_screen, import_screen, library_screen, review_finish,
+                   review_screen)
 
     library_screen.add_routes(app, frame, guarded)   # 4C-1: the Library, rebuilt
     import_screen.add_routes(app, frame, guarded)    # 4C-2: Import, rebuilt
     clips_screen.add_routes(app, frame, guarded)     # 4D: Clips, rebuilt
     create_screen.add_routes(app, frame, guarded)    # 4E: Create video, rebuilt
     review_screen.add_routes(app, frame, guarded)    # 4F-1: Review, rebuilt (editing the cut)
+    review_finish.add_routes(app, frame, guarded)    # 4F-2: and finishing it
     app.mount("/frame", StaticFiles(directory=FRAME), name="frame")
     return gr.mount_gradio_app(app, ui, path=CLASSIC, **mount_kwargs)
 

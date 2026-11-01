@@ -160,8 +160,40 @@
         onclick: async () => { const r = await post(`/api/library/${id}/explore`); if (r.said) toast(r.said); },
       }, "Show in Explorer"));
     }
+    // The game, set or put right here (1 Nov: one came in with none, so it wasn't a Let's
+    // Play). A list of every game: a typed box with suggestions only listed the game
+    // already in it. "Another game…" opens a box for a new one.
+    const OTHER = "(another game)";   // not a game anyone would type
+    const known = found.games.includes(found.game) || !found.game ? found.games
+      : [found.game, ...found.games];
+    const pick = el("select", { class: "input", id: "lib-game-box", "aria-label": "Game" },
+      found.game ? null : el("option", { value: "" }, "Not known"),
+      ...known.map((g) => el("option", { value: g }, g)),
+      el("option", { value: OTHER }, "Another game…"));
+    pick.value = found.game || "";
+    const typed = el("input", { class: "input", type: "text", hidden: "",
+                                placeholder: "The game's name", "aria-label": "Another game" });
+    pick.addEventListener("change", () => {
+      typed.hidden = pick.value !== OTHER;
+      if (!typed.hidden) typed.focus();
+    });
+    const saveGame = async () => {
+      const r = await post(`/api/library/${id}/game`,
+                           { game: pick.value === OTHER ? typed.value : pick.value });
+      if (r.said) toast(r.said);
+      seen = "";
+      shownFacts = "";
+      load();
+    };
+    typed.addEventListener("keydown", (e) => { if (e.key === "Enter") saveGame(); });
+    const gameRow = el("div", { class: "row tight lib-game" },
+      el("label", { for: "lib-game-box" }, "Game"), pick, typed,
+      el("button", { class: "btn", type: "button", onclick: saveGame }, "Save game"),
+      found.game ? null : el("span", { class: "lib-game-warn" },
+        "Not known, so it counts as a stream. Set it, and a Let's Play game goes to Let's Play."));
     const panel = el("div", { class: "panel" },
       el("dl", { class: "facts" }, ...facts),
+      gameRow,
       found.gone ? el("p", { class: "note lib-gone" },
         "The video is deleted or moved. Its clips, transcript and everything you taught "
         + "AI-Editor are kept, and its clips can still be watched; finished videos can't be "

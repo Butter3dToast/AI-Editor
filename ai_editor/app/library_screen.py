@@ -215,10 +215,37 @@ def details(conn, settings: Settings, recording_id: int, snapshot: list[Task]) -
         "status": said, "state": state, "facts": facts,
         "league": league, "league_summary": summary,
         "file": str(source), "gone": gone, "preview": has_preview,
+        # Your Let's Play games from Settings too (Crimson Desert wasn't listed, 1 Nov).
+        "game": row["game"] or "",
+        "games": sorted(set(library.game_choices(conn)) | set(settings.lets_play.games)),
     }
 
 
 # --- what its buttons do -------------------------------------------------------------
+
+
+def set_game(settings: Settings, recording_id: int, game: str) -> str:
+    """A recording's game, set or put right after importing (1 Nov: a Dawnwalker episode
+    named only by its date, with the Companion off, came in with no game, so it wasn't
+    a Let's Play). Only the game changes."""
+    from ..games import canonical_game
+
+    name = canonical_game(" ".join((game or "").split()))
+    if not name:
+        return "Type or pick the game first."
+    conn = init_db(settings.db_path)
+    try:
+        if conn.execute("UPDATE recordings SET game = ? WHERE id = ?",
+                        (name, recording_id)).rowcount == 0:
+            return "That recording isn't in the library."
+        conn.commit()
+    finally:
+        conn.close()
+    if is_lets_play(settings, name):
+        return (f"#{recording_id} is now {name}: a Let's Play episode, so it stays out of stream "
+                "highlights and is in Create video, Let's Play.")
+    return f"#{recording_id} is now {name}."
+
 
 
 def _row(settings: Settings, recording_id: int):
@@ -340,6 +367,11 @@ def add_routes(app, frame, guarded) -> None:
         if found is None:
             raise HTTPException(status_code=404)
         return JSONResponse(found, headers=no_cache)
+
+    @app.post("/api/library/{recording_id}/game")
+    def game(recording_id: int, request: Request, game: str = Body("", embed=True)):
+        guarded(request)
+        return {"said": set_game(settings, recording_id, game)}
 
     @app.post("/api/library/{recording_id}/{action}")
     def act(recording_id: int, action: str, request: Request):

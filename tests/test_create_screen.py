@@ -127,9 +127,15 @@ def test_make_the_plan_starts_todays_job(client, library, monkeypatch):
     assert asked == {"game": None, "recording_ids": [2], "minutes": 12.0, "reuse": True,
                      "profile": None, "only_liked": False, "saved": True}
     job = said["job"]
-    # The same plan again: it watches the one already being made.
-    again = client.post("/api/create/make", headers=GUARD, json={"kind": "highlights"}).json()
+    # The same streams again would replace that draft: it watches the one being made.
+    again = client.post("/api/create/make", headers=GUARD, json={
+        "kind": "highlights", "minutes": "20", "recordings": [2]}).json()
     assert again["job"] == job and "already being made" in again["said"]
+    # Other streams, or all of them, queue a plan of their own (1 Nov).
+    other = client.post("/api/create/make", headers=GUARD, json={
+        "kind": "highlights", "recordings": [3, 1]}).json()
+    every = client.post("/api/create/make", headers=GUARD, json={"kind": "highlights"}).json()
+    assert len({job, other["job"], every["job"]}) == 3
     assert client.post("/api/create/make", headers=GUARD, json={
         "kind": "highlights", "minutes": "90"}).json()["said"] == \
         "The length is between 1 and 60 minutes."
@@ -137,9 +143,10 @@ def test_make_the_plan_starts_todays_job(client, library, monkeypatch):
         "kind": "letsplay"}).json()["said"] == "Pick the episode's recording first."
     lp = client.post("/api/create/make", headers=GUARD,
                      json={"kind": "letsplay", "recording": 4}).json()
-    assert [t.key for t in client.worker.snapshot()] == ["make:highlights:None",
-                                                         "make:letsplay:4"]
-    assert lp["job"] == client.worker.snapshot()[1].id
+    assert [t.key for t in client.worker.snapshot()] == [
+        "make:highlights:None:2", "make:highlights:None:1,3", "make:highlights:None:all",
+        "make:letsplay:4"]
+    assert lp["job"] == client.worker.snapshot()[3].id
 
 
 def test_a_finished_plan_is_found_to_open_in_review(client, library):
@@ -171,5 +178,11 @@ def test_the_frame_draws_create_video_itself():
     assert "NATIVE.create" in script and ".innerHTML" not in script   # text, never markup
     # The creator's choices: open in Review if still here, else a note with a button.
     assert 'window.aie.current() === "create"' in script and '"Open in Review"' in script
+    # ...but only when it's the one plan being made: several queued each say so instead.
+    assert 'window.aie.current() === "create" && queued === 1' in script
+    # The creator's test: a recording with no style profile couldn't be picked, because the
+    # screen only redrew when the server's answer changed.
+    assert "JSON.stringify([found, form.recording])" in script
+    assert "form.recording = r.id; form.style = null; table(); load();" in script
     clips = (frame / "clips.js").read_text(encoding="utf-8")
     assert 'window.aie.show("create", rec === null ? undefined : { recording: rec })' in clips

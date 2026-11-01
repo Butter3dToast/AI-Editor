@@ -3,6 +3,54 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.44.0 — Phase 4F-2: Review in the new design (captions, effects, rendering) — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **Captions tab** in Review:
+  - **Burn in captions (your words)**, off unless you tick it, and **kept with
+    the plan**: ticking it for one video no longer ticks it for the next.
+  - **Caption lines** for the clip you clicked: click a line to hear it, fix
+    its words and **Save line**, **Hide** or **Show** it, **Put back the
+    original**, and the offer to remember a fix everywhere. One Undo step each,
+    as in today's Review.
+- **Effects & music tab:** the effects (all off unless ticked), the suggested
+  effects for each big moment (nothing used until ticked), **Between clips**
+  (Hard cut or Slide), a Short's layout, and **Music from your stream**.
+- **Render** at the top of Review: a panel says what the video will have
+  (captions, music, effects, between clips, length) before you press
+  **Render it**; **Open the finished video** and **Export to DaVinci Resolve**
+  are there too. A Let's Play adds its episode number and which parts.
+- **When a render finishes**, a note says so with **Open it**, wherever you are
+  in the window.
+- **A Let's Play's tabs say why they're shorter:** no effects in Let's Plays
+  (your Phase 2 choice), cuts always hard, and caption lines fixed one by one
+  are for highlights and Shorts.
+- **The game can be set after importing**, in the Library's details: a list of
+  every game in your library and your Let's Play games from Settings, or
+  **Another game…** to type a new one. A Let's Play game moves the recording
+  to Let's Play in Create video.
+- **Several plans at once from Create video:** press Make the plan again while
+  one is being made, and they queue in Jobs. When more than one is queued, none
+  opens by itself: each says it's ready, with **Open in Review**. The same game
+  from the same streams twice still waits for the first, because the second
+  would replace it.
+
+**Fixed while testing**
+
+- Episode #35 came in with no game (named only by its date, with the Stream
+  Companion off), so it counted as a stream and Let's Play said nothing was
+  analysed. The Import button that held the game was called "Sound tracks,
+  Twitch link…": it's now **Game, sound tracks, Twitch link…**, and a game it
+  can't work out says to set it there or in the Library.
+- In Create video, a Let's Play recording with no style profile couldn't be
+  picked: the list only redrew when AI-Editor's answer changed.
+- After an update, the window could keep showing a screen's old version, kept
+  from before: its screens are now always loaded fresh.
+- Queuing a second highlights plan for the same game was refused even with
+  other streams ticked, and the first plan to finish pulled you into Review
+  while you were setting up the next.
+
 ## 0.43.0 — Phase 4F-1: Review in the new design (changing the cut) — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)
