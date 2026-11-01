@@ -194,7 +194,7 @@ def test_the_starting_screen_moves_with_each_real_step_then_shows_the_page(setti
 
     monkeypatch.setattr(app_window, "already_running", lambda port: False)
     monkeypatch.setattr(app_window, "start",
-                        lambda s, port, open_browser: ("the page", "the jobs"))
+                        lambda s, port, open_browser, frame: ("the page", "the jobs"))
     win, started = FakeWindow(), {}
     desktop.boot(settings, win, started)
     steps = [c[1] for c in win.calls if c[0] == "js"]

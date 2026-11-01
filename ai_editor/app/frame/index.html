@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI-Editor</title>
+<!-- Phase 4B: the frame. theme.css is the designer's (mockups/theme.css), as is. -->
+<link rel="stylesheet" href="/frame/theme.css">
+<link rel="stylesheet" href="/frame/frame.css">
+</head>
+<body>
+<div class="app dark" id="app" data-theme="auto">
+  <aside class="side">
+    <div class="brand"><b>AI-Editor</b><span id="version"></span></div>
+    <div id="nav"></div>
+    <div class="side-foot">
+      <div class="seg theme" id="theme" role="group" aria-label="Light or dark">
+        <button type="button" data-mode="auto" title="As Windows is set">Auto</button>
+        <button type="button" data-mode="light">Light</button>
+        <button type="button" data-mode="dark">Dark</button>
+      </div>
+      <button class="comp" id="companion" type="button" title="Start or stop the Stream Companion">
+        <i class="led off"></i><div><b id="comp-title">Companion</b><span id="comp-detail"></span></div>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><h1 id="title">Library</h1><p id="subtitle"></p></div>
+      <div class="spacer"></div>
+      <div class="row tight" id="actions"></div>
+    </header>
+
+    <div class="wrap">
+      <main class="body classic" id="body">
+        <div class="morning" id="morning" hidden>
+          <div class="text" id="morning-text"></div>
+          <button class="btn" id="morning-ok" type="button">OK</button>
+        </div>
+        <iframe id="screen" title="AI-Editor"></iframe>
+      </main>
+      <aside class="rail slim" id="rail" aria-label="Jobs"></aside>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script src="/frame/frame.js"></script>
+</body>
+</html>

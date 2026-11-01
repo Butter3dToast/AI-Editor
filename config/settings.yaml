@@ -372,6 +372,9 @@ backup: # Backups of your library and Settings (manual chapter 5, Backing up). N
   folder: null
   weekly: true # also once a week by itself, while AI-Editor is open
 
+appearance: # AI-Editor's own window (manual 5.1). Change it at the foot of its sidebar.
+  theme: auto # auto (as Windows is set) | light | dark
+
 logging:
   # What appears on screen. The log file always records everything.
   level: WARNING # DEBUG | INFO | WARNING | ERROR

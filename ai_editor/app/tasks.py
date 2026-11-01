@@ -138,6 +138,7 @@ def _ingest(conn, settings: Settings, path: Path, report: Reporter, *, game, tra
         raise TaskFailed(f"{result.error_message} Press Resume to try again; finished "
                          "steps won't be repeated.")
     recording_id = result.registration.recording_id
+    report.keep(recording_id=recording_id)   # 4B: its length, for "about N min left"
     report.say(found_text(link_recording(conn, recording_id)))
     report.say(f"Imported #{recording_id}.")
     return recording_id
@@ -600,6 +601,8 @@ def render(settings: Settings, plan_id: str, *, captions: bool, episode: int | N
                               title=lp.title_card(settings, episode, n)))
                         for n in numbers if not parts or n in parts]
             videos = []
+            # 4B: how much video, for "about N min left".
+            report.keep(size_sec=sum(j.total_sec for j, *_ in jobs), parts=len(jobs))
             for job, part, label, extra in jobs:
                 # Saved under the title you kept in Review, if there is one.
                 extra["target"] = names.target(extra["target"], plan, part, captions)

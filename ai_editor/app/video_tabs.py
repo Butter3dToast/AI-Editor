@@ -128,13 +128,15 @@ def build(settings: Settings, worker: Worker, timer: gr.Timer, ui: gr.Blocks) ->
         clip_ids = gr.State([])
         clip_sel = gr.State(None)
         clip_counts = gr.Markdown()
-        with gr.Row():
-            with gr.Column(scale=3):
+        # The elem_classes only matter inside the new window's frame (4B): there
+        # the player goes on top and the list below at full width.
+        with gr.Row(elem_classes=["aie-clips-stage"]):
+            with gr.Column(scale=3, elem_classes=["aie-clips-list"]):
                 clip_tbl = gr.Dataframe(headers=videos.CLIP_COLUMNS, interactive=False, wrap=True,
                                         max_height=560,
                                         column_widths=["4%", "9%", "6%", "6%", "6%", "6%",
                                                        "12%", "21%", "18%", "6%", "6%"])
-            with gr.Column(scale=2):
+            with gr.Column(scale=2, elem_classes=["aie-clips-player"]):
                 clip_player = gr.HTML(videos.player(None, note="Pick a recording, then click a "
                                                                "clip to watch it here."))
                 clip_info = gr.Markdown()

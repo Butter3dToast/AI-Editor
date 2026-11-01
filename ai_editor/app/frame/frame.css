@@ -1,0 +1,56 @@
+/* The frame's own layout (Phase 4B), on top of the designer's theme.css:
+   the window's full height, today's screen in the body, the morning note,
+   the Companion button and the Jobs panel's open and closed states. */
+
+html, body { margin: 0; height: 100%; background: #111113; }
+@media (prefers-color-scheme: light) { html, body { background: #f7f7f8; } }
+
+.app { min-height: 100vh; height: 100vh; overflow: hidden; }
+.main { height: 100vh; }
+.wrap { min-height: 0; }
+.side { overflow-y: auto; }
+.nav a { cursor: pointer; user-select: none; }
+.nav .tally:empty { display: none; }
+
+/* Today's screen, until it's rebuilt: it fills the body and scrolls itself. */
+.body.classic { padding: 0; gap: 0; overflow: hidden; }
+.body.classic iframe { flex: 1; width: 100%; border: 0; background: var(--bg); }
+
+/* Overnight work's note, along the top of the screen until OK. */
+.morning { display: flex; gap: 16px; align-items: center; padding: 14px 36px;
+  border-bottom: 1px solid var(--line); color: var(--mid); font-size: 13.5px; line-height: 1.6; }
+.morning[hidden] { display: none; }
+.morning .text { flex: 1; }
+.morning b { color: var(--ink); font-weight: 600; }
+
+/* The Stream Companion, at the foot of the sidebar: click to start or stop it. */
+.side .comp { width: 100%; padding: 10px 12px; margin: 0 -12px; border: 0; border-radius: 8px;
+  background: transparent; font: inherit; text-align: left; cursor: pointer;
+  width: calc(100% + 24px); }
+.side .comp:hover { background: var(--surf2); }
+.comp .led.warn { background: var(--warn); }
+.comp .led.off { background: transparent; border: 1px solid var(--line2); }
+.comp span { display: block; }
+
+/* Light or dark, above the Companion: the designer's own switch (.seg). */
+.side .theme { display: flex; margin-bottom: 16px; }
+.side .theme button { flex: 1; }
+
+/* Jobs: the panel's head, with its close button. */
+.rail .head { display: flex; justify-content: space-between; align-items: center; }
+.rail .shut { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line2);
+  background: transparent; color: var(--dim); font: inherit; font-size: 13px; line-height: 1;
+  cursor: pointer; }
+.rail .shut:hover, .rail.slim .open:hover { background: var(--surf2); color: var(--ink); }
+.rail.slim .busy { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.job .step span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.job .row.tight { margin-top: 2px; }
+
+/* A short message after a button: the Companion starting, a job resumed. */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  max-width: 560px; padding: 10px 16px; border-radius: 8px; font-size: 13px;
+  background: var(--surf2, #1f1f23); color: var(--ink, #ececef);
+  border: 1px solid var(--line2, rgba(255,255,255,.14)); opacity: 0; pointer-events: none;
+  transition: opacity .2s; font-family: "Segoe UI", system-ui, sans-serif; }
+.toast.on { opacity: 1; }
+.app.light ~ .toast { background: #f1f1f3; color: #18181b; border-color: rgba(0,0,0,.16); }

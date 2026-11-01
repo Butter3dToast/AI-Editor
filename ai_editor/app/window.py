@@ -80,6 +80,34 @@ CSS = """
                     border: 1px dashed var(--border-color-primary); }
 .aie-player-note { font-size: .85em; opacity: .75; margin-top: 4px; }
 @media (max-width: 640px) { .aie-step { grid-template-columns: 1fr 1fr 40px; } }
+/* Phase 4B: inside the new frame, today's screens show without their own title,
+   Jobs box, Companion box and tabs: the frame has those. Only there. */
+html.aie-embed .aie-chrome { display: none !important; }
+html.aie-embed #aie-tabs > .tab-wrapper { display: none !important; }
+html.aie-embed footer { display: none !important; }
+html.aie-embed .gradio-container { padding: 8px 28px 28px !important; max-width: none !important; }
+html.aie-embed .gradio-container .main.fillable { max-width: none !important; padding-left: 8px !important; padding-right: 8px !important; }
+/* ...on the frame's own background, so the two read as one. */
+html.aie-embed, html.aie-embed body, html.aie-embed gradio-app,
+html.aie-embed .gradio-container, html.aie-embed .main, html.aie-embed .wrap,
+html.aie-embed .contain { background: transparent !important; }
+/* Clips inside the frame: the player on top, the list below at full width (the
+   design's stage), and column names that never break mid-word (1 Nov). */
+html.aie-embed .aie-clips-stage { flex-direction: column !important; }
+html.aie-embed .aie-clips-stage > * { width: 100% !important; min-width: 0 !important;
+                                      flex: none !important; }
+html.aie-embed .aie-clips-player { order: -1; }
+html.aie-embed .aie-clips-list th, html.aie-embed .aie-clips-list th * {
+    white-space: nowrap !important; word-break: keep-all !important; }
+html.aie-embed .aie-clips-list table { min-width: 1100px; }   /* scrolls sideways if narrower */
+html.aie-embed .aie-clips-list th:nth-child(4), html.aie-embed .aie-clips-list th:nth-child(6) {
+    width: 96px !important; min-width: 96px !important; }   /* In a video, Your taste */
+/* Players inside the frame keep a video's shape from the start: before a clip has
+   loaded, a full-width player was the browser's default 150px tall (1 Nov). As big
+   as fits in 60% of the window's height, centred. */
+html.aie-embed .aie-player { display: block !important; aspect-ratio: 16 / 9 !important;
+    height: auto !important; max-height: none !important;
+    width: min(100%, calc(60vh * 16 / 9)) !important; margin: 0 auto !important; }
 """
 
 # Switching tabs pauses whatever is playing: a video on a tab you left kept going (24 Oct).
@@ -89,6 +117,33 @@ document.addEventListener("click", (e) => {
     document.querySelectorAll("video, audio").forEach((m) => { if (!m.paused) m.pause(); });
   }
 }, true);
+// Phase 4B: shown inside the new frame (?embed=1), the frame picks the screen.
+// Opened on its own (the browser), nothing here does anything.
+(function () {
+  var asked = new URLSearchParams(location.search);
+  if (asked.get("embed") !== "1") return;
+  document.documentElement.classList.add("aie-embed");
+  // Light or dark, as the frame says (its switch, or Windows when on Auto).
+  window.aieTheme = function (looks) {
+    document.body.classList.toggle("dark", looks === "dark");
+  };
+  window.aieShow = function (name) {
+    var tabs = document.querySelectorAll("#aie-tabs > .tab-wrapper button[role=tab]");
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].innerText.trim() === name) {
+        if (!tabs[i].classList.contains("selected")) tabs[i].click();
+        return true;
+      }
+    }
+    return false;
+  };
+  var first = asked.get("view");
+  if (first) {
+    var tries = 0, wait = setInterval(function () {
+      if (window.aieShow(first) || ++tries > 200) clearInterval(wait);
+    }, 100);
+  }
+})();
 </script>"""
 
 
@@ -147,10 +202,10 @@ def build(settings: Settings, worker: Worker):
 
     with gr.Blocks(title=__product_name__, analytics_enabled=False) as ui:
         gr.Markdown(f"# {__product_name__}\n<sub>Version {__version__}. Runs on this PC only. "
-                    "To quit, close the black AI-Editor window.</sub>")
+                    "To quit, close the black AI-Editor window.</sub>", elem_classes=["aie-chrome"])
         overnight_panel.build_note(settings, ui)   # Phase 3B: the morning note
 
-        with gr.Accordion("Jobs", open=True):
+        with gr.Accordion("Jobs", open=True, elem_classes=["aie-chrome"]):
             activity = gr.HTML(activity_html(worker.snapshot()))
             with gr.Row():
                 pause_btn = gr.Button("Pause", size="sm")
@@ -158,7 +213,7 @@ def build(settings: Settings, worker: Worker):
                 clear_btn = gr.Button("Clear finished", size="sm")
             jobs_msg = gr.Markdown()
 
-        with gr.Accordion("Stream Companion", open=True):
+        with gr.Accordion("Stream Companion", open=True, elem_classes=["aie-chrome"]):
             with gr.Row():
                 companion_line = gr.HTML(companion_panel.status_html(
                     companion_status.read(companion_status.folder(settings))))
@@ -167,7 +222,7 @@ def build(settings: Settings, worker: Worker):
             companion_msg = gr.Markdown()
 
         timer = gr.Timer(1.0)
-        with gr.Tabs():
+        with gr.Tabs(elem_id="aie-tabs"):
             # --- Library ------------------------------------------------------
             with gr.Tab("Library", id="library"):
                 table = gr.Dataframe(value=read(library.library_table, settings),
@@ -459,6 +514,15 @@ def already_running(port: int) -> bool | None:
         return False
 
 
+def in_window(port: int) -> bool:
+    """True if what answers on ``port`` is AI-Editor's own window (the new frame)."""
+    try:
+        with urllib.request.urlopen(url_for(port) + "config", timeout=3) as reply:  # noqa: S310
+            return '"aie_frame"' in reply.read(20_000).decode("utf-8", "replace")
+    except OSError:
+        return False
+
+
 def recover(settings: Settings) -> None:
     """Jobs left 'running' when AI-Editor last closed were cut short: paused."""
     from ..jobs import JobQueue
@@ -498,11 +562,16 @@ def _ignore_dropped_connections(record: logging.LogRecord) -> bool:
     return not isinstance(error, ConnectionResetError)
 
 
-def start(settings: Settings, *, port: int, open_browser: bool) -> tuple[gr.Blocks, Worker]:
+def start(settings: Settings, *, port: int, open_browser: bool, frame: bool = False):
     """Start AI-Editor's page on ``port`` in the background: the window, the
-    jobs, the overnight and backup clocks. Returns once it's answering. Used by
-    ``ai-editor app`` (the browser) and the desktop window (Phase 4A)."""
+    jobs, the overnight and backup clocks. Returns (what to close, the jobs)
+    once it's answering. Used by ``ai-editor app`` (the browser) and the
+    desktop window (4A), which shows the new frame (4B, ``frame``): today's
+    screens then live under /classic inside it."""
+    from functools import partial
+
     from .. import hardware
+    from .estimate import keep_finished
 
     recover(settings)
     logging.getLogger("asyncio").addFilter(_ignore_dropped_connections)
@@ -512,13 +581,21 @@ def start(settings: Settings, *, port: int, open_browser: bool) -> tuple[gr.Bloc
     find_marks(settings, worker)
     overnight.start_clock(settings, worker)   # Phase 3B: starts at the time in Settings
     backup_panel.start_weekly(settings, worker)   # once a week, if a folder is chosen
-    ui.queue(default_concurrency_limit=4).launch(
-        server_name=ADDRESS, server_port=port, inbrowser=open_browser, share=False,
-        show_error=True, quiet=True, ssr_mode=False, favicon_path=str(ICON),
-        footer_links=[], allowed_paths=[str(settings.folders.cache / "recordings"),
-                                       str(settings.folders.output)],
-        theme=gr.themes.Soft(primary_hue="violet"), css=CSS, head=HEAD,
-        prevent_thread_lock=True)
+    worker.on_done = partial(keep_finished, settings)   # 4B: step times, for "min left"
+    page = dict(show_error=True, ssr_mode=False, favicon_path=str(ICON), footer_links=[],
+                allowed_paths=[str(settings.folders.cache / "recordings"),
+                               str(settings.folders.output)],
+                theme=gr.themes.Soft(primary_hue="violet"), css=CSS, head=HEAD)
+    ui.queue(default_concurrency_limit=4)
+    if frame:
+        from . import frame_api
+
+        server = frame_api.Server(frame_api.build_app(settings, ui, worker, mount_kwargs=page),
+                                  ADDRESS, port)
+        server.start()
+        return server, worker
+    ui.launch(server_name=ADDRESS, server_port=port, inbrowser=open_browser, share=False,
+              quiet=True, prevent_thread_lock=True, **page)
     return ui, worker
 
 
@@ -527,6 +604,8 @@ def serve(settings: Settings, *, port: int = PORT, open_browser: bool = True) ->
     url = url_for(port)
     running = already_running(port)
     if running:
+        if in_window(port):   # 4B: open in its own window; its classic screens are here
+            url += "classic/"
         print(f"{__product_name__} is already open at {url}")
         if open_browser:
             webbrowser.open(url)

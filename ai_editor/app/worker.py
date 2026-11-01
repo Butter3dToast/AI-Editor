@@ -30,6 +30,8 @@ DONE = "done"
 PAUSED = "paused"
 FAILED = "failed"
 UNFINISHED = (WAITING, RUNNING, PAUSED, FAILED)
+# Steps that are waiting, not working: never timed (overnight work's).
+UNTIMED = ("Waiting", "Checking the graphics card")
 
 
 def paused_note(steps: dict[str, float]) -> str:
@@ -71,10 +73,14 @@ class Task:
     started: float | None = None
     finished: float | None = None
     result: dict = field(default_factory=dict)  # what it made, for the window to show
+    # How long each finished step took (4B), in order: for "about N min left".
+    timings: list[tuple[str, float]] = field(default_factory=list)
+    step_started: dict[str, float] = field(default_factory=dict)
 
     def copy(self) -> Task:
         return Task(self.id, self.title, self.key, self.run, self.status, dict(self.steps),
-                    list(self.lines), self.error, self.started, self.finished, dict(self.result))
+                    list(self.lines), self.error, self.started, self.finished, dict(self.result),
+                    list(self.timings), dict(self.step_started))
 
 
 class Reporter:
@@ -86,8 +92,14 @@ class Reporter:
 
     def progress(self, label: str, fraction: float) -> None:
         self._check()
+        now = time.monotonic()
         with self._worker._lock:
-            self._task.steps[label] = max(0.0, min(1.0, fraction))
+            task = self._task
+            before = task.steps.get(label)
+            task.steps[label] = max(0.0, min(1.0, fraction))
+            task.step_started.setdefault(label, now)
+            if task.steps[label] >= 1.0 and (before is None or before < 1.0)                     and not label.startswith(UNTIMED):
+                task.timings.append((label, now - task.step_started[label]))
 
     def keep(self, **result) -> None:
         """Hand something back to the window: a plan made, a video saved."""
@@ -117,6 +129,8 @@ class Worker:
         self._thread: threading.Thread | None = None
         # Told about every job that fails, to write it down as an issue (0.32.0).
         self.on_failure: Callable[[Task, str], None] | None = None
+        # Told about every job that finishes, to keep its step times (4B).
+        self.on_done: Callable[[Task], None] | None = None
         # Asked before each job starts whether this PC can do it (4A, hardware.py):
         # (why it can't, or None; what will make it slower).
         self.precheck: Callable[[Task], tuple[str | None, list[str]]] | None = None
@@ -150,12 +164,17 @@ class Worker:
             self.version += 1
             return len(held)
 
-    def resume(self) -> int:
-        """Send paused and failed jobs back to the queue, in their order."""
+    def resume(self, task_id: int | None = None) -> int:
+        """Send paused and failed jobs back to the queue, in their order. With
+        ``task_id``, only that one (a card's own Resume, 4B)."""
         with self._lock:
-            again = [t for t in self._tasks if t.status in (PAUSED, FAILED)]
+            again = [t for t in self._tasks if t.status in (PAUSED, FAILED)
+                     and (task_id is None or t.id == task_id)]
             for task in again:
                 task.status, task.error = WAITING, None
+                # A step cut short starts again: its clock too, so a pause isn't timed.
+                task.step_started = {k: v for k, v in task.step_started.items()
+                                     if task.steps.get(k, 0.0) >= 1.0}
             self.version += 1
             self._start()
             self._wake.notify()
@@ -201,6 +220,11 @@ class Worker:
                     task.lines.extend(slower)
                     self.version += 1
             status, error = self._run(task)
+            if status == DONE and self.on_done is not None:
+                try:
+                    self.on_done(task.copy())
+                except Exception:  # noqa: BLE001 -- keeping times must never break the queue
+                    log.exception("Couldn't keep the step times of '%s'", task.title)
             if status == FAILED and self.on_failure is not None:
                 try:
                     self.on_failure(task, error or "")

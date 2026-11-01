@@ -107,6 +107,86 @@ def watch_for_second_start(settings: Settings, window, every: float = 0.5) -> No
                 pass
 
 
+# --- Where the window was (4B): opened again where you left it ---------------------
+
+SIZE = {"width": 1512, "height": 982}
+
+
+def geometry_file(settings: Settings) -> Path:
+    return settings.folders.cache / "app" / "window.json"
+
+
+def _read_geometry(settings: Settings) -> dict:
+    import json
+
+    try:
+        return json.loads(geometry_file(settings).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def saved_geometry(settings: Settings, screens=None) -> dict:
+    """Where the window was last time, if it's still on a screen; else the usual size.
+
+    Maximised last time: maximised again, and the restore button goes back to the
+    size it had before (1 Nov: the maximised size was kept as the normal size, so
+    restore had nothing smaller to go back to).
+    """
+    found = _read_geometry(settings)
+    maximized = {"maximized": True} if found.get("maximized") else {}
+    try:
+        x, y, width, height = (int(found[k]) for k in ("x", "y", "width", "height"))
+    except (ValueError, KeyError, TypeError):
+        return {**SIZE, **maximized}
+    if screens is None:
+        try:
+            import webview
+
+            screens = webview.screens
+        except Exception:  # noqa: BLE001 -- no screens to ask: the usual size
+            screens = []
+    # The title bar must be on a screen (a second monitor may have gone).
+    on = [s for s in screens if s.x <= x + 100 <= s.x + s.width and s.y <= y + 10 <= s.y + s.height]
+    if not on or width < 600 or height < 400:
+        return {**SIZE, **maximized}
+    if width >= on[0].width:   # a maximised window kept before 0.39.0
+        return {**SIZE, "maximized": True}
+    return {"x": x, "y": y, "width": width, "height": height, **maximized}
+
+
+def track_state(window, maximized: bool = False) -> dict:
+    """Follow the window being maximised, minimised and restored, for keep_geometry."""
+    state = {"maximized": maximized, "minimized": False}
+    window.events.maximized += lambda: state.update(maximized=True, minimized=False)
+    window.events.minimized += lambda: state.update(minimized=True)
+    window.events.restored += lambda: state.update(maximized=False, minimized=False)
+    return state
+
+
+def keep_geometry(settings: Settings, window, state: dict | None = None) -> None:
+    """window.events.closing: remember where the window is.
+
+    Only its normal size and place: maximised or minimised, the window's size is
+    the screen's (or nowhere), so the normal one from before is kept with a note.
+    """
+    import json
+
+    state = state or {}
+    try:
+        if state.get("maximized") or state.get("minimized"):
+            found = {k: v for k, v in _read_geometry(settings).items()
+                     if k in ("x", "y", "width", "height")}
+        else:
+            found = {"x": window.x, "y": window.y, "width": window.width, "height": window.height}
+        if state.get("maximized"):
+            found["maximized"] = True
+        path = geometry_file(settings)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(found), encoding="utf-8")
+    except Exception:  # noqa: BLE001 -- only a convenience
+        pass
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -128,11 +208,13 @@ def pause_jobs(worker, wait: float = STOP_WAIT_SEC) -> None:
 # finishes; the page replaces it when it's ready. Colours from the Phase 4
 # design (mockups/theme.css), dark or light as Windows is set.
 
-STARTING = """<!doctype html><html><head><meta charset="utf-8"><style>
+STARTING = """<!doctype html><html class="THEME_HERE"><head><meta charset="utf-8"><style>
 :root{--bg:#111113;--ink:#ececef;--dim:#8d9099;--track:rgba(255,255,255,.08);--accent:#a78bfa;
 --bad:#f87171}
-@media (prefers-color-scheme: light){:root{--bg:#f7f7f8;--ink:#18181b;--dim:#6b6e78;
+@media (prefers-color-scheme: light){:root:not(.dark){--bg:#f7f7f8;--ink:#18181b;--dim:#6b6e78;
 --track:rgba(0,0,0,.09);--accent:#6d28d9;--bad:#b91c1c}}
+:root.light{--bg:#f7f7f8;--ink:#18181b;--dim:#6b6e78;--track:rgba(0,0,0,.09);--accent:#6d28d9;
+--bad:#b91c1c}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;
 display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;
@@ -164,8 +246,15 @@ window.step = function (fraction, text, bad) {
 STEPS = (("Loading the editor", 0.62), ("Opening your library", 0.9), ("Almost there", 0.97))
 
 
-def starting_page() -> str:
-    return STARTING.replace("VERSION_HERE", f"Version {__version__}")
+def starting_page(theme: str = "auto") -> str:
+    """``theme``: auto (as Windows is set), light or dark: the one chosen in the window."""
+    return STARTING.replace("VERSION_HERE", f"Version {__version__}").replace(
+        "THEME_HERE", theme if theme in ("light", "dark") else "auto")
+
+
+def looks_light(settings: Settings) -> bool:
+    theme = settings.appearance.theme
+    return theme == "light" or (theme == "auto" and light_windows())
 
 
 def light_windows() -> bool:
@@ -210,7 +299,7 @@ def boot(settings: Settings, window, started: dict) -> None:
         show_step(window, STEPS[1][1], STEPS[1][0])
         if not running:
             started["ui"], started["worker"] = app_window.start(settings, port=port,
-                                                                open_browser=False)
+                                                                open_browser=False, frame=True)
         show_step(window, STEPS[2][1], STEPS[2][0])
         url = app_window.url_for(port)
         started["url"] = url
@@ -255,9 +344,13 @@ def main() -> None:
     try:
         import webview
 
-        win = webview.create_window(__product_name__, html=starting_page(), width=1512,
-                                    height=982, min_size=(1100, 760),
-                                    background_color="#f7f7f8" if light_windows() else "#111113")
+        geometry = saved_geometry(settings)
+        win = webview.create_window(__product_name__, html=starting_page(settings.appearance.theme),
+                                    min_size=(1100, 760),
+                                    background_color="#f7f7f8" if looks_light(settings) else "#111113",
+                                    **geometry)
+        state = track_state(win, maximized=geometry.get("maximized", False))
+        win.events.closing += lambda: keep_geometry(settings, win, state)
         threading.Thread(target=watch_for_second_start, args=(settings, win),
                          name="ai-editor-front", daemon=True).start()
         webview.start(boot, (settings, win, started))   # returns when the window is closed

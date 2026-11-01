@@ -22,7 +22,7 @@ def _read(settings: Settings, fn, *args):
 
 def build_note(settings: Settings, ui: gr.Blocks) -> None:
     """The morning note, under the title, until you press OK."""
-    with gr.Row(visible=False) as row:
+    with gr.Row(visible=False, elem_classes=["aie-chrome"]) as row:
         note = gr.Markdown()
         ok = gr.Button("OK", size="sm", scale=0, min_width=80)
     shown = gr.State(None)

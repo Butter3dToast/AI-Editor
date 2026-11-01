@@ -3,6 +3,47 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.39.0 — Phase 4B: the new frame — 31 October 2026
+
+**New**
+
+- **The new look, in AI-Editor's own window**: the screens down the left in
+  three groups (Make, Teach it, App), with numbers (recordings, clips not rated
+  yet, drafts waiting, open issues); the screen's name and a line about it at
+  the top; the Stream Companion at the bottom left (click it to start or stop
+  it); overnight work's morning note along the top.
+- **Light or dark**: a switch at the bottom of the sidebar. Auto follows
+  Windows; Light or Dark stays as you chose, whatever Windows is set to, and is
+  kept for next time (starting screen included).
+- **Jobs is a panel on the right**: a thin strip when nothing's running, open
+  by itself when a job starts. Each step keeps its bar and percentage, and a
+  job now says **about how long it has left**, learned from how long the same
+  steps took on your own past jobs (no guess until it has seen that kind of
+  job here). A stopped job has its own Resume, and Free up space when it ran
+  out of room. Finished jobs stay until you clear them.
+- **The window remembers** its size and where you left it.
+- Today's screens sit inside the frame until each is rebuilt in the new design
+  (Phase 4C onwards): everything on them works as before. Inside the window
+  they use its full width, and Clips puts the player on top and the list below,
+  its column names never squeezed letter by letter (your test, 1 Nov). Video
+  players there are a proper video shape, as big as 60% of the window's
+  height allows, instead of a thin strip (your second test, 1 Nov). And clips
+  play there: the player was asking for the video at the wrong address.
+- Maximised when you closed it, the window opens maximised, and the restore
+  button takes it back to its normal size. Before, the maximised size was kept
+  as the normal size, so restore had nothing smaller to go back to.
+
+**Good to know**
+
+- **The browser version (`ai-editor app`) is unchanged.** While the window is
+  open, `ai-editor app` opens today's screens in the browser from the window's
+  AI-Editor, so there's still only one Jobs list.
+- Every job's step times are now kept (in the library, which is upgraded to
+  version 12, with a copy kept first), the browser version's too, so the
+  guesses learn from all of them.
+- Screenshots of the frame, from a demo library with made-up streams, are in
+  `docs/screenshots/phase4b/` for the designer.
+
 ## 0.38.1 — The window opens straight away — 31 October 2026
 
 **New**

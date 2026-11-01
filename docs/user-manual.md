@@ -164,6 +164,16 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 - **If the window can't open** (Windows without WebView2, the Edge engine every Windows 11 PC has), AI-Editor opens in your browser instead, with a small message: keep it open while you work, and click **OK** to close AI-Editor.
 - **If something goes wrong** and AI-Editor has to close, a message says so and where the details are; the Issues tab can copy them for you (25.1).
 
+**The new look (from 0.39.0).** The window shows AI-Editor in its new design (Phase 4): the screens are listed down the left, in three groups (**Make**, **Teach it**, **App**), and the screen you're on is at the top with a line about it, such as *"4 recordings · 1 not analysed"*.
+
+- **The numbers beside the screens:** Library, the recordings whose video you still have; Clips, the clips you haven't rated yet in those; Review, the draft plans waiting for you; Issues, the open ones.
+- **Jobs** is the panel on the right. With nothing running it's a thin strip; it opens by itself when a job starts. Each job shows its steps, each with its bar and how far along it is (62%), and, once AI-Editor has seen that kind of job on your PC before, about how long it has left: *"12 min in · about 15 min left"*. That guess comes from how long the same steps took on your own past jobs, per hour of recording, so it gets better the more you use it; with nothing to go on, there's no guess rather than a wrong one. A stopped job says why and has its own **Resume**; one that ran out of space has **Free up space**, which opens Storage. **Pause all** and **Clear finished** are at the bottom. Finished jobs stay until you clear them or close the panel (**›**).
+- **The Stream Companion** is at the bottom left: a green dot while it runs, with how many moments you've marked today. Click it to start or stop it.
+- **Overnight work's morning note** is along the top until you press **OK**.
+- **Light or dark:** the switch at the bottom of the left-hand list, above the Companion. **Auto** follows Windows (even when you change it while AI-Editor is open); **Light** or **Dark** stays as you chose, whatever Windows is set to. It's kept in your settings, so AI-Editor opens that way next time, starting screen included.
+- **The window opens where you left it**, at the same size.
+- **The screens themselves are today's**, inside the new frame, until each is rebuilt in the new design (Phase 4C-4H). Everything on them works as before. Inside the window they use its full width, and **Clips** shows the player on top with the list below it; with the Jobs panel open, the list scrolls sideways rather than squeezing its columns.
+
 **The browser way still works.** In a terminal in the AI-Editor folder, `.\.venv\Scripts\ai-editor app` opens AI-Editor in your browser with the black window, exactly as before 0.38.0. If AI-Editor is already open that way, the desktop icon shows the same page in a window (closing that window then leaves the browser one running).
 
 **Shortcut missing, or still opening the browser?** In a terminal in the AI-Editor folder, run `.\.venv\Scripts\ai-editor shortcut`. It puts the icon on your desktop, opening AI-Editor in its own window. `ai-editor shortcut --browser` makes it open the browser way instead.

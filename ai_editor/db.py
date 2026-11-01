@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 _V1 = """
@@ -453,8 +453,23 @@ CREATE TABLE overnight_drafts (
 );
 """
 
+_V12 = """
+-- How long each step of a job took (4B), for "about N min left" in Jobs.
+CREATE TABLE step_times (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT    NOT NULL,          -- the job's kind: import, analyse, render...
+    run         TEXT    NOT NULL,          -- one job's run: its steps, in order
+    position    INTEGER NOT NULL,          -- the step's place in that run
+    step        TEXT    NOT NULL,          -- the step, as Jobs names it
+    seconds     REAL    NOT NULL,
+    size_sec    REAL,                      -- what it worked on: the recording's or video's length
+    made_at     TEXT    NOT NULL
+);
+CREATE INDEX idx_step_times_kind ON step_times(kind, step);
+"""
+
 MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8,
-                              9: _V9, 10: _V10, 11: _V11}
+                              9: _V9, 10: _V10, 11: _V11, 12: _V12}
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

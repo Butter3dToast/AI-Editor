@@ -57,7 +57,9 @@ def player(path: str | Path | None, start: float | None = None, end: float | Non
     if not path or not Path(path).is_file():
         return ("<div class='aie-player-empty'>" + html.escape(note or "Pick something to play it here.")
                 + "</div>")
-    url = "/gradio_api/file=" + quote(Path(path).as_posix(), safe="/:")
+    # Relative to the page: "/" in the browser, "/classic/" inside the new window
+    # (1 Nov: from "/" there, no clip ever played).
+    url = "gradio_api/file=" + quote(Path(path).as_posix(), safe="/:")
     # When the file was last made, in its address: a preview made again under the
     # same name (a plan replaced by a new one with the same name, 11 Oct) is then a
     # new address, not the browser's stored copy of the old video -- which played

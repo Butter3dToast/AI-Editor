@@ -68,6 +68,7 @@ a hard rule, not a preference.
 | **3D** | Thumbnail prompts: the local AI writes one per best frame, to paste into the Gemini app with the frame (nothing sent online); highlights clean, Let's Play parts say EP and part | **Complete** |
 | Extra | Backup button (library and Settings, weekly, restore) and manual tidy-up | **Complete** |
 | **4A** | AI-Editor in its own window (no console, one copy, closing pauses jobs); a check before every job that this PC can do it | **Complete** |
+| **4B** | The new frame in the window: grouped sidebar with counts, header, Jobs panel with time left learned from past jobs, Companion, morning note, light/dark, remembered size; today's screens inside until rebuilt | **Complete** |
 
 ---
 

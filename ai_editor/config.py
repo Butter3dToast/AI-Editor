@@ -712,6 +712,13 @@ class Learning(BaseModel):
     taste: bool = True
 
 
+class Appearance(BaseModel):
+    """AI-Editor's own window (Phase 4B): light or dark. auto follows Windows; the
+    creator wanted a choice that stays, whatever Windows is set to (1 Nov)."""
+
+    theme: Literal["auto", "light", "dark"] = "auto"
+
+
 class Backup(BaseModel):
     """Backups of the library and your Settings (backup.py). The program itself
     is on GitHub; these are what isn't."""
@@ -737,6 +744,7 @@ class Settings(BaseModel):
     performance: Performance = Performance()
     overnight: Overnight = Overnight()
     backup: Backup = Backup()
+    appearance: Appearance = Appearance()
     companion: Companion = Companion()
     obs: Obs = Obs()
     analysis: Analysis = Analysis()

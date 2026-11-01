@@ -160,7 +160,8 @@ def test_the_player_plays_just_the_clip_from_the_preview_copy(tmp_path):
     proxy.parent.mkdir()
     proxy.write_bytes(b"x")
     page = videos.player(proxy, 61.5, 95)
-    assert "/gradio_api/file=" in page and "my%20recordings/proxy.mp4?v=" in page
+    # Relative to the page, so it plays at "/" in the browser and "/classic/" in the window.
+    assert "src='gradio_api/file=" in page and "my%20recordings/proxy.mp4?v=" in page
     assert "#t=61.50,95.00'" in page
 
 
