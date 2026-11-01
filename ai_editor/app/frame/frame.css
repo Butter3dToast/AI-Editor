@@ -104,6 +104,27 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .clip-knows-box { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
 .clip-knows-box .note { margin: 0; line-height: 1.6; }
 
+/* Create video (4E): the designer's form, the fold, the lists to tick or click. */
+.cv-gap { margin-top: 24px; }
+.cv-len { max-width: 220px; }
+.cv-minutes { align-items: center; flex-wrap: nowrap; }
+.cv-minutes .input { width: 90px; }
+.cv-which .pill { cursor: pointer; font: inherit; font-size: 12.5px; background: transparent; }
+.cv-which .pill.on { background: var(--sel); }
+.cv-fold > summary { cursor: pointer; list-style: none; }
+.cv-fold > summary::-webkit-details-marker { display: none; }
+.cv-fold > summary::before { content: "›"; display: inline-block; transition: transform .15s; }
+.cv-fold[open] > summary::before { transform: rotate(90deg); }
+.cv-fold-in { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 16px; }
+.cv-fold-in .note { margin: 0; line-height: 1.6; }
+.cv-tools { margin-bottom: 12px; }
+#cv-list tbody tr { cursor: pointer; }
+#cv-list .cv-tick { width: 64px; padding-right: 0; }
+#cv-list tr.cv-spent td { color: var(--dim); }
+.cv-name { margin-left: 10px; }
+.cv-about { margin: 16px 0 0; line-height: 1.6; }
+.cv-go { margin-top: 20px; align-items: center; }
+
 /* Overnight work's note, along the top of the screen until OK. */
 .morning { display: flex; gap: 16px; align-items: center; padding: 14px 36px;
   border-bottom: 1px solid var(--line); color: var(--mid); font-size: 13.5px; line-height: 1.6; }
@@ -141,4 +162,6 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
   border: 1px solid var(--line2, rgba(255,255,255,.14)); opacity: 0; pointer-events: none;
   transition: opacity .2s; font-family: "Segoe UI", system-ui, sans-serif; }
 .toast.on { opacity: 1; }
+.toast.act { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
+.toast .btn { height: 30px; padding: 0 12px; }
 .app.light ~ .toast { background: #f1f1f3; color: #18181b; border-color: rgba(0,0,0,.16); }

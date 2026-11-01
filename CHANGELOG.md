@@ -3,6 +3,34 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.42.0 — Phase 4E: Create video in the new design — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **Create video, rebuilt in the designer's layout**:
+  - **Highlights · Let's Play · Shorts** at the top right.
+  - **Highlights:** Game, Length, Style profile (still picked by itself for
+    the game) and Which clips as three buttons, each saying how many 👍 or
+    🔖 clips you have in the streams it will use.
+  - **What it will use:** your streams, oldest first, with how many clips
+    each still has free and your 👍 · 🔖 in it. **Tick streams to use only
+    those**; tick none and it works as before, oldest unused clips first.
+  - **Use clips already in a video** is folded under the form.
+  - **Let's Play and Shorts:** click the recording in a list. Let's Play says
+    about how many parts it makes; Shorts shows your Numpad − marks.
+  - **When the plan is ready it opens in Review** if you're still on Create
+    video; if you've moved on, a note says so with an **Open in Review**
+    button.
+  - **Make a video** in Clips opens Create video with that stream ticked (a
+    Let's Play recording opens on Let's Play).
+- Plans are made exactly as before: the same job, the same choices.
+
+**Different from the mockup**
+
+- The list's **Best score** column became **Your 👍 · 🔖**: each stream's
+  scores are scaled so its best clip is 1.00, so on your streams that column
+  said 1.00 on every row.
+
 ## 0.41.0 — Phase 4D: Clips in the new design — 1 November 2026
 
 **New** (in AI-Editor's own window; the browser version is unchanged)

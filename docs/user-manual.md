@@ -1142,7 +1142,7 @@ On 24 Oct, on your League stream of 19 October, "A zoom on every kill" suggested
 ### 15.1 Quick start
 
 1. Go to **Create video**, and choose **Let's Play**.
-2. Pick the **Episode recording**. Let's Play games are listed first.
+2. Pick the **Episode recording**. Let's Play games are listed first. (In the window, from 0.42.0: click it in the list; see chapter 16.)
 3. Click **Make the plan**. It takes seconds and shows under **Jobs**, then opens in **Review**.
 4. Review lists the **parts**: how long each is, and where it is in the recording. **Click a part** to watch how it starts. **Quick preview of the selected part** makes a watchable version of the whole part, cuts included, in seconds.
 5. Check the **Episode number** (read from the recording's name, e.g. "EP 1"). Choose **All parts** or one part. Then **Render the finished video** (chapter 19).
@@ -1254,6 +1254,17 @@ Use Condense when you want a single video from a session.
 
 ## 16. Creating a Highlight video
 
+**In the window (from 0.42.0), Create video is in the new design.** **Highlights · Let's Play · Shorts** is at the top right; the top says *"Builds a plan you can change before anything renders"*.
+
+- **Highlights:** **Game**, **Length** in minutes, **Style profile** (the one made for this game says *"(picked for this game)"*) and **Which clips** as three buttons: **AI-Editor picks**, **My 👍 clips (N)** and **My 🔖 clips (N)**, with how many of each you have in the streams it will use.
+- **What it will use** lists the streams in reach, **oldest first**, with **Recorded**, **Clips free** (not 👎 and not in a video yet) and **Your 👍 · 🔖**. **Tick streams to use only those** (this is the **Only these streams** box in the browser); with none ticked it uses them all, oldest unused clips first. **All** at the top of the ticks ticks or unticks every stream.
+- **Pick particular streams, or reuse clips already in a video** (folded under the form) holds **Use clips already in a video**.
+- **Let's Play** and **Shorts:** click the recording in the list, then **Make the plan**. Let's Play lists your Let's Play recordings with about how many parts each makes (tick **Show my streams too** for the rest); Shorts lists every recording with how many **Numpad −** marks you pressed in it.
+- **When the plan is ready** it opens in **Review** by itself if you're still on Create video. If you've gone to another screen meanwhile (rating clips, say), a note at the bottom says *"Your plan is ready"* with **Open in Review**, so you're never pulled away.
+- **Make a video** in Clips opens Create video with the stream you were rating already ticked (a Let's Play recording opens on **Let's Play** with it picked).
+
+The steps below describe the browser version; the choices are the same in the window.
+
 ### 16.1 Quick start
 
 1. Go to **Create video**, and choose **Highlights**.
@@ -1348,7 +1359,7 @@ Vertical clips are built entirely inside AI-Editor and rendered here. The finish
 ### 17.1 Quick start
 
 1. Analyse the recording, and ideally **Rate with AI** (12.3): the AI's "makes sense on its own" check is what picks good Shorts.
-2. **Create video → Shorts**, pick the stream or recording, and click **Make the plan**. A couple of seconds later Jobs lists up to five suggestions, and why each was picked:
+2. **Create video → Shorts**, pick the stream or recording (in the window: click it in the list, which shows your Numpad − marks in each), and click **Make the plan**. A couple of seconds later Jobs lists up to five suggestions, and why each was picked:
    - every moment you marked as Short-worthy while live (**Numpad −**), always, even past five;
    - then League's big moments: your multikills, your team's aces, and steals (8.3);
    - then clips you gave a 👍 that make sense on their own;

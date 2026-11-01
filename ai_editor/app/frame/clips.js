@@ -361,8 +361,9 @@
           const said = await post(`/api/clips/${rec}/ai`);
           if (said.said) toast(said.said);
         } }, "Rate with AI"),
-        el("button", { class: "btn primary", type: "button",
-                       onclick: () => window.aie.show("create") }, "Make a video"));
+        // 4E: opens Create video on Highlights with this stream ticked (a Let's Play: its own).
+        el("button", { class: "btn primary", type: "button", onclick: () =>
+          window.aie.show("create", rec === null ? undefined : { recording: rec }) }, "Make a video"));
       body.replaceChildren();
       draw();
       // Heard first (capture), before anything on the page can keep a key to itself.

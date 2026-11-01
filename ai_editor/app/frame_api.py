@@ -151,7 +151,8 @@ class Frame:
                 # The designer's line (4C-2); how many are new is on the screen itself.
                 "import": "Your file is read where it is: never copied, moved or changed",
                 "clips": f"{unrated} not rated yet" if unrated else "Every clip rated",
-                "create": "Highlights, Let's Plays and Shorts",
+                # The designer's line (4E).
+                "create": "Builds a plan you can change before anything renders",
                 "review": plural(drafts, "draft") + " waiting" if drafts else "No drafts waiting",
                 "style": plural(profiles, "profile"),
                 "rules": plural(rules, "rule"),
@@ -292,11 +293,12 @@ def build_app(settings: Settings, ui, worker: Worker, *, mount_kwargs: dict):
             conn.close()
         return {}
 
-    from . import clips_screen, import_screen, library_screen
+    from . import clips_screen, create_screen, import_screen, library_screen
 
     library_screen.add_routes(app, frame, guarded)   # 4C-1: the Library, rebuilt
     import_screen.add_routes(app, frame, guarded)    # 4C-2: Import, rebuilt
     clips_screen.add_routes(app, frame, guarded)     # 4D: Clips, rebuilt
+    create_screen.add_routes(app, frame, guarded)    # 4E: Create video, rebuilt
     app.mount("/frame", StaticFiles(directory=FRAME), name="frame")
     return gr.mount_gradio_app(app, ui, path=CLASSIC, **mount_kwargs)
 

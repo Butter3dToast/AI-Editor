@@ -36,12 +36,21 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
-function toast(text) {
+/* A note at the foot of the window; ``button`` ({label, onclick}) gives it one to press
+   (4E: "Your plan is ready" with Open in Review), and keeps it up longer. */
+function toast(text, button) {
   const box = $("toast");
-  box.textContent = text;
+  box.replaceChildren(text);
+  if (button) {
+    box.append(el("button", { class: "btn quiet", type: "button", onclick: () => {
+      box.classList.remove("on", "act");
+      button.onclick();
+    } }, button.label));
+  }
+  box.classList.toggle("act", !!button);
   box.classList.add("on");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => box.classList.remove("on"), 4500);
+  toast.timer = setTimeout(() => box.classList.remove("on", "act"), button ? 12000 : 4500);
 }
 
 async function post(path, body) {
@@ -60,7 +69,8 @@ function line(text) {
   $("subtitle").textContent = text;
 }
 const lineOf = (id) => (ownLines[id] !== undefined ? ownLines[id] : about.lines[id] || "");
-window.aie = { el, toast, post, show: (id) => show(id), line, NATIVE };
+window.aie = { el, toast, post, show: (id, extra) => show(id, extra), current: () => current,
+               line, NATIVE };
 
 /* --- light or dark: auto (as Windows is set, live), or the one you chose ---------- */
 
@@ -104,7 +114,8 @@ function buildNav() {
   }
 }
 
-function show(id) {
+/* ``extra``: what one rebuilt screen hands the next (Clips' Make a video: its recording). */
+function show(id, extra) {
   if (current !== id && NATIVE[current] && NATIVE[current].close) NATIVE[current].close();
   current = id;
   document.querySelectorAll(".nav a").forEach((a) =>
@@ -117,7 +128,7 @@ function show(id) {
   $("native").hidden = !native;
   $("body").hidden = !!native;
   if (native) {
-    native.open($("native"), $("actions"));
+    native.open($("native"), $("actions"), extra);
     // Today's screens load meanwhile, so the others open quickly.
     if (!frame.src) frame.src = `/classic/?embed=1&__theme=${looks()}&view=Clips`;
     return;
