@@ -53,7 +53,14 @@ async function post(path, body) {
 
 /* The rebuilt screens add themselves here: { open(body, actions), close() }. */
 const NATIVE = {};
-window.aie = { el, toast, post, show: (id) => show(id), NATIVE };
+/* A rebuilt screen may say its own line under the title (Clips: the recording's). */
+const ownLines = {};
+function line(text) {
+  ownLines[current] = text;
+  $("subtitle").textContent = text;
+}
+const lineOf = (id) => (ownLines[id] !== undefined ? ownLines[id] : about.lines[id] || "");
+window.aie = { el, toast, post, show: (id) => show(id), line, NATIVE };
 
 /* --- light or dark: auto (as Windows is set, live), or the one you chose ---------- */
 
@@ -103,7 +110,7 @@ function show(id) {
   document.querySelectorAll(".nav a").forEach((a) =>
     a.classList.toggle("on", a.dataset.screen === id));
   $("title").textContent = NAMES[id];
-  $("subtitle").textContent = about.lines[id] || "";
+  $("subtitle").textContent = lineOf(id);
   $("actions").replaceChildren();
   const frame = $("screen");
   const native = NATIVE[id];
@@ -142,7 +149,7 @@ async function refresh() {
     const tally = $(`tally-${id}`);
     if (tally) tally.textContent = n ? String(n) : "";
   }
-  $("subtitle").textContent = about.lines[current] || "";
+  $("subtitle").textContent = lineOf(current);
   const c = about.companion || {};
   $("comp-title").textContent = c.title || "Companion";
   $("comp-detail").textContent = c.detail || "";

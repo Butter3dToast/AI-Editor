@@ -67,6 +67,43 @@ button.check { padding: 0; border: 0; background: transparent; font: inherit; fo
 .imp-problem { margin: 20px 0 0; color: var(--warn); line-height: 1.6; }
 .input:disabled { opacity: .5; }
 
+/* Clips (4D): the designer's stage, pinned at the top while the list scrolls under it
+   (the creator: no scrolling up and down), the player about half the window's height
+   so the stage and the top of the list fit on one screen (their 4B test). */
+.clip-stage { position: sticky; top: -36px; z-index: 2; background: var(--bg);
+  margin: -36px -36px 0; padding: 36px 36px 20px; border-bottom: 1px solid var(--line); }
+.clip-screen { position: relative; }
+.clip-video { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: 46vh;
+  background: var(--media); border-radius: 12px; object-fit: contain; }
+.clip-video[hidden] { display: none; }
+.clip-video:focus:not(:focus-visible) { outline: none; }
+.clip-empty { display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9;
+  max-height: 46vh; border: 1px dashed var(--line2); border-radius: 12px; color: var(--dim);
+  font-size: 13px; }
+.clip-empty[hidden] { display: none; }
+.clip-rate { align-items: center; }
+.clip-rate .spacer { margin-left: auto; }
+.clip-keys { margin: 0; }
+.clip-stage .meta { max-height: calc(46vh + 100px); overflow-y: auto; padding-right: 10px;
+  gap: 0; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.clip-stage .kv { padding: 8px 0; }
+.clip-stage .kv b { text-align: right; overflow-wrap: anywhere; }
+.clip-part { padding: 16px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.clip-part h4 { margin: 0 0 2px; color: var(--dim); font-size: 11px; letter-spacing: .6px;
+  text-transform: uppercase; font-weight: 600; }
+.clip-part p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mid); }
+.clip-part p:first-of-type { color: var(--ink); }
+.clip-tools { align-items: center; }
+.clip-tools .spacer { margin-left: auto; }
+.clip-rec { max-width: 340px; }
+#clip-totals { margin: 0; line-height: 1.6; }
+#clip-list tbody tr { cursor: pointer; }
+#clip-list td { padding-top: 13px; padding-bottom: 13px; }
+#clip-list .clip-what { color: var(--mid); line-height: 1.45; }
+.clip-fold { margin-top: 0; }
+.clip-knows-box { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
+.clip-knows-box .note { margin: 0; line-height: 1.6; }
+
 /* Overnight work's note, along the top of the screen until OK. */
 .morning { display: flex; gap: 16px; align-items: center; padding: 14px 36px;
   border-bottom: 1px solid var(--line); color: var(--mid); font-size: 13.5px; line-height: 1.6; }

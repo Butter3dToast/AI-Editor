@@ -70,6 +70,7 @@ a hard rule, not a preference.
 | **4A** | AI-Editor in its own window (no console, one copy, closing pauses jobs); a check before every job that this PC can do it | **Complete** |
 | **4B** | The new frame in the window: grouped sidebar with counts, header, Jobs panel with time left learned from past jobs, Companion, morning note, light/dark, remembered size; today's screens inside until rebuilt | **Complete** |
 | **4C** | Library and Import rebuilt in the new design: filter, search and details panel; tick several new recordings and import them one after another; Twitch check | **Complete** |
+| **4D** | Clips rebuilt in the new design: player and details pinned at the top, rate and move on to the next clip, keyboard rating | **Complete** |
 
 ---
 

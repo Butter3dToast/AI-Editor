@@ -172,8 +172,8 @@ Double-click **AI-Editor** on your desktop (the purple play-button icon).
 - **Overnight work's morning note** is along the top until you press **OK**.
 - **Light or dark:** the switch at the bottom of the left-hand list, above the Companion. **Auto** follows Windows (even when you change it while AI-Editor is open); **Light** or **Dark** stays as you chose, whatever Windows is set to. It's kept in your settings, so AI-Editor opens that way next time, starting screen included.
 - **The window opens where you left it**, at the same size.
-- **Library and Import are rebuilt in the new design** (from 0.40.0; 10.1, 10.2, 10.5).
-- **The other screens are today's**, inside the new frame, until each is rebuilt in the new design (Phase 4D-4H). Everything on them works as before. Inside the window they use its full width, and **Clips** shows the player on top with the list below it; with the Jobs panel open, the list scrolls sideways rather than squeezing its columns.
+- **Library and Import are rebuilt in the new design** (from 0.40.0; 10.1, 10.2, 10.5), and **Clips** (from 0.41.0; 12).
+- **The other screens are today's**, inside the new frame, until each is rebuilt in the new design (Phase 4E-4H). Everything on them works as before. Inside the window they use its full width, and **Clips** shows the player on top with the list below it; with the Jobs panel open, the list scrolls sideways rather than squeezing its columns.
 
 **The browser way still works.** In a terminal in the AI-Editor folder, `.\.venv\Scripts\ai-editor app` opens AI-Editor in your browser with the black window, exactly as before 0.38.0. If AI-Editor is already open that way, the desktop icon shows the same page in a window (closing that window then leaves the browser one running).
 
@@ -853,6 +853,19 @@ While you sleep, AI-Editor can do the slow work for you, so in the morning your 
 ## 12. The Clip Browser
 
 The **Clips** tab shows every moment AI-Editor found in a recording, best first.
+
+**In the window (from 0.41.0), Clips is in the new design**, made for rating a whole stream without scrolling up and down:
+
+- **The player is at the top left**, about half the window's height, with **👍 Good clip · 🔖 Next video · 👎 Not good** and **Clear rating** under it. **Beside it** are the clip's details: its number and length, when it is in the recording, its length in a video, score, your taste, game, why it was picked, whether it's used, then **AI SAYS**, **YOU SAID**, and **LEAGUE** and **USED IN** when it has them.
+- **The player, buttons and details stay at the top** while the list scrolls underneath.
+- **Each clip plays from its start and stops at its end.** Press **Space** after it ends to watch it again.
+- **After 👍, 🔖 or 👎 it moves on to the next clip and plays it**, so you can rate a stream in one go. Clear rating stays on the clip.
+- **Keys:** **1** 👍 · **2** 🔖 · **3** 👎 · **0** clear rating · **↑ ↓** the clip before or after · **Space** play or pause. They work anywhere on the screen except while typing in a box.
+- **The list** shows **# · At · Length · Score · What happens · Rated**. *What happens* is the AI's one-line summary (12.3), or the words said if it hasn't rated the clip; ⭐ marks your own marks. The other columns below are in the details beside the player.
+- **Above the list:** Not used yet / All / Rated, **Streams whose video is deleted**, and the recording to look at. **How well AI-Editor knows you** (12.2a) is folded at the bottom.
+- **At the top:** the recording, how many clips were found and how many aren't used yet, with **Rate with AI** (12.3) and **Make a video** (Create video).
+
+The rest of this chapter describes the browser version, which works as before; everything it says about what ratings do is the same in the window.
 
 ### 12.1 What you see for each clip
 

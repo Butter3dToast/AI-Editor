@@ -3,6 +3,44 @@
 Written so the creator can understand what changed, not only the engineer
 (specification section 14.3).
 
+## 0.41.0 — Phase 4D: Clips in the new design — 1 November 2026
+
+**New** (in AI-Editor's own window; the browser version is unchanged)
+
+- **Clips, rebuilt for rating a whole stream in one go**:
+  - **The player is at the top left**, about half the window's height, with
+    the rating buttons under it and the clip's details beside it. Your 4B
+    test found the old player too big to rate with, so the video, buttons,
+    details and the top of the list now fit on one screen.
+  - **Player, buttons and details stay at the top** while the list scrolls
+    underneath: no scrolling up and down.
+  - **A rating moves on to the next clip and plays it.**
+  - **Keys:** 1 👍, 2 🔖, 3 👎, 0 clear, ↑ ↓ the clip before or after, Space
+    play or pause.
+  - **Each clip plays from its start and stops at its end.**
+  - **The list** shows # · At · Length · Score · What happens (the AI's
+    one-line summary, or the words said) · Rated. Its other columns are in
+    the details beside the player (In a video, Your taste, Why, Used, what
+    the AI says, what you said, League events).
+  - **Rate with AI** and **Make a video** are at the top, with how many clips
+    were found and how many aren't used yet.
+- Ratings are kept exactly as before, so what AI-Editor learns from them is
+  the same.
+
+**Faster**
+
+- Each clip's length in a video is now kept rather than worked out again on
+  every click (about half a second each time on your streams). It's worked out
+  again when it could have changed: a clip used in a video, a 👎 cleared, your
+  settings, rules or style profiles changed.
+
+**Fixed while you tested** (1 Nov)
+
+- The ↑ ↓ keys only scrolled the list in your window: the Clips screen now
+  hears the keys first, and by any name Windows gives them.
+- The details beside the player showed "null" where a clip had no League
+  events or wasn't used yet; they're now labelled parts (AI says, You said…).
+
 ## 0.40.1 — Fix: very short recordings — 1 November 2026
 
 **Fixed**
